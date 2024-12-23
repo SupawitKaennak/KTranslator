@@ -5,6 +5,7 @@ from PIL import ImageGrab
 import numpy as np
 import threading
 import time
+import csv
 from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text
 
 # ตั้งค่า pytesseract
@@ -52,6 +53,17 @@ def select_crop_area():
     cv2.setMouseCallback("Select Area", draw_rectangle)
     cv2.waitKey(0)  # รอจนกว่าจะปิดหน้าต่าง
 
+# ฟังก์ชันในการโหลดภาษาจากไฟล์ CSV
+def load_languages_from_csv(file_path):
+    languages = {}
+    with open(file_path, newline='', encoding='utf-8') as csvfile:
+        reader = csv.reader(csvfile)
+        for row in reader:
+            language_name = row[0]  # ชื่อภาษา
+            language_code = row[1]  # รหัสภาษา
+            languages[language_name] = language_code
+    return languages
+
 # ส่วนอื่น ๆ ยังคงเหมือนเดิม
 class TranslatorApp:
     def __init__(self):
@@ -63,12 +75,13 @@ class TranslatorApp:
         # ทำให้ซ้อนทับหน้าจออื่นได้โดยไม่พับลง always on top
         self.root.attributes('-topmost', 1)
 
+        # โหลดภาษาจากไฟล์ CSV
+        self.ocr_languages = load_languages_from_csv("languages.csv")
+        self.translation_languages = self.ocr_languages  # ใช้ภาษาจากไฟล์เดียวกันสำหรับการแปล
+
         # สร้างกรอบ UI
         self.main_frame = Frame(self.root, bg="#f0f8ff")
         self.main_frame.pack(pady=20)
-
-        # Label หัวข้อ
-        # Label(self.main_frame, text="KTranslator", font=("Arial", 20, "bold"), bg="#f0f8ff", fg="#4682b4").pack()
 
         # กรอบสำหรับตัวเลือกภาษา OCR และการแปลภาษา
         lang_frame = Frame(self.main_frame, bg="#f0f8ff")
@@ -76,18 +89,7 @@ class TranslatorApp:
 
         # ตัวเลือกภาษา OCR
         self.selected_ocr_language = StringVar(self.root)
-        self.selected_ocr_language.set("eng")
-        self.ocr_languages = {
-            "English": "eng",
-            "Thai": "tha",
-            "Japanese": "jpn",
-            "Chinese Simplified": "chi_sim",
-            "Chinese Traditional": "chi_tra",
-            "Korean": "kor",
-            "French": "fra",
-            "German": "deu",
-            "Spanish": "spa"
-        }
+        self.selected_ocr_language.set(list(self.ocr_languages.values())[0])  # ตั้งค่าเริ่มต้น
         Label(lang_frame, text="OCR Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=0, padx=5)
         ocr_menu = ttk.OptionMenu(lang_frame, self.selected_ocr_language, self.selected_ocr_language.get(),
                                   *self.ocr_languages.values())
@@ -95,17 +97,7 @@ class TranslatorApp:
 
         # ตัวเลือกภาษาสำหรับการแปล
         self.selected_language = StringVar(self.root)
-        self.selected_language.set("th")
-        self.translation_languages = {
-            "English": "en",
-            "Thai": "th",
-            "Japanese": "ja",
-            "Chinese": "zh-CN",
-            "Korean": "ko",
-            "French": "fr",
-            "German": "de",
-            "Spanish": "es"
-        }
+        self.selected_language.set(list(self.translation_languages.values())[0])  # ตั้งค่าเริ่มต้น
         Label(lang_frame, text="Translation Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=2, padx=5)
         translation_menu = ttk.OptionMenu(lang_frame, self.selected_language, self.selected_language.get(),
                                            *self.translation_languages.values())
@@ -168,15 +160,25 @@ class TranslatorApp:
                 img = ImageGrab.grab(bbox=tuple(crop_rect))
                 img_np = np.array(img)
                 ocr_language = self.selected_ocr_language.get()
+                print(f"OCR Language: {ocr_language}")  # ดีบั๊ก: แสดงภาษาที่เลือก
                 text = pytesseract.image_to_string(img_np, lang=ocr_language)
-                if text.strip():
-                    target_language = self.selected_language.get()
-                    translated_text = GoogleTranslator(source='auto', target=target_language).translate(text)
-                    self.update_translated_text(translated_text)  # อัปเดตข้อความแปล
-                else:
-                    self.update_translated_text("No text detected")  # ไม่มีข้อความที่ถูกตรวจจับ
-            time.sleep(1)
+                print(f"Detected Text: {text}")  # ดีบั๊ก: แสดงข้อความที่ OCR ดึงมาได้
+            if text.strip():
+                target_language = self.selected_language.get()
+                print(f"Translating to: {target_language}")  # ดีบั๊ก: แสดงภาษาที่แปล
+                translated_text = GoogleTranslator(source='auto', target=target_language).translate(text)
+                self.update_translated_text(translated_text)  # อัปเดตข้อความแปล
+            else:
+                self.update_translated_text("No text detected")  # ไม่มีข้อความที่ถูกตรวจจับ
+        time.sleep(1)
 
+def update_translated_text(self, text):
+    """ฟังก์ชันอัปเดตข้อความแปล"""
+    print(f"Updating Translated Text: {text}")  # ดีบั๊ก: แสดงข้อความที่จะแสดงใน UI
+    self.result_text.config(state="normal")  # เปิดให้แก้ไขชั่วคราว
+    self.result_text.delete("1.0", "end")  # ลบข้อความเก่า
+    self.result_text.insert("1.0", f"Translated Text:\n{text}")  # แทรกข้อความแปลใหม่
+    self.result_text.config(state="disabled")  # ตั้งเป็น Read-Only
 
 # เรียกโปรแกรม
 if __name__ == "__main__":
