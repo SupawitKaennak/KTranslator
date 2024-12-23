@@ -6,7 +6,7 @@ OLD VERSION<br>
 <img src="https://github.com/user-attachments/assets/32056c17-acd5-4118-ba78-098dddb71b1a" width="300" height="150"><br>
 
 NEW<br>
-<img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="300" height="150"><br>
+<img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="300" height="170"><br>
 
 
 Requirement Program: Tesseract OCR<br>
