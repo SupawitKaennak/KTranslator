@@ -57,23 +57,22 @@ class TranslatorApp:
     def __init__(self):
         self.root = Tk()
         self.root.title("KTranslator")
-        self.root.geometry("800x600")
+        self.root.geometry("480x260")
         self.root.configure(bg="#f0f8ff")  # สีพื้นหลัง
 
-        #ทำให้ซ้อนทับหน้าจออื่นได้ดดยไม่พับลง alway on top
+        # ทำให้ซ้อนทับหน้าจออื่นได้โดยไม่พับลง always on top
         self.root.attributes('-topmost', 1)
 
         # สร้างกรอบ UI
         self.main_frame = Frame(self.root, bg="#f0f8ff")
         self.main_frame.pack(pady=20)
 
-        # สร้าง style สำหรับ dropdown menus
-        style = ttk.Style()
-        style.configure("TMenubutton", font=("Arial", 12), relief="flat", background="#d2d2d3", borderwidth=1,
-                        focusthickness=3, focuscolor="none")
-        style.map("TMenubutton",
-                  background=[("active", "#e6e6e6")],
-                  relief=[("pressed", "sunken"), ("!pressed", "flat")])
+        # Label หัวข้อ
+        # Label(self.main_frame, text="KTranslator", font=("Arial", 20, "bold"), bg="#f0f8ff", fg="#4682b4").pack()
+
+        # กรอบสำหรับตัวเลือกภาษา OCR และการแปลภาษา
+        lang_frame = Frame(self.main_frame, bg="#f0f8ff")
+        lang_frame.pack(pady=10)
 
         # ตัวเลือกภาษา OCR
         self.selected_ocr_language = StringVar(self.root)
@@ -89,6 +88,10 @@ class TranslatorApp:
             "German": "deu",
             "Spanish": "spa"
         }
+        Label(lang_frame, text="OCR Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=0, padx=5)
+        ocr_menu = ttk.OptionMenu(lang_frame, self.selected_ocr_language, self.selected_ocr_language.get(),
+                                  *self.ocr_languages.values())
+        ocr_menu.grid(row=0, column=1, padx=5)
 
         # ตัวเลือกภาษาสำหรับการแปล
         self.selected_language = StringVar(self.root)
@@ -103,48 +106,39 @@ class TranslatorApp:
             "German": "de",
             "Spanish": "es"
         }
-
-        # Label หัวข้อ
-        Label(self.main_frame, text="KTranslator", font=("Arial", 20, "bold"), bg="#f0f8ff", fg="#4682b4").pack()
-
-        # Dropdown Menu สำหรับ OCR
-        Label(self.main_frame, text="Select OCR Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").pack(pady=5)
-        ocr_menu = ttk.OptionMenu(self.main_frame, self.selected_ocr_language, self.selected_ocr_language.get(),
-                                  *self.ocr_languages.values())
-        ocr_menu.configure(style="TMenubutton")
-        ocr_menu.pack()
-
-        # Dropdown Menu สำหรับแปลภาษา
-        Label(self.main_frame, text="Select Translation Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").pack(pady=5)
-        translation_menu = ttk.OptionMenu(self.main_frame, self.selected_language, self.selected_language.get(),
+        Label(lang_frame, text="Translation Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=2, padx=5)
+        translation_menu = ttk.OptionMenu(lang_frame, self.selected_language, self.selected_language.get(),
                                            *self.translation_languages.values())
-        translation_menu.configure(style="TMenubutton")
-        translation_menu.pack()
+        translation_menu.grid(row=0, column=3, padx=5)
 
         # สร้างกรอบสำหรับการแสดงข้อความแปลพร้อม scroll bar
         self.text_frame = Frame(self.main_frame, bg="#f0f8ff")
-        self.text_frame.pack(pady=10)
+        self.text_frame.pack(pady=5)
 
         self.scrollbar = Scrollbar(self.text_frame, orient="vertical")
         self.scrollbar.pack(side="right", fill="y")
 
         self.result_text = Text(self.text_frame, wrap="word", font=("Arial", 12), bg="#ffffff", fg="#555555",
-                                yscrollcommand=self.scrollbar.set, width=60, height=10, state="disabled")
+                                yscrollcommand=self.scrollbar.set, width=42, height=6, state="disabled")
         self.result_text.pack(side="left", fill="both", expand=True)
 
         self.scrollbar.config(command=self.result_text.yview)
 
+        # กรอบสำหรับปุ่ม
+        button_frame = Frame(self.main_frame, bg="#f0f8ff")
+        button_frame.pack(pady=10)
+
         # ปุ่มเลือกพื้นที่ Crop
-        self.select_area_button = Button(self.main_frame, text="Select Area", command=select_crop_area, bg="#4682b4", fg="white", font=("Arial", 12), width=20)
-        self.select_area_button.pack(pady=5)
+        self.select_area_button = Button(button_frame, text="Select Area", command=select_crop_area, bg="#4682b4", fg="white", font=("Arial", 12), width=13)
+        self.select_area_button.grid(row=0, column=0, padx=5)
 
         # ปุ่มเริ่มการแปล
-        self.start_button = Button(self.main_frame, text="Start Translation", command=self.start_translation, bg="#32cd32", fg="white", font=("Arial", 12), width=20)
-        self.start_button.pack(pady=5)
+        self.start_button = Button(button_frame, text="Start Translation", command=self.start_translation, bg="#32cd32", fg="white", font=("Arial", 12), width=13)
+        self.start_button.grid(row=0, column=1, padx=5)
 
         # ปุ่มหยุดการแปล
-        self.stop_button = Button(self.main_frame, text="Stop Translation", command=self.stop_translation, bg="#dc143c", fg="white", font=("Arial", 12), width=20)
-        self.stop_button.pack(pady=5)
+        self.stop_button = Button(button_frame, text="Stop Translation", command=self.stop_translation, bg="#dc143c", fg="white", font=("Arial", 12), width=13)
+        self.stop_button.grid(row=0, column=2, padx=5)
 
         # ใช้ Event ในการควบคุมการหยุดเธรด
         self.stop_event = threading.Event()
@@ -182,6 +176,7 @@ class TranslatorApp:
                 else:
                     self.update_translated_text("No text detected")  # ไม่มีข้อความที่ถูกตรวจจับ
             time.sleep(1)
+
 
 # เรียกโปรแกรม
 if __name__ == "__main__":
