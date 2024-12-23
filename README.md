@@ -10,6 +10,7 @@ NEW<br>
 
 
 Requirement Program: Tesseract OCR<br>
+https://sourceforge.net/projects/tesseract-ocr.mirror/<br>
 
 Library package:<br>
 1.pip install deep-translator<br>
