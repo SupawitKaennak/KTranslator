@@ -18,3 +18,4 @@ Library package:<br>
 4.pip install pytesseract<br>
 5.pip install googletrans<br>
 6.pip install numpy<br>
+7.pip install tk<br>
