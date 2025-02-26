@@ -70,7 +70,7 @@ class TranslatorApp:
     def __init__(self):
         self.root = Tk()
         self.root.title("KTranslator")
-        self.root.geometry("480x260")
+        self.root.geometry("620x350")
         self.root.configure(bg="#f0f8ff")  # สีพื้นหลัง
 
         # ล็อคขนาดหน้าต่าง
@@ -96,16 +96,16 @@ class TranslatorApp:
         self.selected_ocr_language = StringVar(self.root)
         self.selected_ocr_language.set(list(self.ocr_languages.values())[0])  # ตั้งค่าเริ่มต้น
         Label(lang_frame, text="OCR Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=0, padx=5)
-        ocr_menu = ttk.OptionMenu(lang_frame, self.selected_ocr_language, self.selected_ocr_language.get(),
-                                  *self.ocr_languages.values())
+        ocr_menu = ttk.Combobox(lang_frame, textvariable=self.selected_ocr_language, values=list(self.ocr_languages.values()), state="readonly", height=10)
+
         ocr_menu.grid(row=0, column=1, padx=5)
 
         # ตัวเลือกภาษาสำหรับการแปล
         self.selected_language = StringVar(self.root)
         self.selected_language.set(list(self.translation_languages.values())[0])  # ตั้งค่าเริ่มต้น
         Label(lang_frame, text="Translation Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=2, padx=5)
-        translation_menu = ttk.OptionMenu(lang_frame, self.selected_language, self.selected_language.get(),
-                                           *self.translation_languages.values())
+        translation_menu = ttk.Combobox(lang_frame, textvariable=self.selected_language, values=list(self.translation_languages.values()), state="readonly", height=10)
+
         translation_menu.grid(row=0, column=3, padx=5)
 
         # สร้างกรอบสำหรับการแสดงข้อความแปลพร้อม scroll bar
@@ -116,7 +116,7 @@ class TranslatorApp:
         self.scrollbar.pack(side="right", fill="y")
 
         self.result_text = Text(self.text_frame, wrap="word", font=("Arial", 12), bg="#ffffff", fg="#555555",
-                                yscrollcommand=self.scrollbar.set, width=42, height=6, state="disabled")
+                                yscrollcommand=self.scrollbar.set, width=63, height=11, state="disabled")
         self.result_text.pack(side="left", fill="both", expand=True)
 
         self.scrollbar.config(command=self.result_text.yview)
@@ -126,15 +126,15 @@ class TranslatorApp:
         button_frame.pack(pady=10)
 
         # ปุ่มเลือกพื้นที่ Crop
-        self.select_area_button = Button(button_frame, text="Select Area", command=select_crop_area, bg="#4682b4", fg="white", font=("Arial", 12), width=13)
+        self.select_area_button = Button(button_frame, text="Select Area", command=select_crop_area, bg="#4682b4", fg="white", font=("Arial", 12), width=20)
         self.select_area_button.grid(row=0, column=0, padx=5)
 
         # ปุ่มเริ่มการแปล
-        self.start_button = Button(button_frame, text="Start Translation", command=self.start_translation, bg="#32cd32", fg="white", font=("Arial", 12), width=13)
+        self.start_button = Button(button_frame, text="Start Translation", command=self.start_translation, bg="#32cd32", fg="white", font=("Arial", 12), width=20)
         self.start_button.grid(row=0, column=1, padx=5)
 
         # ปุ่มหยุดการแปล
-        self.stop_button = Button(button_frame, text="Stop Translation", command=self.stop_translation, bg="#dc143c", fg="white", font=("Arial", 12), width=13)
+        self.stop_button = Button(button_frame, text="Stop Translation", command=self.stop_translation, bg="#dc143c", fg="white", font=("Arial", 12), width=20)
         self.stop_button.grid(row=0, column=2, padx=5)
 
         # ใช้ Event ในการควบคุมการหยุดเธรด
@@ -146,6 +146,11 @@ class TranslatorApp:
         self.result_text.config(state="normal")  # เปิดให้แก้ไขข้อความได้ในขณะแปล
         self.stop_event.clear()  # Reset stop event
         threading.Thread(target=self.translate_loop).start()
+
+    def stop_translation(self):
+        self.stop_event.set()  # Set stop event
+        self.result_text.config(state="disabled")  # ทำให้เป็น Read-Only เมื่อหยุดการแปล
+
 
     def stop_translation(self):
         self.stop_event.set()  # Set stop event
@@ -181,8 +186,6 @@ def update_translated_text(self, text):
     """ฟังก์ชันอัปเดตข้อความแปล"""
     print(f"Updating Translated Text: {text}")  # ดีบั๊ก: แสดงข้อความที่จะแสดงใน UI
     self.result_text.config(state="normal")  # เปิดให้แก้ไขชั่วคราว
-    self.result_text.delete("1.0", "end")  # ลบข้อความเก่า
-    self.result_text.insert("1.0", f"Translated Text:\n{text}")  # แทรกข้อความแปลใหม่
     self.result_text.config(state="disabled")  # ตั้งเป็น Read-Only
 
 # เรียกโปรแกรม
