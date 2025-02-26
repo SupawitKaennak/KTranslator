@@ -8,6 +8,8 @@ OLD VERSION<br>
 NEW<br>
 <img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="300" height="170"><br>
 
+FINAL<br>
+<img src="https://github.com/user-attachments/assets/f107b762-e367-46ee-8a8f-184612e2984d" width="300" height="170"><br>
 
 Requirement Program: Tesseract OCR<br>
 https://sourceforge.net/projects/tesseract-ocr.mirror/<br>
