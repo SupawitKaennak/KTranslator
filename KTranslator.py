@@ -151,11 +151,6 @@ class TranslatorApp:
         self.stop_event.set()  # Set stop event
         self.result_text.config(state="disabled")  # ทำให้เป็น Read-Only เมื่อหยุดการแปล
 
-
-    def stop_translation(self):
-        self.stop_event.set()  # Set stop event
-        self.result_text.config(state="disabled")  # ทำให้เป็น Read-Only เมื่อหยุดการแปล
-
     def update_translated_text(self, text):
         """ฟังก์ชันอัปเดตข้อความแปล"""
         self.result_text.config(state="normal")  # เปิดให้แก้ไขชั่วคราว
