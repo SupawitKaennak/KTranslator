@@ -1,6 +1,6 @@
 # translate-screen
 
-This program is screen translator. I make this program for translate subtitle in game<br>
+This program is Realtime Screen Translator. I make this program for translate subtitle in game<br>
 
 OLD VERSION<br>
 <img src="https://github.com/user-attachments/assets/32056c17-acd5-4118-ba78-098dddb71b1a" width="300" height="140"><br>
@@ -22,3 +22,5 @@ Library package:<br>
 5.pip install googletrans<br>
 6.pip install numpy<br>
 7.pip install tk<br>
+ 
+pip install deep-translator pillow opencv-python pytesseract googletrans numpy tk
