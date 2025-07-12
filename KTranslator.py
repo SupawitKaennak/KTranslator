@@ -108,8 +108,8 @@ class TranslatorApp:
         self.scrollbar = Scrollbar(self.text_frame, orient="vertical")
         self.scrollbar.pack(side="right", fill="y")
 
-        self.result_text = Text(self.text_frame, wrap="word", font=("Arial", 12), bg="#ffffff", fg="#555555",
-                                yscrollcommand=self.scrollbar.set, width=63, height=30, state="disabled")
+        self.result_text = Text(self.text_frame, wrap="word", font=("AngsanaUPC", 20), bg="#ffffff", fg="#555555",
+                                yscrollcommand=self.scrollbar.set, width=63, height=15, state="disabled")
         self.result_text.pack(side="left", fill="both", expand=True)
 
         self.scrollbar.config(command=self.result_text.yview)
@@ -206,7 +206,8 @@ class TranslatorApp:
         """ฟังก์ชันอัปเดตข้อความแปล"""
         self.result_text.config(state="normal")  # เปิดให้แก้ไขชั่วคราว
         self.result_text.delete("1.0", "end")  # ลบข้อความเก่า
-        self.result_text.insert("1.0", f"Translated Text:\n{text}")  # แทรกข้อความแปลใหม่
+        # Insert text with word wrapping and ensure no truncation
+        self.result_text.insert("1.0", f"Translated Text:\n{text}\n")
         self.result_text.config(state="disabled")  # ตั้งเป็น Read-Only
 
     def translate_loop(self):
