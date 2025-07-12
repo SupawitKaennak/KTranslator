@@ -18,49 +18,6 @@ if os.path.exists(default_tesseract_path):
 else:
     print(f"Warning: Tesseract executable not found at {default_tesseract_path}. Please check the path.")
 
-# ตัวแปรสำหรับการ Crop
-crop_rect = [0, 0, 0, 0]  # [x1, y1, x2, y2]
-dragging = False  # สถานะการลาก
-resize_factor = 0.6  # อัตราการย่อขนาดภาพ (50%) ของเวลากด select แล้ว crop หน้าจอ
-crop_lock = threading.Lock()  # Lock for crop_rect synchronization
-
-def select_crop_area():
-    global crop_rect, dragging
-
-    # ฟังก์ชันสำหรับ Mouse Event
-    def draw_rectangle(event, x, y, flags, param):
-        global crop_rect, dragging, temp_image
-
-        # คำนวณพิกัดจริงตามอัตราการย่อขนาด
-        real_x, real_y = int(x / resize_factor), int(y / resize_factor)
-
-        if event == cv2.EVENT_LBUTTONDOWN:  # เริ่มลาก
-            crop_rect[0], crop_rect[1] = real_x, real_y
-            dragging = True
-        elif event == cv2.EVENT_MOUSEMOVE and dragging:  # ขณะลาก
-            temp_image = resized_image.copy()
-            cv2.rectangle(temp_image, (int(crop_rect[0] * resize_factor), int(crop_rect[1] * resize_factor)),
-                          (x, y), (0, 255, 0), 2)
-            cv2.imshow("Select Area", temp_image)
-        elif event == cv2.EVENT_LBUTTONUP:  # ปล่อยคลิกซ้าย
-            crop_rect[2], crop_rect[3] = real_x, real_y
-            dragging = False
-            cv2.destroyWindow("Select Area")
-
-    # จับภาพหน้าจอ
-    screen = ImageGrab.grab()
-    image = np.array(screen)
-    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-
-    # ย่อขนาดภาพสำหรับแสดงผล
-    resized_image = cv2.resize(image, (int(image.shape[1] * resize_factor), int(image.shape[0] * resize_factor)))
-    temp_image = resized_image.copy()
-
-    # เปิดหน้าต่างให้ผู้ใช้เลือกพื้นที่
-    cv2.imshow("Select Area", temp_image)
-    cv2.setMouseCallback("Select Area", draw_rectangle)
-    cv2.waitKey(0)  # รอจนกว่าจะปิดหน้าต่าง
-
 # ฟังก์ชันในการโหลดภาษาจากไฟล์ CSV
 def load_languages_from_csv(file_path):
     languages = {}
@@ -90,6 +47,16 @@ class TranslatorApp:
 
         # ทำให้ซ้อนทับหน้าจออื่นได้โดยไม่พับลง always on top
         self.root.attributes('-topmost', 1)
+
+        # ตัวแปรสำหรับการ Crop (ย้ายเข้ามาในคลาส)
+        self.crop_rect = [0, 0, 0, 0]  # [x1, y1, x2, y2]
+        self.dragging = False
+        self.resize_factor = 0.6
+        self.crop_lock = threading.Lock()
+
+        # ตัวแปรสำหรับ Translator เพื่อการ Re-use
+        self.translator = None
+        self.last_target_lang = None
 
         # โหลดภาษาจากไฟล์ CSV
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -126,6 +93,11 @@ class TranslatorApp:
 
         translation_menu.grid(row=0, column=3, padx=5)
 
+        # Add type-ahead search for comboboxes using a factory function
+        ocr_menu.bind('<KeyPress>', self._create_keypress_handler(ocr_menu, list(self.ocr_languages.values())))
+        translation_menu.bind('<KeyPress>', self._create_keypress_handler(translation_menu, list(self.translation_languages.values())))
+
+
         # สร้างกรอบสำหรับการแสดงข้อความแปลพร้อม scroll bar
         self.text_frame = Frame(self.main_frame, bg="#f0f8ff")
         self.text_frame.pack(pady=5)
@@ -144,7 +116,7 @@ class TranslatorApp:
         button_frame.pack(pady=10)
 
         # ปุ่มเลือกพื้นที่ Crop
-        self.select_area_button = Button(button_frame, text="Select Area", command=select_crop_area, bg="#4682b4", fg="white", font=("Arial", 12), width=20)
+        self.select_area_button = Button(button_frame, text="Select Area", command=self.select_crop_area, bg="#4682b4", fg="white", font=("Arial", 12), width=20)
         self.select_area_button.grid(row=0, column=0, padx=5)
 
         # ปุ่มเริ่มการแปล
@@ -159,6 +131,64 @@ class TranslatorApp:
         self.stop_event = threading.Event()
 
         self.root.mainloop()
+
+    def _create_keypress_handler(self, combobox, values):
+        """Creates a keypress handler for a combobox to enable type-ahead search."""
+        search_string = ''
+        last_key_time = 0
+
+        def on_keypress(event):
+            nonlocal search_string, last_key_time
+            current_time = time.time()
+
+            # Reset search string if more than 1 second has passed
+            if current_time - last_key_time > 1:
+                search_string = ''
+            last_key_time = current_time
+
+            char = event.char.lower()
+            if not char.isprintable():
+                return
+
+            search_string += char
+            # Find the first language that starts with the search string
+            for idx, val in enumerate(values):
+                if val.lower().startswith(search_string):
+                    def select_idx():
+                        combobox.current(idx)
+                        combobox.event_generate('<Button-1>')  # Open dropdown to show selection
+                    self.root.after(50, select_idx)
+                    break
+        return on_keypress
+
+    def select_crop_area(self):
+        """Opens a window to select a screen area for OCR."""
+        # Mouse event handler for drawing the rectangle
+        def draw_rectangle(event, x, y, flags, param):
+            real_x, real_y = int(x / self.resize_factor), int(y / self.resize_factor)
+
+            if event == cv2.EVENT_LBUTTONDOWN:
+                self.crop_rect[0], self.crop_rect[1] = real_x, real_y
+                self.dragging = True
+            elif event == cv2.EVENT_MOUSEMOVE and self.dragging:
+                temp_image = resized_image.copy()
+                cv2.rectangle(temp_image, (int(self.crop_rect[0] * self.resize_factor), int(self.crop_rect[1] * self.resize_factor)),
+                              (x, y), (0, 255, 0), 2)
+                cv2.imshow("Select Area", temp_image)
+            elif event == cv2.EVENT_LBUTTONUP:
+                self.crop_rect[2], self.crop_rect[3] = real_x, real_y
+                self.dragging = False
+                cv2.destroyWindow("Select Area")
+
+        screen = ImageGrab.grab()
+        image = np.array(screen)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        resized_image = cv2.resize(image, (int(image.shape[1] * self.resize_factor), int(image.shape[0] * self.resize_factor)))
+
+        cv2.imshow("Select Area", resized_image)
+        cv2.setMouseCallback("Select Area", draw_rectangle)
+        cv2.waitKey(0)
 
     def start_translation(self):
         self.result_text.config(state="normal")  # เปิดให้แก้ไขข้อความได้ในขณะแปล
@@ -177,27 +207,40 @@ class TranslatorApp:
         self.result_text.config(state="disabled")  # ตั้งเป็น Read-Only
 
     def translate_loop(self):
-        global crop_rect
         while not self.stop_event.is_set():  # ทำงานจนกว่าจะมีการหยุด
-            with crop_lock:
-                current_crop = crop_rect.copy()
-            if current_crop[2] > current_crop[0] and current_crop[3] > current_crop[1]:
-                img = ImageGrab.grab(bbox=tuple(current_crop))
-                img_np = np.array(img)
-                ocr_language = self.selected_ocr_language.get()
-                print(f"OCR Language: {ocr_language}")  # ดีบั๊ก: แสดงภาษาที่เลือก
-                text = pytesseract.image_to_string(img_np, lang=ocr_language)
-                print(f"Detected Text: {text}")  # ดีบั๊ก: แสดงข้อความที่ OCR ดึงมาได้
-            else:
+            try:
+                with self.crop_lock:
+                    current_crop = self.crop_rect.copy()
+
                 text = ""
-            if text.strip():
-                target_language = self.selected_language.get()
-                print(f"Translating to: {target_language}")  # ดีบั๊ก: แสดงภาษาที่แปล
-                translated_text = GoogleTranslator(source='auto', target=target_language).translate(text)
-                self.update_translated_text(translated_text)  # อัปเดตข้อความแปล
-            else:
-                self.update_translated_text("No text detected")  # ไม่มีข้อความที่ถูกตรวจจับ
-            time.sleep(1)
+                if current_crop[2] > current_crop[0] and current_crop[3] > current_crop[1]:
+                    img = ImageGrab.grab(bbox=tuple(current_crop))
+                    img_np = np.array(img)
+                    ocr_language = self.selected_ocr_language.get()
+                    text = pytesseract.image_to_string(img_np, lang=ocr_language)
+
+                if text.strip():
+                    target_language = self.selected_language.get()
+
+                    # Recreate translator only if target language changes for efficiency
+                    if self.translator is None or self.last_target_lang != target_language:
+                        self.translator = GoogleTranslator(source='auto', target=target_language)
+                        self.last_target_lang = target_language
+                        print(f"Translator target set to: {target_language}")
+
+                    translated_text = self.translator.translate(text)
+                    # Schedule GUI update on the main thread (Thread-safe)
+                    self.root.after(0, lambda t=translated_text: self.update_translated_text(t))
+                else:
+                    self.root.after(0, lambda: self.update_translated_text("No text detected"))
+
+            except Exception as e:
+                error_message = f"An error occurred: {e}"
+                print(error_message)
+                self.root.after(0, lambda: self.update_translated_text(error_message))
+            finally:
+                # Wait before the next loop
+                time.sleep(1)
 
 # เรียกโปรแกรม
 if __name__ == "__main__":
