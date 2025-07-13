@@ -22,6 +22,5 @@ Library package:<br>
 5.pip install googletrans<br>
 6.pip install numpy<br>
 7.pip install tk<br>
-8.pip install pythainlp<br>
  
-pip install deep-translator pillow opencv-python pytesseract googletrans numpy tk pythainlp
+pip install deep-translator pillow opencv-python pytesseract googletrans numpy tk

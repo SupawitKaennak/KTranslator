@@ -13,9 +13,6 @@ from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text, C
 # ตั้งค่า pytesseract
 import os.path
 
-# Import pythainlp for Thai language processing
-from pythainlp.tokenize import word_tokenize
-
 default_tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 if os.path.exists(default_tesseract_path):
     pytesseract.pytesseract.tesseract_cmd = default_tesseract_path
@@ -252,9 +249,8 @@ class TranslatorApp:
                     translated_text = self.translator.translate(text)
                     # Post-process Thai translation for better grammar if target is Thai
                     if self.last_target_lang == 'th':
-                        # Tokenize Thai text and join with spaces (simple post-processing)
-                        tokens = word_tokenize(translated_text, engine='newmm')
-                        translated_text = ' '.join(tokens)
+                        # Post-processing removed as pythainlp is no longer used
+                        pass
                     # Schedule GUI update on the main thread (Thread-safe)
                     self.root.after(0, lambda t=translated_text: self.update_translated_text(t))
                 else:
