@@ -1,13 +1,14 @@
 import cv2
 import pytesseract
 from deep_translator import GoogleTranslator
+import os
 from PIL import ImageGrab
 import numpy as np
 import threading
 import time
 import csv
 import os
-from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text
+from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text, Canvas
 
 # ตั้งค่า pytesseract
 import os.path
@@ -165,33 +166,49 @@ class TranslatorApp:
         return on_keypress
 
     def select_crop_area(self):
-        """Opens a window to select a screen area for OCR."""
-        # Mouse event handler for drawing the rectangle
-        def draw_rectangle(event, x, y, flags, param):
-            real_x, real_y = int(x / self.resize_factor), int(y / self.resize_factor)
+        """Opens a transparent overlay window to select a screen area for OCR."""
+        # Create a transparent fullscreen window using Tkinter
+        overlay = Tk()
+        overlay.attributes('-fullscreen', True)
+        overlay.attributes('-topmost', True)
+        overlay.attributes('-alpha', 0.3)  # semi-transparent
+        overlay.config(bg='black')
 
-            if event == cv2.EVENT_LBUTTONDOWN:
-                self.crop_rect[0], self.crop_rect[1] = real_x, real_y
-                self.dragging = True
-            elif event == cv2.EVENT_MOUSEMOVE and self.dragging:
-                temp_image = resized_image.copy()
-                cv2.rectangle(temp_image, (int(self.crop_rect[0] * self.resize_factor), int(self.crop_rect[1] * self.resize_factor)),
-                              (x, y), (0, 255, 0), 2)
-                cv2.imshow("Select Area", temp_image)
-            elif event == cv2.EVENT_LBUTTONUP:
-                self.crop_rect[2], self.crop_rect[3] = real_x, real_y
-                self.dragging = False
-                cv2.destroyWindow("Select Area")
+        # Variables to store crop rectangle coordinates
+        self.crop_rect = [0, 0, 0, 0]
+        self.dragging = False
 
-        screen = ImageGrab.grab()
-        image = np.array(screen)
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+        # Canvas for drawing rectangle
+        canvas = Canvas(overlay, cursor="cross", bg='black')
+        canvas.pack(fill="both", expand=True)
 
-        resized_image = cv2.resize(image, (int(image.shape[1] * self.resize_factor), int(image.shape[0] * self.resize_factor)))
+        def on_button_press(event):
+            self.crop_rect[0] = event.x
+            self.crop_rect[1] = event.y
+            self.crop_rect[2] = event.x
+            self.crop_rect[3] = event.y
+            self.dragging = True
+            canvas.delete("rect")
+            canvas.create_rectangle(self.crop_rect[0], self.crop_rect[1], self.crop_rect[2], self.crop_rect[3], outline='green', width=2, tag="rect")
 
-        cv2.imshow("Select Area", resized_image)
-        cv2.setMouseCallback("Select Area", draw_rectangle)
-        cv2.waitKey(0)
+        def on_move_press(event):
+            if not self.dragging:
+                return
+            self.crop_rect[2] = event.x
+            self.crop_rect[3] = event.y
+            canvas.delete("rect")
+            canvas.create_rectangle(self.crop_rect[0], self.crop_rect[1], self.crop_rect[2], self.crop_rect[3], outline='green', width=2, tag="rect")
+
+        def on_button_release(event):
+            self.dragging = False
+            # Close the overlay window after selection
+            overlay.destroy()
+
+        canvas.bind("<ButtonPress-1>", on_button_press)
+        canvas.bind("<B1-Motion>", on_move_press)
+        canvas.bind("<ButtonRelease-1>", on_button_release)
+
+        overlay.mainloop()
 
     def start_translation(self):
         self.result_text.config(state="normal")  # เปิดให้แก้ไขข้อความได้ในขณะแปล
