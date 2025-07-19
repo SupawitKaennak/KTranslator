@@ -7,14 +7,10 @@ import numpy as np
 import threading
 import time
 import csv
-import os
 from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text, Canvas
 
 # ตั้งค่า pytesseract
 import os.path
-
-# Import pythainlp for Thai language processing
-from pythainlp.tokenize import word_tokenize
 
 default_tesseract_path = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 if os.path.exists(default_tesseract_path):
@@ -38,7 +34,6 @@ def load_languages_from_csv(file_path):
         print(f"Error reading language file {file_path}: {e}")
     return languages
 
-# ส่วนอื่น ๆ ยังคงเหมือนเดิม
 class TranslatorApp:
     def __init__(self):
         self.root = Tk()
@@ -80,7 +75,7 @@ class TranslatorApp:
         if self.ocr_languages:
             self.selected_ocr_language.set(list(self.ocr_languages.values())[0])  # ตั้งค่าเริ่มต้น
         else:
-            self.selected_ocr_language.set('eng')  # default fallback
+            self.selected_ocr_language.set('')  # removed default fallback
         Label(lang_frame, text="OCR Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=0, padx=5)
         ocr_menu = ttk.Combobox(lang_frame, textvariable=self.selected_ocr_language, values=list(self.ocr_languages.values()), state="readonly", height=10)
 
@@ -91,7 +86,7 @@ class TranslatorApp:
         if self.translation_languages:
             self.selected_language.set(list(self.translation_languages.values())[0])  # ตั้งค่าเริ่มต้น
         else:
-            self.selected_language.set('en')  # default fallback
+            self.selected_language.set('')  # removed default fallback
         Label(lang_frame, text="Translation Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=2, padx=5)
         translation_menu = ttk.Combobox(lang_frame, textvariable=self.selected_language, values=list(self.translation_languages.values()), state="readonly", height=10)
 
@@ -250,11 +245,6 @@ class TranslatorApp:
                         print(f"Translator target set to: {target_language}")
 
                     translated_text = self.translator.translate(text)
-                    # Post-process Thai translation for better grammar if target is Thai
-                    if self.last_target_lang == 'th':
-                        # Tokenize Thai text and join with spaces (simple post-processing)
-                        tokens = word_tokenize(translated_text, engine='newmm')
-                        translated_text = ' '.join(tokens)
                     # Schedule GUI update on the main thread (Thread-safe)
                     self.root.after(0, lambda t=translated_text: self.update_translated_text(t))
                 else:
