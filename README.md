@@ -2,13 +2,13 @@
 
 This program is Realtime Screen Translator. I make this program for translate subtitle in game<br>
 FIRST VERSION<br>
-<img src="https://github.com/user-attachments/assets/32056c17-acd5-4118-ba78-098dddb71b1a" width="622" height="300"><br>
+<img src="https://github.com/user-attachments/assets/32056c17-acd5-4118-ba78-098dddb71b1a" width="622" height="400"><br>
 
 SECOND<br>
-<img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="622" height="300"><br>
+<img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="622" height="400"><br>
 
 THIRD<br>
-<img src="https://github.com/user-attachments/assets/f107b762-e367-46ee-8a8f-184612e2984d" width="622" height="300"><br>
+<img src="https://github.com/user-attachments/assets/f107b762-e367-46ee-8a8f-184612e2984d" width="622" height="400"><br>
 
 FINAL<br>
 <img width="622" height="734" alt="{CCA3174F-9F7A-4228-9D2E-EB790C3DEE20}" src="https://github.com/user-attachments/assets/52820cad-5498-4510-9fb6-497d0ec941e8" /><br>
