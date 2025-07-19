@@ -1,10 +1,16 @@
 # translate-screen
 
 This program is Realtime Screen Translator. I make this program for translate subtitle in game<br>
+FIRST VERSION<br>
+<img src="https://github.com/user-attachments/assets/32056c17-acd5-4118-ba78-098dddb71b1a" width="622" height="400"><br>
 
 FIRST VERSION<br>
 <img src="https://github.com/user-attachments/assets/32056c17-acd5-4118-ba78-098dddb71b1a" width="622" height="400"><br>
 
+SECOND<br>
+<img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="622" height="400"><br>
+
+=======
 SECOND<br>
 <img src="https://github.com/user-attachments/assets/511d0a11-9660-4272-8dfc-69dc18607784" width="622" height="400"><br>
 
