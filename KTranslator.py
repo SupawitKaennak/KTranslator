@@ -149,9 +149,12 @@ class TranslatorApp:
             if google_code in self.ocr_mapping:
                 ocr_code = self.ocr_mapping[google_code]
                 self.ocr_languages[lang_name] = ocr_code
+                print(f"Added OCR language: {lang_name} -> {google_code} -> {ocr_code}")
+            else:
+                print(f"Missing OCR mapping for: {lang_name} ({google_code})")
 
         # ตรวจสอบว่ามีข้อมูลภาษาหรือไม่
-        if not self.translation_languages:git
+        if not self.translation_languages:
             messagebox.showerror("Error", "No language data available. Please check the languages.csv file.")
             return
 
