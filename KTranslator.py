@@ -151,7 +151,7 @@ class TranslatorApp:
                 self.ocr_languages[lang_name] = ocr_code
 
         # ตรวจสอบว่ามีข้อมูลภาษาหรือไม่
-        if not self.translation_languages:git
+        if not self.translation_languages:
             messagebox.showerror("Error", "No language data available. Please check the languages.csv file.")
             return
 
