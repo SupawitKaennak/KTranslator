@@ -1,4 +1,3 @@
-import cv2
 import pytesseract
 from deep_translator import GoogleTranslator
 import os
@@ -7,7 +6,7 @@ import numpy as np
 import threading
 import time
 import csv
-from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text, Canvas
+from tkinter import Tk, Label, StringVar, Button, Frame, ttk, Scrollbar, Text, Canvas, messagebox
 
 # ตั้งค่า pytesseract
 import os.path
@@ -24,15 +23,90 @@ def load_languages_from_csv(file_path):
     try:
         with open(file_path, newline='', encoding='utf-8') as csvfile:
             reader = csv.reader(csvfile)
+            next(reader)  # ข้าม header row
             for row in reader:
-                language_name = row[0]  # ชื่อภาษา
-                language_code = row[1]  # รหัสภาษา
-                languages[language_name] = language_code
+                if len(row) >= 2:  # ตรวจสอบว่ามีข้อมูลครบ
+                    language_name = row[0]  # ชื่อภาษา
+                    language_code = row[1]  # รหัสภาษา (Google Translate)
+                    languages[language_name] = language_code
     except FileNotFoundError:
         print(f"Error: Language file {file_path} not found.")
+        # สร้างข้อมูลภาษาเริ่มต้น
+        languages = {
+            "English": "en",
+            "Thai": "th",
+            "Japanese": "ja",
+            "Korean": "ko",
+            "Chinese Simplified": "zh-CN",
+            "Chinese Traditional": "zh-TW"
+        }
     except Exception as e:
         print(f"Error reading language file {file_path}: {e}")
+        # สร้างข้อมูลภาษาเริ่มต้น
+        languages = {
+            "English": "en",
+            "Thai": "th",
+            "Japanese": "ja",
+            "Korean": "ko",
+            "Chinese Simplified": "zh-CN",
+            "Chinese Traditional": "zh-TW"
+        }
     return languages
+
+# ฟังก์ชันสำหรับโหลด OCR language mapping จากไฟล์ CSV
+def load_ocr_mapping_from_csv(file_path):
+    """โหลด mapping ระหว่าง Google Translate codes และ Tesseract OCR codes จากไฟล์ CSV"""
+    ocr_mapping = {}
+    try:
+        with open(file_path, newline='', encoding='utf-8') as csvfile:
+            reader = csv.reader(csvfile)
+            next(reader)  # ข้าม header row
+            for row in reader:
+                if len(row) >= 2:  # ตรวจสอบว่ามีข้อมูลครบ
+                    google_code = row[0]  # Google Translate code
+                    ocr_code = row[1]     # Tesseract OCR code
+                    ocr_mapping[google_code] = ocr_code
+    except FileNotFoundError:
+        print(f"Warning: OCR mapping file {file_path} not found. Using default mapping.")
+        # สร้าง mapping เริ่มต้นสำหรับภาษาหลัก
+        ocr_mapping = {
+            "en": "eng",
+            "th": "tha", 
+            "ja": "jpn",
+            "ko": "kor",
+            "zh-CN": "chi_sim",
+            "zh-TW": "chi_tra",
+            "ar": "ara",
+            "hi": "hin",
+            "bn": "ben",
+            "ru": "rus",
+            "fr": "fra",
+            "de": "deu",
+            "es": "spa",
+            "it": "ita",
+            "pt": "por"
+        }
+    except Exception as e:
+        print(f"Error reading OCR mapping file {file_path}: {e}")
+        # สร้าง mapping เริ่มต้นสำหรับภาษาหลัก
+        ocr_mapping = {
+            "en": "eng",
+            "th": "tha", 
+            "ja": "jpn",
+            "ko": "kor",
+            "zh-CN": "chi_sim",
+            "zh-TW": "chi_tra",
+            "ar": "ara",
+            "hi": "hin",
+            "bn": "ben",
+            "ru": "rus",
+            "fr": "fra",
+            "de": "deu",
+            "es": "spa",
+            "it": "ita",
+            "pt": "por"
+        }
+    return ocr_mapping
 
 class TranslatorApp:
     def __init__(self):
@@ -56,11 +130,30 @@ class TranslatorApp:
         # ตัวแปรสำหรับ Translator เพื่อการ Re-use
         self.translator = None
         self.last_target_lang = None
+        
+        # ตัวแปรสำหรับการควบคุม thread
+        self.translation_thread = None
+        self.is_translating = False
 
         # โหลดภาษาจากไฟล์ CSV
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        self.ocr_languages = load_languages_from_csv(os.path.join(current_dir, "languages.csv"))
-        self.translation_languages = self.ocr_languages  # ใช้ภาษาจากไฟล์เดียวกันสำหรับการแปล
+        data_dir = os.path.join(current_dir, "data")
+        self.translation_languages = load_languages_from_csv(os.path.join(data_dir, "languages.csv"))
+        
+        # โหลด OCR language mapping จากไฟล์ CSV
+        self.ocr_mapping = load_ocr_mapping_from_csv(os.path.join(data_dir, "ocr_mapping.csv"))
+        
+        # สร้าง OCR languages list โดยใช้ชื่อภาษาและ OCR codes
+        self.ocr_languages = {}
+        for lang_name, google_code in self.translation_languages.items():
+            if google_code in self.ocr_mapping:
+                ocr_code = self.ocr_mapping[google_code]
+                self.ocr_languages[lang_name] = ocr_code
+
+        # ตรวจสอบว่ามีข้อมูลภาษาหรือไม่
+        if not self.translation_languages:git
+            messagebox.showerror("Error", "No language data available. Please check the languages.csv file.")
+            return
 
         # สร้างกรอบ UI
         self.main_frame = Frame(self.root, bg="#f0f8ff")
@@ -72,29 +165,31 @@ class TranslatorApp:
 
         # ตัวเลือกภาษา OCR
         self.selected_ocr_language = StringVar(self.root)
-        if self.ocr_languages:
-            self.selected_ocr_language.set(list(self.ocr_languages.values())[0])  # ตั้งค่าเริ่มต้น
+        ocr_language_names = list(self.ocr_languages.keys())
+        if ocr_language_names:
+            self.selected_ocr_language.set(ocr_language_names[0])  # ตั้งค่าเริ่มต้น
         else:
-            self.selected_ocr_language.set('')  # removed default fallback
+            self.selected_ocr_language.set('English')  # fallback to English
         Label(lang_frame, text="OCR Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=0, padx=5)
-        ocr_menu = ttk.Combobox(lang_frame, textvariable=self.selected_ocr_language, values=list(self.ocr_languages.values()), state="readonly", height=10)
+        ocr_menu = ttk.Combobox(lang_frame, textvariable=self.selected_ocr_language, values=ocr_language_names, state="readonly", height=10)
 
         ocr_menu.grid(row=0, column=1, padx=5)
 
         # ตัวเลือกภาษาสำหรับการแปล
         self.selected_language = StringVar(self.root)
-        if self.translation_languages:
-            self.selected_language.set(list(self.translation_languages.values())[0])  # ตั้งค่าเริ่มต้น
+        translation_language_names = list(self.translation_languages.keys())
+        if translation_language_names:
+            self.selected_language.set(translation_language_names[0])  # ตั้งค่าเริ่มต้น
         else:
-            self.selected_language.set('')  # removed default fallback
+            self.selected_language.set('English')  # fallback to English
         Label(lang_frame, text="Translation Language:", font=("Arial", 12), bg="#f0f8ff", fg="#333333").grid(row=0, column=2, padx=5)
-        translation_menu = ttk.Combobox(lang_frame, textvariable=self.selected_language, values=list(self.translation_languages.values()), state="readonly", height=10)
+        translation_menu = ttk.Combobox(lang_frame, textvariable=self.selected_language, values=translation_language_names, state="readonly", height=10)
 
         translation_menu.grid(row=0, column=3, padx=5)
 
         # Add type-ahead search for comboboxes using a factory function
-        ocr_menu.bind('<KeyPress>', self._create_keypress_handler(ocr_menu, list(self.ocr_languages.values())))
-        translation_menu.bind('<KeyPress>', self._create_keypress_handler(translation_menu, list(self.translation_languages.values())))
+        ocr_menu.bind('<KeyPress>', self._create_keypress_handler(ocr_menu, ocr_language_names))
+        translation_menu.bind('<KeyPress>', self._create_keypress_handler(translation_menu, translation_language_names))
 
 
         # สร้างกรอบสำหรับการแสดงข้อความแปลพร้อม scroll bar
@@ -206,21 +301,39 @@ class TranslatorApp:
         overlay.mainloop()
 
     def start_translation(self):
+        if self.is_translating:
+            messagebox.showwarning("Warning", "Translation is already running!")
+            return
+            
+        # ตรวจสอบว่ามีการเลือกพื้นที่หรือไม่
+        if self.crop_rect[2] <= self.crop_rect[0] or self.crop_rect[3] <= self.crop_rect[1]:
+            messagebox.showwarning("Warning", "Please select a crop area first!")
+            return
+            
         self.result_text.config(state="normal")  # เปิดให้แก้ไขข้อความได้ในขณะแปล
         self.stop_event.clear()  # Reset stop event
-        threading.Thread(target=self.translate_loop, daemon=True).start()
+        self.is_translating = True
+        self.translation_thread = threading.Thread(target=self.translate_loop, daemon=True)
+        self.translation_thread.start()
 
     def stop_translation(self):
+        if not self.is_translating:
+            return
+            
         self.stop_event.set()  # Set stop event
+        self.is_translating = False
         self.result_text.config(state="disabled")  # ทำให้เป็น Read-Only เมื่อหยุดการแปล
 
     def update_translated_text(self, text):
         """ฟังก์ชันอัปเดตข้อความแปล"""
-        self.result_text.config(state="normal")  # เปิดให้แก้ไขชั่วคราว
-        self.result_text.delete("1.0", "end")  # ลบข้อความเก่า
-        # Insert text with word wrapping and ensure no truncation
-        self.result_text.insert("1.0", f"Translated Text:\n{text}\n")
-        self.result_text.config(state="disabled")  # ตั้งเป็น Read-Only
+        try:
+            self.result_text.config(state="normal")  # เปิดให้แก้ไขชั่วคราว
+            self.result_text.delete("1.0", "end")  # ลบข้อความเก่า
+            # Insert text with word wrapping and ensure no truncation
+            self.result_text.insert("1.0", f"Translated Text:\n{text}\n")
+            self.result_text.config(state="disabled")  # ตั้งเป็น Read-Only
+        except Exception as e:
+            print(f"Error updating text: {e}")
 
     def translate_loop(self):
         while not self.stop_event.is_set():  # ทำงานจนกว่าจะมีการหยุด
@@ -232,17 +345,21 @@ class TranslatorApp:
                 if current_crop[2] > current_crop[0] and current_crop[3] > current_crop[1]:
                     img = ImageGrab.grab(bbox=tuple(current_crop))
                     img_np = np.array(img)
-                    ocr_language = self.selected_ocr_language.get()
-                    text = pytesseract.image_to_string(img_np, lang=ocr_language)
+                    # ใช้ชื่อภาษาเพื่อหา OCR code
+                    ocr_language_name = self.selected_ocr_language.get()
+                    ocr_language_code = self.ocr_languages.get(ocr_language_name, 'eng')
+                    text = pytesseract.image_to_string(img_np, lang=ocr_language_code)
 
                 if text.strip():
-                    target_language = self.selected_language.get()
+                    # ใช้ชื่อภาษาเพื่อหา Google Translate code
+                    target_language_name = self.selected_language.get()
+                    target_language_code = self.translation_languages.get(target_language_name, 'en')
 
                     # Recreate translator only if target language changes for efficiency
-                    if self.translator is None or self.last_target_lang != target_language:
-                        self.translator = GoogleTranslator(source='auto', target=target_language)
-                        self.last_target_lang = target_language
-                        print(f"Translator target set to: {target_language}")
+                    if self.translator is None or self.last_target_lang != target_language_code:
+                        self.translator = GoogleTranslator(source='auto', target=target_language_code)
+                        self.last_target_lang = target_language_code
+                        print(f"Translator target set to: {target_language_code}")
 
                     translated_text = self.translator.translate(text)
                     # Schedule GUI update on the main thread (Thread-safe)
@@ -257,7 +374,14 @@ class TranslatorApp:
             finally:
                 # Wait before the next loop
                 time.sleep(1)
+        
+        # Reset translation state when loop ends
+        self.is_translating = False
 
 # เรียกโปรแกรม
 if __name__ == "__main__":
-    TranslatorApp()
+    try:
+        TranslatorApp()
+    except Exception as e:
+        print(f"Application error: {e}")
+        messagebox.showerror("Error", f"Failed to start application: {e}")
