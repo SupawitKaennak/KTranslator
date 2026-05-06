@@ -73,21 +73,12 @@ impl BackgroundCoordinator {
                         let new_ocr = ocr_text.trim();
                         let old_ocr = slot.last_ocr_text.trim();
 
-                        let is_too_similar = if !old_ocr.is_empty() && !new_ocr.is_empty() {
-                            let dist = strsim::levenshtein(new_ocr, old_ocr);
-                            let max_len = new_ocr.len().max(old_ocr.len());
-                            let similarity = 1.0 - (dist as f32 / max_len as f32);
-                            similarity > 0.85 // If more than 85% similar, don't re-translate
-                        } else {
-                            false
-                        };
-
                         if new_ocr.is_empty() {
                             slot.last_ocr_text = String::new();
                             slot.last_translation = String::new();
                             slot.last_ocr_lines.clear();
                             slot.last_trans_lines.clear();
-                        } else if new_ocr != old_ocr && !is_too_similar {
+                        } else if new_ocr != old_ocr {
                             slot.last_ocr_text = ocr_text.clone();
                             slot.last_translation = translated.clone();
                             slot.last_ocr_lines = ocr_lines.clone();
@@ -98,10 +89,10 @@ impl BackgroundCoordinator {
                                 translation_cache.lock().insert(cache_key, (ocr_text, translated));
                             }
                         } else {
-                            // Even if we skip translation, we might want to update line positions
-                            // if they shifted slightly, but keep the old text.
-                            if !slot.last_translation.trim().is_empty() {
+                            if !translated.trim().is_empty() {
+                                slot.last_trans_lines = Self::parse_numbered_lines(&translated, ocr_lines.len());
                                 slot.last_ocr_lines = ocr_lines;
+                                slot.last_translation = translated;
                             }
                         }
                     }
