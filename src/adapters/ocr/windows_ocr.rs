@@ -1,179 +1,156 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use image::{ImageBuffer, Rgba};
-use windows::Graphics::Imaging::SoftwareBitmap;
+use std::sync::Arc;
+use windows::Graphics::Imaging::BitmapDecoder;
+use windows::Storage::Streams::InMemoryRandomAccessStream;
+use windows::Globalization::Language;
 use windows::Media::Ocr::OcrEngine;
-use windows::Storage::Streams::DataWriter;
+use std::future::IntoFuture;
 
-use crate::core::types::LanguageTag;
-use crate::core::ports::{FrameRgba, OcrTextLine};
+use crate::core::{
+    ports::{FrameRgba, OcrEngine as OcrEngineTrait, OcrTextLine},
+    types::LanguageTag,
+};
 
-pub struct WindowsOcr {}
+pub struct WindowsOcr {
+    engine: Arc<OcrEngine>,
+}
 
 impl WindowsOcr {
     pub fn new() -> Self {
-        Self {}
+        let lang = Language::CreateLanguage(&windows::core::HSTRING::from("en-US")).unwrap();
+        let engine = OcrEngine::TryCreateFromLanguage(&lang).unwrap();
+        Self { engine: Arc::new(engine) }
     }
 
-    fn make_engine(lang_hint: Option<&LanguageTag>) -> Result<OcrEngine> {
-        if let Some(tag) = lang_hint {
-            let win_tag = windows::Globalization::Language::CreateLanguage(&windows::core::HSTRING::from(&tag.0))?;
-            if let Ok(engine) = OcrEngine::TryCreateFromLanguage(&win_tag) {
-                return Ok(engine);
-            }
-        }
-        Ok(OcrEngine::TryCreateFromUserProfileLanguages()?)
-    }
-
-    fn to_software_bitmap(frame: &FrameRgba) -> Result<SoftwareBitmap> {
-        let bitmap = SoftwareBitmap::Create(
-            windows::Graphics::Imaging::BitmapPixelFormat::Rgba8,
-            frame.width as i32,
-            frame.height as i32,
-        )?;
-
-        let dw = DataWriter::new()?;
-        dw.WriteBytes(&frame.data)?;
-        let buffer = dw.DetachBuffer()?;
-
-        bitmap.CopyFromBuffer(&buffer)?;
-        Ok(bitmap)
-    }
-
-    fn preprocess(frame: &FrameRgba) -> (FrameRgba, f32) {
-        let Some(img) = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(frame.width, frame.height, frame.data.clone()) else {
-            return (frame.clone(), 1.0);
+    fn preprocess(frame: FrameRgba) -> (FrameRgba, f32) {
+        let Some(img) = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(frame.width, frame.height, frame.data) else {
+            return (FrameRgba { width: frame.width, height: frame.height, data: Vec::new() }, 1.0);
         };
 
-        // Convert to grayscale first. This reduces the math required for blur and unsharpen by 75%
-        // because it operates on 1 channel (Luma) instead of 4 (RGBA).
         let gray_img_base = image::DynamicImage::ImageRgba8(img).into_luma8();
-        let gray_dynamic = image::DynamicImage::ImageLuma8(gray_img_base);
         
-        // 1. Denoise: A very light blur to merge screentone dots
-        let blurred = gray_dynamic.blur(0.5);
-        
-        // 2. Sharpen: Bring back character edges
-        let sharpened = blurred.unsharpen(1.5, 10);
-        
-        let gray_img = sharpened.into_luma8();
- 
-        let (processed_img, final_scale) = if frame.height < 1200 {
+        let (processed_img, final_scale) = if frame.height < 1000 {
             let scale = 3.0;
             let new_w = (frame.width as f32 * scale) as u32;
             let new_h = (frame.height as f32 * scale) as u32;
-            // Use Triangle (Bilinear) instead of CatmullRom.
-            // Triangle is significantly faster and sufficient for OCR text upscaling.
-            let resized = image::imageops::resize(&gray_img, new_w, new_h, image::imageops::FilterType::Triangle);
+            let resized = image::imageops::resize(&gray_img_base, new_w, new_h, image::imageops::FilterType::Triangle);
             (resized, scale)
         } else {
-            (gray_img, 1.0)
+            (gray_img_base, 1.0)
         };
-        let scale = final_scale;
 
-        let mut final_img: image::ImageBuffer<image::Luma<u8>, Vec<u8>> = processed_img;
-        
-        // 3. Dynamic Contrast Stretching
+        let mut final_img = processed_img;
         let mut min_v = 255u8;
         let mut max_v = 0u8;
+        let mut sum_v = 0u64;
+        
         for pixel in final_img.pixels() {
             let v = pixel.0[0];
             if v < min_v { min_v = v; }
             if v > max_v { max_v = v; }
+            sum_v += v as u64;
         }
         
+        let total_pixels = final_img.width() as u64 * final_img.height() as u64;
+        let avg_v = if total_pixels > 0 { (sum_v / total_pixels) as u8 } else { 128 };
+        let should_invert = avg_v < 100;
+
         if max_v > min_v {
             let range = (max_v - min_v) as f32;
             for pixel in final_img.pixels_mut() {
                 let v = pixel.0[0];
-                let normalized = ((v - min_v) as f32 / range * 255.0) as u8;
+                let mut normalized = ((v - min_v) as f32 / range * 255.0) as u8;
+                if should_invert {
+                    normalized = 255 - normalized;
+                }
                 pixel.0[0] = normalized;
             }
         }
 
-        // 4. Auto-Inversion: Manga text can be white-on-black.
-        // If the image is mostly dark, invert it for Windows OCR.
-        let mut dark_pixels = 0;
-        let total = final_img.width() * final_img.height();
-        for pixel in final_img.pixels() {
-            if pixel.0[0] < 128 { dark_pixels += 1; }
-        }
-        if dark_pixels > total / 2 {
-            for pixel in final_img.pixels_mut() {
-                pixel.0[0] = 255 - pixel.0[0];
-            }
-        }
-
+        let width = final_img.width();
+        let height = final_img.height();
         let final_rgba = image::DynamicImage::ImageLuma8(final_img).to_rgba8();
         
-        (
-            FrameRgba {
-                width: final_rgba.width(),
-                height: final_rgba.height(),
-                data: final_rgba.into_raw(),
-            },
-            scale,
-        )
+        (FrameRgba { width, height, data: final_rgba.into_raw() }, final_scale)
+    }
+}
+
+// Robust helper to block on Windows futures using tokio
+fn wait_for<F: std::future::Future>(f: F) -> F::Output {
+    tokio::runtime::Handle::current().block_on(f)
+}
+
+impl OcrEngineTrait for WindowsOcr {
+    fn recognize(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<String> {
+        let (processed, _) = Self::preprocess(frame);
+        
+        let stream = InMemoryRandomAccessStream::new()?;
+        let writer = stream.GetOutputStreamAt(0)?;
+        {
+            let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)?;
+            data_writer.WriteBytes(&processed.data)?;
+            wait_for(data_writer.StoreAsync()?.into_future())?;
+            wait_for(data_writer.FlushAsync()?.into_future())?;
+        }
+
+        let decoder = wait_for(BitmapDecoder::CreateWithIdAsync(windows::Graphics::Imaging::BitmapDecoder::PngDecoderId()?, &stream)?.into_future())?;
+        let bitmap = wait_for(decoder.GetSoftwareBitmapAsync()?.into_future())?;
+
+        let result = wait_for(self.engine.RecognizeAsync(&bitmap)?.into_future())?;
+        Ok(result.Text()?.to_string())
     }
 
-    pub fn recognize_lines(
-        &self,
-        frame: &FrameRgba,
-        lang_hint: Option<&LanguageTag>,
-    ) -> Result<Vec<OcrTextLine>> {
-        let engine = Self::make_engine(lang_hint)?;
-
-        let (processed_frame, scale) = Self::preprocess(frame);
-        let bitmap = Self::to_software_bitmap(&processed_frame)?;
-
-        let operation = engine.RecognizeAsync(&bitmap)?;
-        while operation.Status()?.0 == 0 {
-            std::thread::sleep(std::time::Duration::from_millis(10));
+    fn recognize_lines(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+        let (processed, scale) = Self::preprocess(frame);
+        
+        let stream = InMemoryRandomAccessStream::new()?;
+        let writer = stream.GetOutputStreamAt(0)?;
+        {
+            let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)?;
+            data_writer.WriteBytes(&processed.data)?;
+            wait_for(data_writer.StoreAsync()?.into_future())?;
+            wait_for(data_writer.FlushAsync()?.into_future())?;
         }
-        let result = operation.GetResults().context("OCR recognition failed")?;
 
-        let lines = result.Lines()?;
-        let count = lines.Size()?;
-        let mut out = Vec::with_capacity(count as usize);
+        let decoder = wait_for(BitmapDecoder::CreateWithIdAsync(windows::Graphics::Imaging::BitmapDecoder::PngDecoderId()?, &stream)?.into_future())?;
+        let bitmap = wait_for(decoder.GetSoftwareBitmapAsync()?.into_future())?;
 
-        for idx in 0..count {
-            let line = lines.GetAt(idx)?;
+        let result = wait_for(self.engine.RecognizeAsync(&bitmap)?.into_future())?;
+        let lines_api = result.Lines()?;
+
+        let mut out_lines = Vec::new();
+        for line in lines_api {
             let text = line.Text()?.to_string();
             
-            let trimmed = text.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-
-            // OcrLine doesn't have a direct Rect property. 
-            // We must calculate the bounding box from its words.
+            // Calculate line bounding box from its words, as OcrLine doesn't provide BoundingRect in this crate version
             let words = line.Words()?;
-            let word_count = words.Size()?;
-            if word_count == 0 { continue; }
-
             let mut min_x = f32::MAX;
             let mut min_y = f32::MAX;
             let mut max_x = f32::MIN;
             let mut max_y = f32::MIN;
-
-            for w_idx in 0..word_count {
-                let word = words.GetAt(w_idx)?;
+            
+            let mut has_words = false;
+            for word in words {
                 let rect = word.BoundingRect()?;
                 min_x = min_x.min(rect.X);
                 min_y = min_y.min(rect.Y);
                 max_x = max_x.max(rect.X + rect.Width);
                 max_y = max_y.max(rect.Y + rect.Height);
+                has_words = true;
             }
             
-            out.push(OcrTextLine {
-                text,
-                x: min_x / scale,
-                y: min_y / scale,
-                w: (max_x - min_x) / scale,
-                h: (max_y - min_y) / scale,
-            });
+            if has_words {
+                out_lines.push(OcrTextLine {
+                    text,
+                    x: min_x / scale,
+                    y: min_y / scale,
+                    w: (max_x - min_x) / scale,
+                    h: (max_y - min_y) / scale,
+                });
+            }
         }
 
-        Ok(out)
+        Ok(out_lines)
     }
-
 }

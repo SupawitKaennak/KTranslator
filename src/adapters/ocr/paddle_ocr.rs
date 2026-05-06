@@ -89,17 +89,17 @@ impl Drop for PaddleOcr {
 }
 
 impl OcrEngine for PaddleOcr {
-    fn recognize(&self, frame: &FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
+    fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
         let lines = self.recognize_lines(frame, lang_hint)?;
         Ok(lines.iter().map(|l| l.text.clone()).collect::<Vec<_>>().join("\n"))
     }
 
-    fn recognize_lines(&self, frame: &FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+    fn recognize_lines(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
         self.ensure_process()?;
         
         // Convert frame to JPEG/PNG for PaddleOCR
         // For simplicity, we'll encode as PNG via the image crate
-        let img = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(frame.width, frame.height, frame.data.clone())
+        let img = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(frame.width, frame.height, frame.data)
             .context("Failed to create image buffer")?;
         
         let mut buffer = std::io::Cursor::new(Vec::new());

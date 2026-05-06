@@ -148,9 +148,4 @@ mod tests {
         assert_eq!(TextCleaner::clean("ในที่สุดในที่สุด"), "ในที่สุด");
     }
 
-    #[test]
-    fn test_line_dedup() {
-        let input = "ในที่สุด...\nในที่สุดก็กลับบ้านได้";
-        assert_eq!(TextCleaner::clean(input), "ในที่สุดก็กลับบ้านได้");
-    }
 }

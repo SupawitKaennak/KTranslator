@@ -89,9 +89,10 @@ impl SlotRuntimeState {
 pub fn smart_hash(data: &[u8]) -> u64 {
     let mut h: u64 = 0xcbf29ce484222325;
     
-    // Use a larger step (32 bytes = 8 pixels) for gaming performance.
-    // Most text blocks are large enough that this still captures changes.
-    let step: usize = 32;
+    // Dynamic step: smaller regions need finer sampling to detect
+    // single-character text changes; large regions can skip more.
+    let pixel_count = data.len() / 4;
+    let step: usize = if pixel_count < 50_000 { 8 } else { 32 };
     let mut i = 0;
     while i + 2 < data.len() {
         // Quantize each channel to 3 bits (8 levels) to ignore compression noise and dithering
