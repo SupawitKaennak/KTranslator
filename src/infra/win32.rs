@@ -4,18 +4,13 @@ use std::ptr;
 use windows::Win32::Foundation::COLORREF;
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, SetLayeredWindowAttributes, LWA_COLORKEY,
-    SetWindowDisplayAffinity, WINDOW_DISPLAY_AFFINITY,
+    FindWindowW, SetLayeredWindowAttributes, LWA_COLORKEY, LWA_ALPHA,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{
     GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS,
 };
 
-/// WDA_EXCLUDEFROMCAPTURE = 0x11: window is visible to the user
-/// but excluded from screen capture / screenshots APIs.
-#[cfg(target_os = "windows")]
-const WDA_EXCLUDEFROMCAPTURE: WINDOW_DISPLAY_AFFINITY = WINDOW_DISPLAY_AFFINITY(0x00000011);
 
 /// Finds a window by its title.
 pub fn find_window(window_title: &str) -> Option<isize> {
@@ -43,11 +38,14 @@ pub fn apply_overlay_attributes(hwnd_raw: isize) {
         use windows::Win32::Foundation::HWND;
         let hwnd = HWND(hwnd_raw as *mut _);
         
-        // Apply pure black (0x000000) as the transparency color key
-        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0x000000), 0, LWA_COLORKEY);
+        // Apply color key for transparency. 
+        // We use LWA_COLORKEY | LWA_ALPHA and set alpha to 255 (opaque) 
+        // because we want egui's own alpha handling to work, but the window 
+        // itself MUST be considered 'there' by the OS to be captured.
+        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0x000000), 255, LWA_COLORKEY | LWA_ALPHA);
         
-        // Exclude window from screen capture
-        let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+        // REMOVED: SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+        // This was preventing Snipping Tool from seeing the overlay.
     }
     let _ = hwnd_raw;
 }
