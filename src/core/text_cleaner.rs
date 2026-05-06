@@ -15,14 +15,51 @@ impl TextCleaner {
         // 2. Process each line individually, PRESERVING line count.
         let lines: Vec<String> = normalized
             .lines()
-            .map(|l| Self::process_single_line(l.trim()))
+            .map(|l| {
+                let trimmed = l.trim();
+                if Self::is_line_garbage(trimmed) {
+                    String::new()
+                } else {
+                    Self::process_single_line(trimmed)
+                }
+            })
             .collect();
 
-        // NOTE: We no longer deduplicate adjacent lines globally here 
-        // because it breaks the 1-to-1 mapping with OCR boxes.
-        // The AI or the UI logic should handle spatial merging if needed.
-
         lines.join("\n")
+    }
+
+    /// Determines if a line is likely OCR noise/garbage.
+    fn is_line_garbage(line: &str) -> bool {
+        if line.is_empty() { return false; }
+        
+        // Count alphanumeric vs symbols
+        let mut alpha_count = 0;
+        let mut symbol_count = 0;
+        for c in line.chars() {
+            if c.is_alphanumeric() {
+                alpha_count += 1;
+            } else if !c.is_whitespace() {
+                symbol_count += 1;
+            }
+        }
+
+        // 1. If line is mostly symbols/noise (e.g. "@@@--!!!")
+        if symbol_count > alpha_count && symbol_count > 2 {
+            return true;
+        }
+
+        // 2. If line is very short but only symbols
+        if line.len() <= 3 && alpha_count == 0 {
+            return true;
+        }
+
+        // 3. Suspicious manga patterns often captured by OCR
+        let s = line.to_lowercase();
+        if s.contains("iiiii") || s.contains("|||") || s.contains("____") {
+            return true;
+        }
+
+        false
     }
 
     fn process_single_line(line: &str) -> String {
