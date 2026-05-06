@@ -420,46 +420,15 @@ impl BackgroundCoordinator {
         }
     }
 
-    /// Parse a numbered translation response back into a Vec aligned to
-    /// the original OCR lines.
+    /// Parse a translation response back into a Vec aligned to the original
+    /// OCR lines. Delegates to the centralized multi-strategy parser in
+    /// `prompt_builder` and applies TextCleaner post-processing.
     fn parse_numbered_lines(raw: &str, ocr_count: usize) -> Vec<String> {
-        if ocr_count == 0 {
-            return vec![];
-        }
-
-        let mut result = vec![String::new(); ocr_count];
-        // Stricter regex to ensure we don't accidentally include the number in the content
-        let re_numbered = regex::Regex::new(r"^\s*(\d+)[\.\):\->\s]+(.*)$").unwrap();
-
-        for line in raw.lines() {
-            let line = line.trim();
-            if line.is_empty() { continue; }
-
-            if let Some(caps) = re_numbered.captures(line) {
-                if let Ok(num) = caps[1].parse::<usize>() {
-                    if num > 0 && num <= ocr_count {
-                        let mut content = caps[2].trim().to_string();
-                        // Strip leading junk that AI sometimes adds
-                        content = content.trim_start_matches(|c: char| c.is_ascii_digit() || c == '.' || c == ' ' || c == '-').trim().to_string();
-                        
-                        if result[num - 1].is_empty() || result[num - 1].len() < content.len() {
-                            result[num - 1] = content;
-                        }
-                    }
-                }
-            } else {
-                for i in 0..ocr_count {
-                    if result[i].is_empty() {
-                        result[i] = line.to_string();
-                        break;
-                    }
-                }
-            }
-        }
-
+        let mut result = crate::core::prompt_builder::parse_translation_response(raw, ocr_count);
         for s in result.iter_mut() {
             *s = TextCleaner::clean(s);
         }
         result
     }
 }
+

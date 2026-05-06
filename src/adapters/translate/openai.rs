@@ -2,7 +2,11 @@ use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::core::{ports::Translator, types::LanguageTag};
+use crate::core::{
+    ports::Translator,
+    prompt_builder,
+    types::LanguageTag,
+};
 
 #[derive(Clone)]
 pub struct OpenAiTranslator {
@@ -43,54 +47,19 @@ impl Translator for OpenAiTranslator {
             bail!("Custom OpenAI Base URL is empty");
         }
 
-        let source_lines: Vec<&str> = text.lines().collect();
-        let (prompt_body, multi_line) = if source_lines.len() > 1 {
-            let numbered = source_lines
-                .iter()
-                .enumerate()
-                .map(|(i, l)| format!("{}. {}", i + 1, l))
-                .collect::<Vec<_>>()
-                .join("\n");
-            (numbered, true)
-        } else {
-            (text.to_string(), false)
-        };
-
-        let system_prompt = if multi_line {
-            format!(
-                "You are an expert manga/game translator. Translate each numbered line to {target_lang}. \
-                Source language: {source_lang}. \
-                Maintain context across lines as they belong to the same scene or speech bubble. \
-                RULES:
-                1. You MUST return EXACTLY the same number of lines.
-                2. Each output line MUST start with its corresponding number (e.g., '1. <translation>').
-                3. Do not add extra commentary, notes, or combine lines.
-                4. Maintain punctuation style appropriate for {target_lang}.",
-                target_lang = target.0,
-                source_lang = source.map(|l| l.0.as_str()).unwrap_or("auto-detect"),
-            )
-        } else {
-            format!(
-                "You are an expert manga/game translator. Translate the text to {target_lang}. \
-                Source language: {source_lang}. \
-                RULES:
-                1. Provide ONLY the translation.
-                2. Do not add any commentary, notes, or quotes.",
-                target_lang = target.0,
-                source_lang = source.map(|l| l.0.as_str()).unwrap_or("auto-detect"),
-            )
-        };
+        let lines: Vec<&str> = text.lines().collect();
+        let prompt = prompt_builder::build_translation_prompt(&lines, source, target);
 
         let req_body = OpenAiRequest {
             model: self.model.clone(),
             messages: vec![
                 OpenAiMessage {
                     role: "system".to_string(),
-                    content: system_prompt,
+                    content: prompt.system,
                 },
                 OpenAiMessage {
                     role: "user".to_string(),
-                    content: prompt_body,
+                    content: prompt.user,
                 },
             ],
             temperature: 0.3,
