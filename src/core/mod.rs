@@ -4,3 +4,4 @@ pub mod ports;
 pub mod types;
 pub mod text_cleaner;
 pub mod coordinator;
+pub mod prompt_builder;
