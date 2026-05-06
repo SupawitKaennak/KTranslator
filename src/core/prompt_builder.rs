@@ -1,3 +1,4 @@
+use std::sync::LazyLock;
 use crate::core::types::LanguageTag;
 
 // ---------------------------------------------------------------------------
@@ -79,30 +80,34 @@ pub fn build_translation_prompt(
         };
         TranslationPrompt { system, user, line_count: lines.len() }
     } else {
-        // ── Multi-line batch mode (||| separator protocol) ───────────────
-        let joined_input = lines.join(&format!(" {LINE_SEPARATOR} "));
+        // ── Multi-line batch mode (Numbered List protocol) ───────────────
+        // Use numbered lines which is much more robust for Llama/OpenAI models.
+        let mut joined_input = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            joined_input.push_str(&format!("{}. {}\n", i + 1, line));
+        }
 
         let system = format!(
-            "You are an expert manga/game translator.\n\
-             The input contains {count} text segments separated by \"{sep}\".\n\
-             Translate EACH segment to {target_name} and output the translations separated by \"{sep}\".\n\
+            "You are an expert professional manga/game translator.\n\
+             Input: A numbered list of {count} text segments.\n\
+             Task: Translate EACH segment to {target_name}.\n\
              \n\
-             CRITICAL RULES:\n\
-             - Output EXACTLY {count} segments, separated by \"{sep}\".\n\
-             - Do NOT add line numbers, bullet points, or explanations.\n\
-             - Do NOT merge or split segments.\n\
-             - If a segment is empty or untranslatable, output it unchanged.\n\
-             - Maintain context across segments (they belong to the same scene).\n\
-             - Output ONLY in {target_name}.",
+             STRICT RULES:\n\
+             1. Output EXACTLY {count} translated lines.\n\
+             2. Use the same numbering format (1. Translation).\n\
+             3. Do NOT merge segments or summarize the content.\n\
+             4. Do NOT add any notes, explanations, or meta-talk.\n\
+             5. If a segment is empty, output the number and an empty translation (e.g. \"5. \").\n\
+             6. Prevent hallucinations: translate ONLY what is written.\n\
+             7. Output ONLY the numbered list in {target_name}.",
             count = lines.len(),
-            sep = LINE_SEPARATOR,
             target_name = target_name,
         );
 
         let user = if source.is_some() {
-            format!("Translate from {source_name} to {target_name}:\n\n{joined_input}")
+            format!("Translate these {count} segments from {source_name} to {target_name}:\n\n{joined_input}", count = lines.len())
         } else {
-            format!("Translate to {target_name}:\n\n{joined_input}")
+            format!("Translate these {count} segments to {target_name}:\n\n{joined_input}", count = lines.len())
         };
 
         TranslationPrompt { system, user, line_count: lines.len() }
@@ -142,32 +147,44 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    // ── Strategy 2: Numbered list ────────────────────────────────────────
-    let re_numbered = regex::Regex::new(r"^\s*\[?\s*(\d+)\s*\]?\s*[\.)\:\->\s]+\s*(.*)$").unwrap();
+    // ── Strategy 1: Numbered list (Primary for Llama/OpenAI) ─────────────
+    // Regex matches "1. text", "1: text", "[1] text", "1) text", etc.
+    static RE_NUMBERED: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"(?m)^\s*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->]+\s*(.*)$").unwrap()
+    });
+    
     let mut numbered_result = vec![String::new(); expected_count];
-    let mut matched_any = false;
+    let mut matched_indices = std::collections::HashSet::new();
 
-    for line in trimmed.lines() {
-        let line = line.trim();
-        if line.is_empty() { continue; }
-        if let Some(caps) = re_numbered.captures(line) {
-            if let Ok(num) = caps[1].parse::<usize>() {
-                if num > 0 && num <= expected_count {
-                    let content = caps[2].trim().to_string();
-                    if numbered_result[num - 1].is_empty() || numbered_result[num - 1].len() < content.len() {
-                        numbered_result[num - 1] = content;
-                        matched_any = true;
-                    }
+    for caps in RE_NUMBERED.captures_iter(trimmed) {
+        if let Ok(num) = caps[1].parse::<usize>() {
+            if num > 0 && num <= expected_count {
+                let content = caps[2].trim().to_string();
+                // Store the longest content if duplicate numbers appear (rare)
+                if numbered_result[num - 1].len() < content.len() {
+                    numbered_result[num - 1] = content;
+                    matched_indices.insert(num - 1);
                 }
             }
         }
     }
 
-    // Accept numbered result if we matched at least half the expected lines
-    if matched_any {
-        let filled = numbered_result.iter().filter(|s| !s.is_empty()).count();
-        if filled >= (expected_count + 1) / 2 {
-            return numbered_result;
+    // If we matched more than 50% of the expected lines, use this strategy
+    if matched_indices.len() >= (expected_count + 1) / 2 {
+        return numbered_result;
+    }
+
+    // ── Strategy 2: ||| separator (Legacy/Fallback) ──────────────────────
+    if trimmed.contains(LINE_SEPARATOR) {
+        let parts: Vec<String> = trimmed
+            .split(LINE_SEPARATOR)
+            .map(|s| s.trim().to_string())
+            .collect();
+        if parts.len() == expected_count {
+            return parts;
+        }
+        if parts.len() >= expected_count {
+            return parts[..expected_count].to_vec();
         }
     }
 
