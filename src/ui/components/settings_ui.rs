@@ -2,8 +2,9 @@ use eframe::egui;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::Mutex;
-use crate::infra::settings::{Settings, TranslationProvider};
+use crate::infra::settings::{Settings, TranslationProvider, UiLanguage};
 use crate::adapters::translate::gemini::GeminiModel;
+use crate::ui::i18n::get_i18n;
 
 pub struct SettingsWindowResponse {
     pub save_clicked: bool,
@@ -53,12 +54,13 @@ pub fn show_settings_window(
 
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut settings = settings_inner.lock();
+                let i18n = get_i18n(settings.ui_language);
 
-                ui.heading("⚙ Settings");
+                ui.heading(format!("⚙ {}", i18n.settings));
                 ui.add_space(8.0);
 
                 ui.horizontal(|ui| {
-                    ui.label("Provider:");
+                    ui.label(format!("{}:", i18n.provider));
                     ui.selectable_value(
                         &mut settings.provider,
                         TranslationProvider::Gemini,
@@ -83,7 +85,7 @@ pub fn show_settings_window(
                 ui.separator();
 
                 ui.horizontal(|ui| {
-                    ui.label("OCR Engine:");
+                    ui.label(format!("{}:", i18n.ocr));
                     ui.selectable_value(
                         &mut settings.ocr_engine,
                         crate::infra::settings::OcrEngineType::Windows,
@@ -110,7 +112,7 @@ pub fn show_settings_window(
                     TranslationProvider::Gemini => {
                         ui.label("Gemini (API key)");
                         ui.horizontal(|ui| {
-                            ui.label("model");
+                            ui.label(i18n.model);
                             let mut current_idx = model_choices
                                 .iter()
                                 .position(|m| m.id == settings.gemini_model)
@@ -133,7 +135,7 @@ pub fn show_settings_window(
                             }
                         });
                         ui.horizontal(|ui| {
-                            ui.label("api_key");
+                            ui.label(i18n.api_key);
                             ui.add(
                                 egui::TextEdit::singleline(&mut settings.gemini_api_key)
                                     .password(true),
@@ -143,7 +145,7 @@ pub fn show_settings_window(
                     TranslationProvider::Groq => {
                         ui.label("Groq (High speed, Free)");
                         ui.horizontal(|ui| {
-                            ui.label("model");
+                            ui.label(i18n.model);
                             let groq_models = vec![
                                 ("llama-3.3-70b-versatile", "Llama 3.3 70B (Versatile)"),
                                 ("llama-3.1-8b-instant", "Llama 3.1 8B (Instant)"),
@@ -169,7 +171,7 @@ pub fn show_settings_window(
                             settings.groq_model = current;
                         });
                         ui.horizontal(|ui| {
-                            ui.label("api_key");
+                            ui.label(i18n.api_key);
                             ui.add(
                                 egui::TextEdit::singleline(&mut settings.groq_api_key)
                                     .password(true),
@@ -355,12 +357,28 @@ pub fn show_settings_window(
 
                 ui.add_space(12.0);
                 ui.separator();
-                ui.heading("📺 Overlay Appearance");
+                ui.heading(format!("📺 {}", i18n.appearance));
+                
+                ui.horizontal(|ui| {
+                    ui.label(format!("{}:", i18n.ui_language));
+                    egui::ComboBox::from_id_salt("ui_language_dropdown")
+                        .selected_text(match settings.ui_language {
+                            UiLanguage::System => i18n.auto_detect,
+                            UiLanguage::Thai => "ภาษาไทย",
+                            UiLanguage::English => "English",
+                        })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut settings.ui_language, UiLanguage::System, i18n.auto_detect);
+                            ui.selectable_value(&mut settings.ui_language, UiLanguage::Thai, "ภาษาไทย");
+                            ui.selectable_value(&mut settings.ui_language, UiLanguage::English, "English");
+                        });
+                });
+                ui.add_space(8.0);
                 egui::Grid::new("overlay_settings_grid")
                     .num_columns(2)
                     .spacing([20.0, 8.0])
                     .show(ui, |ui| {
-                        ui.label("Background Color:");
+                        ui.label(format!("{}:", i18n.bg_color));
                         let mut bg_color = egui::Color32::from_rgba_unmultiplied(
                             settings.overlay_bg_color[0],
                             settings.overlay_bg_color[1],
@@ -372,7 +390,7 @@ pub fn show_settings_window(
                         }
                         ui.end_row();
 
-                        ui.label("Text Color:");
+                        ui.label(format!("{}:", i18n.text_color));
                         let mut text_color = egui::Color32::from_rgba_unmultiplied(
                             settings.overlay_text_color[0],
                             settings.overlay_text_color[1],
@@ -384,15 +402,15 @@ pub fn show_settings_window(
                         }
                         ui.end_row();
 
-                        ui.label("Font Size:");
+                        ui.label(format!("{}:", i18n.font_size));
                         ui.add(egui::Slider::new(&mut settings.overlay_font_size, 8.0..=48.0).suffix("px"));
                         ui.end_row();
 
-                        ui.label("Padding:");
+                        ui.label(format!("{}:", i18n.padding));
                         ui.add(egui::Slider::new(&mut settings.overlay_padding, 0.0..=20.0).suffix("px"));
                         ui.end_row();
 
-                        ui.label("Corner Radius:");
+                        ui.label(format!("{}:", i18n.corner_radius));
                         ui.add(egui::Slider::new(&mut settings.overlay_corner_radius, 0.0..=20.0).suffix("px"));
                         ui.end_row();
                     });

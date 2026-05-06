@@ -1,10 +1,14 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod core;
 mod adapters;
 mod infra;
 mod ui;
 
 fn main() -> eframe::Result<()> {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
+    tracing::info!("KTranslator starting up...");
     #[cfg(windows)]
     {
         use windows::Win32::UI::HiDpi::*;
