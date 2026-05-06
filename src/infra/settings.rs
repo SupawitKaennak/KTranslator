@@ -49,6 +49,7 @@ pub struct Settings {
     pub overlay_corner_radius: f32,
 
     pub ui_language: UiLanguage,
+    pub hide_from_capture: bool,
 }
 
 impl Default for Settings {
@@ -73,6 +74,7 @@ impl Default for Settings {
             overlay_padding: 4.0,
             overlay_corner_radius: 4.0,
             ui_language: UiLanguage::System,
+            hide_from_capture: true,
         }
     }
 }

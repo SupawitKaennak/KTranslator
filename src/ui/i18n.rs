@@ -22,6 +22,7 @@ pub struct I18n {
     pub ui_language: &'static str,
     pub auto_detect: &'static str,
     pub system_default: &'static str,
+    pub allow_capture: &'static str,
     pub add_region: &'static str,
     
     // Slot UI
@@ -62,6 +63,7 @@ const EN: I18n = I18n {
     ui_language: "UI Language",
     auto_detect: "Auto Detect",
     system_default: "System Default",
+    allow_capture: "Screenshot Mode (Allow Snip)",
     add_region: "Add Region",
     
     region: "Region",
@@ -101,6 +103,7 @@ const TH: I18n = I18n {
     ui_language: "ภาษาของเมนู",
     auto_detect: "ตรวจจับอัตโนมัติ",
     system_default: "ตามระบบเครื่อง",
+    allow_capture: "โหมดแคปจอ (ปิดการล่องหน)",
     add_region: "เพิ่มพื้นที่",
 
     region: "พื้นที่",
