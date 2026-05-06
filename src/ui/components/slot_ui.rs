@@ -4,6 +4,8 @@ use crate::core::{
     types::{LanguageTag, Rect},
 };
 use crate::core::worker::SlotRuntimeState;
+use crate::infra::settings::UiLanguage;
+use crate::ui::i18n::get_i18n;
 
 pub struct SlotUiResponse {
     pub do_crop: bool,
@@ -38,6 +40,7 @@ pub fn render_slot_item(
     model: &mut AppModel,
     runtime: &SlotRuntimeState,
     available_screens: &[(u32, String)],
+    lang: UiLanguage,
 ) -> SlotUiResponse {
     let mut do_crop = false;
     let mut should_remove = false;
@@ -51,12 +54,14 @@ pub fn render_slot_item(
         ui.set_min_width(500.0);
         
         // --- HEADER ROW ---
+        let i18n = get_i18n(lang);
+
         ui.horizontal(|ui| {
-            ui.heading(format!("Region {}", slot_idx + 1));
+            ui.heading(format!("{} {}", i18n.region, slot_idx + 1));
             
             let slot = &mut model.slots[slot_idx];
             
-            ui.checkbox(&mut slot.enabled, "Active").on_hover_text("Enable or disable this translation region");
+            ui.checkbox(&mut slot.enabled, i18n.active).on_hover_text("Enable or disable this translation region");
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if slot_idx > 0 {
@@ -65,7 +70,7 @@ pub fn render_slot_item(
                     }
                 }
                 
-                if ui.button("🗺 Select Area")
+                if ui.button(format!("🗺 {}", i18n.select_area))
                     .on_hover_text("Drag to select a new area on the screen")
                     .clicked() 
                 {
@@ -80,7 +85,7 @@ pub fn render_slot_item(
 
         // --- SETTINGS ROW (Screen & Refresh) ---
         ui.horizontal(|ui| {
-            ui.label("🖥 Screen:");
+            ui.label(format!("🖥 {}:", i18n.screen));
             let slot = &mut model.slots[slot_idx];
 
             egui::ComboBox::from_id_salt(format!("disp_sel_{}", slot_idx))
@@ -97,7 +102,7 @@ pub fn render_slot_item(
                 });
 
             ui.add_space(20.0);
-            ui.label("⏱ Refresh:");
+            ui.label(format!("⏱ {}:", i18n.refresh));
             ui.add(egui::DragValue::new(&mut slot.refresh_ms).speed(10.0).suffix("ms"))
                 .on_hover_text("How often to check for screen changes");
         });
@@ -108,23 +113,24 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.label("🌐 From:");
+            ui.label(format!("🌐 {}:", i18n.from));
             let mut src = slot.source_lang.as_ref().map(|l| l.0.clone()).unwrap_or_default();
             egui::ComboBox::from_id_salt(format!("src_{slot_idx}"))
                 .selected_text(
                     LANGUAGE_OPTIONS.iter()
                         .find(|(_, code)| code.to_string() == src)
-                        .map(|(name, _)| *name).unwrap_or("Auto Detection"),
+                        .map(|(name, code)| if *code == "" { i18n.auto_detect } else { *name }).unwrap_or(i18n.auto_detect),
                 )
                 .show_ui(ui, |ui| {
                     for (name, code) in LANGUAGE_OPTIONS {
-                        ui.selectable_value(&mut src, code.to_string(), *name);
+                        let label = if *code == "" { i18n.auto_detect } else { *name };
+                        ui.selectable_value(&mut src, code.to_string(), label);
                     }
                 });
             slot.source_lang = if src.is_empty() { None } else { Some(LanguageTag(src)) };
 
             ui.add_space(10.0);
-            ui.label("➡️ To:");
+            ui.label(format!("➡️ {}:", i18n.to));
             let mut tgt = slot.target_lang.0.clone();
             egui::ComboBox::from_id_salt(format!("tgt_{slot_idx}"))
                 .selected_text(
@@ -147,12 +153,16 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.checkbox(&mut slot.show_frame, "👁 Show Frame Box").on_hover_text("Show a green border around the captured area");
+            ui.checkbox(&mut slot.show_frame, format!("👁 {}", i18n.show_frame)).on_hover_text("Show a green border around the captured area");
             ui.add_space(10.0);
-            ui.checkbox(&mut slot.overlay_mode, "📺 Overlay Mode").on_hover_text("Show translated text directly over the original text on your screen");
+            ui.checkbox(&mut slot.overlay_mode, format!("📺 {}", i18n.overlay_mode)).on_hover_text("Show translated text directly over the original text on your screen");
             ui.add_space(20.0);
             
-            let popup_btn_text = if slot.popup_open { "💬 Close Popup" } else { "💬 Open Popup" };
+            let popup_btn_text = if slot.popup_open { 
+                format!("💬 {}", i18n.clear_results.replace("Clear Results", "Close Popup").replace("ล้างหน้าจอ", "ปิดหน้าต่างแยก"))
+            } else { 
+                format!("💬 {}", i18n.open_popup) 
+            };
             if ui.button(popup_btn_text).on_hover_text("Toggle the in-game translation result window").clicked() {
                 slot.popup_open = !slot.popup_open;
             }
@@ -161,7 +171,7 @@ pub fn render_slot_item(
         ui.add_space(8.0);
 
         // --- ADVANCED / POSITION ROW ---
-        egui::CollapsingHeader::new("🔍 Manual Position Adjustment")
+        egui::CollapsingHeader::new(format!("🔍 {}", i18n.manual_pos))
             .id_salt(format!("manual_adj_{slot_idx}"))
             .default_open(false)
             .show(ui, |ui| {
@@ -191,10 +201,12 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             if runtime.processing || runtime.busy {
                 ui.add(egui::Spinner::new().size(12.0));
+                ui.label(egui::RichText::new(i18n.busy).size(13.0).strong());
             } else {
                 ui.label("💤");
+                let status_text = if runtime.status == "Idle" || runtime.status.is_empty() { i18n.idle } else { &runtime.status };
+                ui.label(egui::RichText::new(status_text).size(13.0).strong());
             }
-            ui.label(egui::RichText::new(&runtime.status).size(13.0).strong());
         });
     });
 
