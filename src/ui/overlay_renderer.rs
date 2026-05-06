@@ -200,13 +200,17 @@ pub fn render_overlay_viewport(
                 }
             });
 
-            // Platform attributes (transparency/color key)
+            // Platform attributes (transparency/color key/capture exclusion)
             let title_inner = format!("Frame Overlay {}", slot_idx + 1);
             if let Some(raw) = platform_svc.find_window_by_title(&title_inner) {
-                let cached = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
-                if raw != cached {
-                    platform_svc.apply_overlay_transparency(raw);
+                let cached_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
+                let current_hide = overlay_settings.hide_from_capture;
+                let mut last_hide = runtime.last_capture_hide.lock();
+                
+                if raw != cached_hwnd || *last_hide != Some(current_hide) {
+                    crate::infra::win32::apply_overlay_attributes(raw, current_hide);
                     hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
+                    *last_hide = Some(current_hide);
                 }
             }
         },

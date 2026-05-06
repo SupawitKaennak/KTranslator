@@ -373,6 +373,14 @@ pub fn show_settings_window(
                             ui.selectable_value(&mut settings.ui_language, UiLanguage::English, "English");
                         });
                 });
+                
+                ui.horizontal(|ui| {
+                    let mut allow = !settings.hide_from_capture;
+                    if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
+                        settings.hide_from_capture = !allow;
+                    }
+                });
+
                 ui.add_space(8.0);
                 egui::Grid::new("overlay_settings_grid")
                     .num_columns(2)
