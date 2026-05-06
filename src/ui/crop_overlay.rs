@@ -168,7 +168,6 @@ fn crop_content(
     
     if let (Some(start), Some(curr)) = (st.drag_start, st.drag_current) {
         let r = egui::Rect::from_two_pos(start, curr);
-        current_rect = Some(r);
 
         // 3. Clear the selection area (Draw the original image over the dark overlay in this rect)
         painter.image(
