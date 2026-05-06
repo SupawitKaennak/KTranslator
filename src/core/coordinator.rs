@@ -275,7 +275,7 @@ impl BackgroundCoordinator {
             let cache_arc = translation_cache.clone();
             let text_cache_arc = text_translation_cache.clone();
             let first_unstable_at = slots_runtime[i].first_unstable_at;
-
+            
             let ctx_worker = ctx.clone();
             self.pool.execute(move || {
                 let _ = tx.send(BgResult::StatusUpdate { slot_idx: i, status: "Capturing...".to_string() });

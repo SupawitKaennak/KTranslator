@@ -1,5 +1,7 @@
 use crate::core::ports::OcrTextLine;
 use std::sync::Arc;
+use std::sync::atomic::AtomicIsize;
+use parking_lot::Mutex;
 
 /// Results from background worker threads sent back to the main UI loop.
 pub enum BgResult {
@@ -62,12 +64,14 @@ pub struct SlotRuntimeState {
     /// Hash of the last captured frame to detect changes
     pub last_hash: u64,
     /// Native HWND of the overlay window for Win32 transparency
-    pub overlay_hwnd: Arc<std::sync::atomic::AtomicIsize>,
+    pub overlay_hwnd: Arc<AtomicIsize>,
     /// Track language changes to invalidate caches
     pub last_langs: (Option<String>, String),
     /// Time when the screen first became unstable. 
     /// Used to force a translation if it never settles (e.g. in games).
     pub first_unstable_at: u64,
+    /// Whether the last capture attempt resulted in an instruction to hide the overlay
+    pub last_capture_hide: Arc<Mutex<Option<bool>>>,
 }
 
 impl SlotRuntimeState {
@@ -77,9 +81,10 @@ impl SlotRuntimeState {
             processing: false,
             status: "Idle".to_string(),
             last_hash: 0,
-            overlay_hwnd: Arc::new(std::sync::atomic::AtomicIsize::new(0)),
+            overlay_hwnd: Arc::new(AtomicIsize::new(0)),
             last_langs: (None, String::new()),
             first_unstable_at: 0,
+            last_capture_hide: Arc::new(Mutex::new(None)),
         }
     }
 }
