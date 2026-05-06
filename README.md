@@ -7,7 +7,8 @@
 <a name="thai"></a>
 ## ภาษาไทย (Thai)
 
-โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) เขียนด้วยภาษา Rust 
+โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) เขียนด้วยภาษา Rust <br>
+<img width="1917" height="1126" alt="{DD417730-D74E-48D7-B8F4-86A07DC7E0A6}" src="https://github.com/user-attachments/assets/b46b82c1-8395-4023-9a4f-83da7191a998" />
 
 ### ลักษณะการใช้งาน
 - **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
