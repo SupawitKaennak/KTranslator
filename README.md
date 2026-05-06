@@ -8,7 +8,9 @@
 ## ภาษาไทย (Thai)
 
 โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) เขียนด้วยภาษา Rust <br>
-<img width="1917" height="1126" alt="{DD417730-D74E-48D7-B8F4-86A07DC7E0A6}" src="https://github.com/user-attachments/assets/b46b82c1-8395-4023-9a4f-83da7191a998" />
+<img width="1917" height="1126" alt="{DD417730-D74E-48D7-B8F4-86A07DC7E0A6}" src="https://github.com/user-attachments/assets/b46b82c1-8395-4023-9a4f-83da7191a998" /><br>
+<img width="1770" height="1068" alt="{C3BE31E9-110E-4894-8475-AFF12EEAE2B5}" src="https://github.com/user-attachments/assets/f1f0f849-1008-4acb-8806-6d7137ac9a33" />
+
 
 ### ลักษณะการใช้งาน
 - **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
