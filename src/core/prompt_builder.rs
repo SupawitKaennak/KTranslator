@@ -147,7 +147,21 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    // ── Strategy 1: Numbered list (Primary for Llama/OpenAI) ─────────────
+    // ── Strategy 1: ||| separator (Primary) ─────────────────────────────
+    if trimmed.contains(LINE_SEPARATOR) {
+        let parts: Vec<String> = trimmed
+            .split(LINE_SEPARATOR)
+            .map(|s| s.trim().to_string())
+            .collect();
+        if parts.len() == expected_count {
+            return parts;
+        }
+        if parts.len() >= expected_count {
+            return parts[..expected_count].to_vec();
+        }
+    }
+
+    // ── Strategy 2: Numbered list (Fallback) ─────────────────────────────
     // Regex matches "1. text", "1: text", "[1] text", "1) text", etc.
     static RE_NUMBERED: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r"(?m)^\s*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->]+\s*(.*)$").unwrap()
@@ -160,7 +174,6 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         if let Ok(num) = caps[1].parse::<usize>() {
             if num > 0 && num <= expected_count {
                 let content = caps[2].trim().to_string();
-                // Store the longest content if duplicate numbers appear (rare)
                 if numbered_result[num - 1].len() < content.len() {
                     numbered_result[num - 1] = content;
                     matched_indices.insert(num - 1);
@@ -169,23 +182,8 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    // If we matched more than 50% of the expected lines, use this strategy
     if matched_indices.len() >= (expected_count + 1) / 2 {
         return numbered_result;
-    }
-
-    // ── Strategy 2: ||| separator (Legacy/Fallback) ──────────────────────
-    if trimmed.contains(LINE_SEPARATOR) {
-        let parts: Vec<String> = trimmed
-            .split(LINE_SEPARATOR)
-            .map(|s| s.trim().to_string())
-            .collect();
-        if parts.len() == expected_count {
-            return parts;
-        }
-        if parts.len() >= expected_count {
-            return parts[..expected_count].to_vec();
-        }
     }
 
     // ── Strategy 3: Plain newline split ──────────────────────────────────
