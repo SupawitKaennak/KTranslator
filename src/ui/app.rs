@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use crate::{
     adapters::{
         capture::screenshots_capture::ScreenshotsCapture,
-        ocr::windows_ocr::WindowsOcr,
+        ocr::{windows_ocr::WindowsOcr, paddle_ocr::PaddleOcr},
         translate::{
             create_translator,
             gemini::{GeminiModel, GeminiTranslator},
@@ -15,12 +15,12 @@ use crate::{
     core::{
         coordinator::BackgroundCoordinator,
         model::AppModel,
-        ports::{FrameSource, Translator},
+        ports::{FrameSource, OcrEngine, Translator},
         worker::SlotRuntimeState,
     },
     infra::{
         settings::{load_settings, save_settings, Settings},
-        win32,
+        platform::{self, PlatformServices},
     },
     ui::{
         components::{
@@ -28,6 +28,9 @@ use crate::{
             slot_ui::render_slot_item,
         },
         crop_overlay::{run_crop_viewport, CropOutcome, CropOverlayState},
+        font_loader,
+        i18n::get_i18n,
+        overlay_renderer,
     },
 };
 
@@ -55,10 +58,11 @@ pub struct App {
 
     capture: Arc<dyn FrameSource>,
 
-    /// Local OCR engine (Offline)
-    windows_ocr: Arc<WindowsOcr>,
-    /// Advanced Local OCR engine (Paddle)
-    paddle_ocr: Arc<crate::adapters::ocr::paddle_ocr::PaddleOcr>,
+    /// Platform-specific services (overlay transparency, process priority)
+    platform: Arc<dyn PlatformServices>,
+
+    /// Active OCR engine (selected based on settings)
+    ocr_engine: Arc<dyn OcrEngine>,
 
     /// Text-only translator via selected provider (Gemini/Groq/Ollama)
     translator: Option<Arc<dyn Translator + Send + Sync>>,
@@ -97,66 +101,11 @@ impl App {
         //   • CJK           → Microsoft YaHei / MS Gothic / Malgun Gothic (Windows system)
         //   • Arabic/Hebrew → Arial / Tahoma (Windows system)
         //   • Devanagari    → Nirmala UI / Mangal (Windows system)
-        let mut fonts = egui::FontDefinitions::default();
-
-        // 1. Embedded Thai font (always available)
-        fonts.font_data.insert(
-            "noto_sans_thai".to_owned(),
-            Arc::new(egui::FontData::from_static(include_bytes!(
-                "../../assets/NotoSansThai.ttf"
-            ))),
-        );
-
-        // 2. Windows system fonts loaded at runtime
-        //    We try each path; missing fonts are silently skipped.
-        let system_fonts: &[(&str, &str)] = &[
-            // CJK — Chinese (Simplified), Japanese, Korean
-            ("msyh",    r"C:\Windows\Fonts\msyh.ttc"),     // Microsoft YaHei  (zh)
-            ("msyh",    r"C:\Windows\Fonts\msyhbd.ttc"),
-            ("msgoth",  r"C:\Windows\Fonts\msgothic.ttc"),  // MS Gothic         (ja)
-            ("malgun",  r"C:\Windows\Fonts\malgun.ttf"),    // Malgun Gothic     (ko)
-            ("malgunbd",r"C:\Windows\Fonts\malgunbd.ttf"),
-            // Arabic, Hebrew, and wide Latin coverage
-            ("arial",   r"C:\Windows\Fonts\arial.ttf"),
-            ("tahoma",  r"C:\Windows\Fonts\tahoma.ttf"),
-            // Devanagari (Hindi, Nepali, Marathi) + other South-Asian scripts
-            ("nirmala", r"C:\Windows\Fonts\Nirmala.ttf"),
-            ("nirmalab",r"C:\Windows\Fonts\NirmalaB.ttf"),
-            ("mangal",  r"C:\Windows\Fonts\mangal.ttf"),
-            // Fallback Unicode catch-all (Office installs)
-            ("arialuni",r"C:\Windows\Fonts\ARIALUNI.TTF"),
-        ];
-
-        let mut loaded: Vec<String> = Vec::new();
-        for (key, path) in system_fonts {
-            if loaded.contains(&key.to_string()) {
-                continue; // skip duplicate keys
-            }
-            if let Ok(data) = std::fs::read(path) {
-                fonts.font_data.insert(
-                    (*key).to_owned(),
-                    Arc::new(egui::FontData::from_owned(data)),
-                );
-                loaded.push(key.to_string());
-            }
-        }
-
-        // 3. Register all fonts as fallbacks (Thai first, then system fonts)
-        let fallback_order = {
-            let mut v = vec!["noto_sans_thai".to_owned()];
-            v.extend(loaded.iter().cloned());
-            v
-        };
-        for family_key in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-            if let Some(family) = fonts.families.get_mut(&family_key) {
-                family.extend(fallback_order.clone());
-            }
-        }
-
-        cc.egui_ctx.set_fonts(fonts);
+        font_loader::setup_fonts(&cc.egui_ctx);
 
         let settings = load_settings().unwrap_or_default();
-        crate::infra::win32::boost_process_priority();
+        let platform: Arc<dyn PlatformServices> = Arc::from(platform::create_platform());
+        platform.boost_process_priority();
 
         let translator = create_translator(&settings);
 
@@ -184,7 +133,11 @@ impl App {
 
         let coordinator = BackgroundCoordinator::new();
 
-        let paddle_ocr = Arc::new(crate::adapters::ocr::paddle_ocr::PaddleOcr::new(settings.paddle_ocr_path.clone()));
+        let paddle_ocr = Arc::new(PaddleOcr::new(settings.paddle_ocr_path.clone()));
+        let ocr_engine: Arc<dyn OcrEngine> = match settings.ocr_engine {
+            crate::infra::settings::OcrEngineType::Paddle => paddle_ocr,
+            _ => Arc::new(WindowsOcr::new()),
+        };
 
         Self {
             model: Arc::new(Mutex::new(AppModel::new_default())),
@@ -197,8 +150,8 @@ impl App {
             crop_session: None,
             crop_finish: Arc::new(Mutex::new(None)),
             capture: Arc::new(ScreenshotsCapture::new()),
-            windows_ocr: Arc::new(WindowsOcr::new()),
-            paddle_ocr,
+            platform: platform.clone(),
+            ocr_engine,
             translator,
             coordinator,
             slots_runtime: vec![SlotRuntimeState::new()],
@@ -269,284 +222,28 @@ impl App {
 
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
-        let model_slots: Vec<_> = { self.model.lock().slots.clone() };
-        for slot in model_slots {
-            if !slot.popup_open {
-                continue;
-            }
-            let title = format!("Region {} (Popup)", slot.id.0 + 1);
-            let viewport_id = egui::ViewportId::from_hash_of(format!("popup_{}", slot.id.0));
-            let model_arc = self.model.clone();
-            let slot_id = slot.id.0;
-            
-            ctx.show_viewport_immediate(
-                viewport_id,
-                egui::ViewportBuilder::default()
-                    .with_title(&title)
-                    .with_inner_size([400.0, 200.0])
-                    .with_always_on_top(),
-                move |ctx, class| {
-                    if ctx.input(|i| i.viewport().close_requested()) {
-                        let mut m = model_arc.lock();
-                        // Find the slot by checking length, but we can just use slot_id if it's within bounds.
-                        if slot_id < m.slots.len() {
-                            m.slots[slot_id].popup_open = false;
-                        }
-                    }
-                    
-                    let show_content = |ui: &mut egui::Ui| {
-                        if !slot.last_ocr_text.is_empty() {
-                            ui.label("OCR:");
-                            ui.monospace(&slot.last_ocr_text);
-                        }
-                        ui.separator();
-                        ui.label("Translation:");
-                        if slot.last_trans_lines.is_empty() {
-                            ui.monospace("(waiting...)");
-                        } else {
-                            for line in &slot.last_trans_lines {
-                                ui.label(line);
-                            }
-                        }
-                    };
-
-                    if matches!(class, egui::ViewportClass::Embedded) {
-                        egui::Window::new(&title).show(ctx, show_content);
-                    } else {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            egui::ScrollArea::vertical().show(ui, show_content);
-                        });
-                    }
-                }
-            );
+        let snapshot = { self.model.lock().clone() };
+        for (i, slot) in snapshot.slots.iter().enumerate() {
+            if !slot.popup_open { continue; }
+            overlay_renderer::render_popup_viewport(ctx, i, &self.model);
         }
     }
 
     fn ui_frames(&mut self, ctx: &egui::Context) {
-        let ppp = ctx.pixels_per_point();
-        let model_slots: Vec<_> = { self.model.lock().slots.clone() };
-        for slot in model_slots {
-            if !slot.show_frame && !slot.overlay_mode {
-                continue;
-            }
-            let Some(r) = slot.rect else {
-                continue;
-            };
-
-            let title = format!("Frame Overlay {}", slot.id.0 + 1);
-            let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot.id.0));
-            let model_arc = self.model.clone();
-            let slot_id = slot.id.0;
-
-            // Ensure the Vec is large enough (can happen on first run before Add Region)
-            while self.slots_runtime.len() <= slot_id {
+        let snapshot = { self.model.lock().clone() };
+        for (i, slot) in snapshot.slots.iter().enumerate() {
+            if !slot.enabled { continue; }
+            if self.slots_runtime.len() <= i {
                 self.slots_runtime.push(SlotRuntimeState::new());
             }
-            // Clone the Arc so the closure can own it without needing &mut self
-            let hwnd_cache = self.slots_runtime[slot_id].overlay_hwnd.clone();
-            let overlay_settings = self.settings.clone();
-
-            ctx.show_viewport_immediate(
-                viewport_id,
-                egui::ViewportBuilder::default()
-                    .with_title(&title)
-                    .with_decorations(false)
-                    .with_transparent(true)
-                    .with_always_on_top()
-                    .with_mouse_passthrough(true)
-                    .with_active(false) // CRITICAL: Prevent focus theft and black boxes
-                    .with_inner_size(egui::vec2(r.w / ppp, r.h / ppp))
-                    .with_position(egui::pos2(r.x / ppp, r.y / ppp)),
-                move |ctx, class| {
-                    if matches!(class, egui::ViewportClass::Embedded) {
-                        egui::CentralPanel::default().show(ctx, |ui| {
-                            ui.label("Frame Viewer (Embedded)");
-                        });
-                        return;
-                    }
-
-                    // Paint directly on the transparent GPU-cleared surface.
-                    let full_rect = ctx.screen_rect();
-                    let painter = ctx.layer_painter(egui::LayerId::background());
-
-                    {
-                        let m = model_arc.lock();
-                        if slot_id < m.slots.len() {
-                            let slot = &m.slots[slot_id];
-                            let show_overlay = slot.overlay_mode && !slot.last_translation.is_empty();
-                            let show_border  = slot.show_frame;
-                            let ocr_lines    = slot.last_ocr_lines.clone();
-                            let trans_lines  = slot.last_trans_lines.clone();
-                            let fallback_text = slot.last_translation.clone();
-                            drop(m);
-
-                            if show_overlay {
-                                let overlay_bg_color = egui::Color32::from_rgba_unmultiplied(
-                                    overlay_settings.overlay_bg_color[0],
-                                    overlay_settings.overlay_bg_color[1],
-                                    overlay_settings.overlay_bg_color[2],
-                                    overlay_settings.overlay_bg_color[3],
-                                );
-                                let overlay_text_color = egui::Color32::from_rgba_unmultiplied(
-                                    overlay_settings.overlay_text_color[0],
-                                    overlay_settings.overlay_text_color[1],
-                                    overlay_settings.overlay_text_color[2],
-                                    overlay_settings.overlay_text_color[3],
-                                );
-                                let overlay_padding = overlay_settings.overlay_padding;
-                                let overlay_corner_radius = overlay_settings.overlay_corner_radius;
-
-                                // ── Positional overlay ────────────────────────────────────────
-                                // Background is TRANSPARENT. Only the small dark rect behind
-                                // each translated line is drawn, matching the original text position.
-                                let has_positions = !ocr_lines.is_empty();
-
-                                if has_positions {
-                                    // Max width for text wrapping = region width
-                                    let max_text_w = full_rect.width() - 8.0;
-                                    
-                                    // Track the bottom position of the last rendered line to avoid overlaps
-                                    let mut last_bottom_y = full_rect.top();
-
-                                    for (idx, ocr_line) in ocr_lines.iter().enumerate() {
-                                        let trans = trans_lines
-                                            .get(idx)
-                                            .map(|s| s.as_str())
-                                            .unwrap_or("");
-                                        if trans.trim().is_empty() { continue; }
-
-                                        // Font size: Use user setting, but cap at 120% of original line height if needed
-                                        let line_h_points = ocr_line.h / ppp;
-                                        let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-
-                                        // Wrap text within region width
-                                        let wrap_width = (max_text_w - (ocr_line.x as f32 / ppp) + full_rect.left()).max(100.0);
-                                        let galley = ctx.fonts(|f| {
-                                            f.layout(
-                                                trans.to_string(),
-                                                egui::FontId::proportional(font_size),
-                                                overlay_text_color,
-                                                wrap_width,
-                                            )
-                                        });
-
-                                        let start_y = ocr_line.y / ppp;
-
-                                        // Background covers the ENTIRE OCR line area to fully hide original text
-                                        let bg_w = (ocr_line.w / ppp).max(galley.size().x + (overlay_padding * 2.0)).min(wrap_width + (overlay_padding * 2.0));
-                                        let bg_h = (ocr_line.h / ppp).max(galley.size().y + overlay_padding);
-                                        let bg = egui::Rect::from_min_size(
-                                            egui::pos2((ocr_line.x / ppp) - overlay_padding/2.0, start_y - overlay_padding/4.0),
-                                            egui::vec2(bg_w + overlay_padding, bg_h + overlay_padding/2.0),
-                                        );
-                                        
-                                        // Update last_bottom_y for the next iteration
-                                        last_bottom_y = bg.max.y;
-
-                                        // Use user's background color
-                                        painter.rect_filled(
-                                            bg,
-                                            overlay_corner_radius,
-                                            overlay_bg_color,
-                                        );
-
-                                        // Center text vertically within the calculated background box
-                                        let text_y = start_y + (bg_h - galley.size().y) / 2.0;
-                                        let text_pos = egui::pos2(ocr_line.x / ppp, text_y);
-                                        painter.galley(text_pos, galley, overlay_text_color);
-                                    }
-
-                                    // Render any extra translated lines below everything else
-                                    if trans_lines.len() > ocr_lines.len() {
-                                        let last = ocr_lines.last().unwrap();
-                                        let mut y = last_bottom_y + 4.0;
-                                        for extra in &trans_lines[ocr_lines.len()..] {
-                                            if extra.trim().is_empty() { continue; }
-                                            let wrap_width = (full_rect.width() - (last.x as f32 / ppp) + full_rect.left() - 8.0).max(100.0);
-                                            let galley = ctx.fonts(|f| {
-                                                f.layout(
-                                                    extra.clone(),
-                                                    egui::FontId::proportional(overlay_settings.overlay_font_size),
-                                                    overlay_text_color,
-                                                    wrap_width,
-                                                )
-                                            });
-                                            let pos = egui::pos2(last.x as f32 / ppp, y);
-                                            let bg = egui::Rect::from_min_size(
-                                                pos - egui::vec2(overlay_padding, overlay_padding/2.0),
-                                                galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),
-                                            );
-                                            painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                            let line_h = galley.size().y;
-                                            painter.galley(pos, galley, overlay_text_color);
-                                            y += line_h + 4.0;
-                                        }
-                                    }
-                                } else {
-                                    // Fallback: no position info (cache hit) — stack lines vertically centered
-                                    let font_size = overlay_settings.overlay_font_size;
-                                    let mut y = full_rect.top() + 8.0;
-                                    for line in fallback_text.lines() {
-                                        if line.trim().is_empty() { continue; }
-                                        let wrap_width = full_rect.width() - 16.0;
-                                        let galley = ctx.fonts(|f| {
-                                            f.layout(
-                                                line.to_string(),
-                                                egui::FontId::proportional(font_size),
-                                                overlay_text_color,
-                                                wrap_width,
-                                            )
-                                        });
-                                        let x = (full_rect.center().x - galley.size().x / 2.0)
-                                            .clamp(full_rect.left() + 4.0, full_rect.right() - 4.0);
-                                        let pos = egui::pos2(x, y);
-                                        let bg = egui::Rect::from_min_size(
-                                            pos - egui::vec2(overlay_padding, overlay_padding/2.0),
-                                            galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),
-                                        );
-                                        painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                        let line_h = galley.size().y;
-                                        painter.galley(pos, galley, overlay_text_color);
-                                        y += line_h + 4.0;
-                                    }
-                                }
-                            }
-
-                            // Green frame border (shown when Show Frame Box is ticked)
-                            if show_border {
-                                let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
-                                painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
-                            }
-                        }
-                    }
-
-                    // Drag to reposition the capture region
-                    ctx.input(|i| {
-                        if i.pointer.primary_down() {
-                            let delta = i.pointer.delta();
-                            if delta != egui::Vec2::ZERO {
-                                let mut m = model_arc.lock();
-                                if slot_id < m.slots.len() {
-                                    if let Some(rect) = m.slots[slot_id].rect.as_mut() {
-                                        // delta is in points, rect is in pixels
-                                        rect.x += delta.x * ppp;
-                                        rect.y += delta.y * ppp;
-                                    }
-                                }
-                            }
-                        }
-                    });
-
-                    // Win32 Color Key Transparency
-                    let title = format!("Frame Overlay {}", slot_id + 1);
-                    if let Some(raw) = win32::find_window(&title) {
-                        let cached = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
-                        if raw != cached {
-                            win32::apply_overlay_attributes(raw);
-                            hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
-                        }
-                    }
-                },
+            
+            overlay_renderer::render_overlay_viewport(
+                ctx,
+                i,
+                &self.model,
+                &self.slots_runtime[i],
+                &self.settings,
+                &self.platform,
             );
         }
     }
@@ -576,9 +273,7 @@ impl App {
             &self.model,
             &mut self.slots_runtime,
             &self.capture,
-            &self.windows_ocr,
-            &self.paddle_ocr,
-            self.settings.ocr_engine,
+            &self.ocr_engine,
             &self.translator,
             &self.translation_cache,
             &self.text_translation_cache,
@@ -633,7 +328,13 @@ impl App {
                 self.last_errors.insert(999, format!("{e:#}"));
             } else {
                 self.translator = create_translator(&self.settings);
-                self.paddle_ocr = Arc::new(crate::adapters::ocr::paddle_ocr::PaddleOcr::new(self.settings.paddle_ocr_path.clone()));
+                // Rebuild OCR engine if settings changed
+                self.ocr_engine = match self.settings.ocr_engine {
+                    crate::infra::settings::OcrEngineType::Paddle => {
+                        Arc::new(PaddleOcr::new(self.settings.paddle_ocr_path.clone()))
+                    }
+                    _ => Arc::new(WindowsOcr::new()),
+                };
                 self.last_errors.clear();
                 self.show_settings = false;
                 self.settings_edit = None; // Clean up
@@ -698,6 +399,7 @@ impl eframe::App for App {
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        let i18n = get_i18n(self.settings.ui_language);
         self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
@@ -730,16 +432,16 @@ impl eframe::App for App {
                     let running = &mut model.running;
                     
                     let (btn_text, btn_color) = if *running { 
-                        ("⏹ Stop", egui::Color32::from_rgb(200, 50, 50)) 
+                        (i18n.stop_capture, egui::Color32::from_rgb(200, 50, 50)) 
                     } else { 
-                        ("▶ Start", egui::Color32::from_rgb(50, 150, 50)) 
+                        (i18n.start_capture, egui::Color32::from_rgb(50, 150, 50)) 
                     };
 
                     let button = egui::Button::new(egui::RichText::new(btn_text).color(egui::Color32::WHITE).strong())
                         .fill(btn_color)
-                        .min_size(egui::vec2(80.0, 24.0));
+                        .min_size(egui::vec2(100.0, 24.0));
                         
-                    if ui.add(button).on_hover_text(if *running { "Stop translation loop" } else { "Start translation loop" }).clicked() {
+                    if ui.add(button).clicked() {
                         *running = !*running;
                         if *running {
                             // Reset all timers to trigger immediately when starting manually
@@ -790,7 +492,7 @@ impl eframe::App for App {
             let content_resp = ui.vertical(|ui| {
                 for i in 0..slot_count {
                     let mut model = self.model.lock();
-                    let resp = render_slot_item(ui, i, &mut model, &self.slots_runtime[i], &self.available_screens);
+                    let resp = render_slot_item(ui, i, &mut model, &self.slots_runtime[i], &self.available_screens, self.settings.ui_language);
                     if resp.should_remove {
                         remove_idx = Some(i);
                     }
@@ -812,7 +514,7 @@ impl eframe::App for App {
                 }
 
                 ui.add_space(8.0);
-                if ui.button("➕ Add Region").clicked() {
+                if ui.button(format!("➕ {}", i18n.clear_results.replace("Clear Results", "Add Region").replace("ล้างหน้าจอ", "เพิ่มพื้นที่"))).clicked() {
                     let mut model = self.model.lock();
                     model.add_slot();
                     self.slots_runtime.push(SlotRuntimeState::new());

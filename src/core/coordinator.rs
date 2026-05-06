@@ -8,9 +8,6 @@ use crate::core::{
     worker::{BgResult, SlotRuntimeState, smart_hash},
     text_cleaner::TextCleaner,
 };
-use crate::adapters::{
-    ocr::windows_ocr::WindowsOcr,
-};
 
 pub struct BackgroundCoordinator {
     pub bg_tx: mpsc::Sender<BgResult>,
@@ -209,9 +206,7 @@ impl BackgroundCoordinator {
         model_arc: &Arc<Mutex<AppModel>>,
         slots_runtime: &mut Vec<SlotRuntimeState>,
         capture: &Arc<dyn FrameSource>,
-        windows_ocr: &Arc<WindowsOcr>,
-        paddle_ocr: &Arc<crate::adapters::ocr::paddle_ocr::PaddleOcr>,
-        ocr_engine_type: crate::infra::settings::OcrEngineType,
+        ocr_engine: &Arc<dyn OcrEngine>,
         translator: &Option<Arc<dyn Translator + Send + Sync>>,
         translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
         text_translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
@@ -270,9 +265,7 @@ impl BackgroundCoordinator {
             let source_lang = slot.source_lang.clone();
             let target_lang = slot.target_lang.clone();
             let capture = capture.clone();
-            let windows_ocr = windows_ocr.clone();
-            let paddle_ocr = paddle_ocr.clone();
-            let ocr_engine_type = ocr_engine_type;
+            let ocr_engine = ocr_engine.clone();
             let translator = translator.clone();
             let tx = self.bg_tx.clone();
             let prev_hash = slots_runtime[i].last_hash;
@@ -298,6 +291,8 @@ impl BackgroundCoordinator {
                         let hash = smart_hash(&frame.data);
                         let now = Self::now_ms();
 
+                        tracing::debug!(slot = i, hash = %hash, "Frame captured and hashed");
+
                         // Stability Logic
                         let is_changing = hash != stable_hash || stable_since_ms == 0;
                         let unstable_dur = if stable_since_ms == 0 { 0 } else { now.saturating_sub(stable_since_ms) };
@@ -316,12 +311,10 @@ impl BackgroundCoordinator {
                             return Ok(BgResult::Unchanged { slot_idx: i });
                         }
 
+                        tracing::info!(slot = i, "Proceeding with OCR/Translation");
                         let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "OCR...".to_string() });
                         ctx_worker.request_repaint();
-                        let ocr_lines = match ocr_engine_type {
-                            crate::infra::settings::OcrEngineType::Windows => windows_ocr.recognize_lines(&frame, source_lang.as_ref())?,
-                            crate::infra::settings::OcrEngineType::Paddle => paddle_ocr.recognize_lines(&frame, source_lang.as_ref())?,
-                        };
+                        let ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
                         
                         // --- Grouping disabled as it caused UI chaos and AI confusion ---
                         // let ocr_lines = Self::group_ocr_lines(raw_ocr_lines);
