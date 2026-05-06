@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use egui::{self, Color32, Pos2, Sense, Stroke, Vec2};
+use egui::{self, Color32, Pos2, Sense, Stroke};
 use parking_lot::Mutex;
 use screenshots::Screen;
 
@@ -129,39 +129,91 @@ fn crop_content(
     }
 
     let tex = st.texture.clone();
-    let (iw, ih) = (st.px.0 as f32, st.px.1 as f32);
 
-    ui.vertical(|ui| {
-        ui.label(egui::RichText::new("Click and drag to draw a region (select text area to capture)").strong());
-        ui.small("Using primary monitor — multi-monitor support can be added later.");
-    });
+    // Get the actual screen rect for the image (should fill the viewport)
+    let full_rect = ui.max_rect();
+    let painter = ui.painter();
 
-    let available = ui.available_size();
-    let scale = (available.x / iw).min(available.y / ih);
-    let size = Vec2::new(iw * scale, ih * scale);
-
-    let response = ui.add(
-        egui::Image::from_texture(&tex)
-            .fit_to_exact_size(size)
-            .sense(Sense::click_and_drag()),
+    // 1. Draw the base screenshot
+    painter.image(
+        tex.id(),
+        full_rect,
+        egui::Rect::from_min_max(Pos2::ZERO, egui::pos2(1.0, 1.0)),
+        Color32::WHITE,
     );
 
-    let img_rect = response.rect;
+    // 2. Draw Dark Overlay (Dimming the whole screen)
+    painter.rect_filled(
+        full_rect,
+        0.0,
+        Color32::from_black_alpha(150),
+    );
 
+    let pointer_pos = ui.ctx().input(|i| i.pointer.latest_pos());
+
+    // Handle Interaction
+    let response = ui.interact(full_rect, ui.id(), Sense::click_and_drag());
+    
     if response.drag_started() {
-        if let Some(p) = response.interact_pointer_pos() {
+        if let Some(p) = pointer_pos {
             st.drag_start = Some(p);
             st.drag_current = Some(p);
         }
     }
     if response.dragged() {
-        if let Some(p) = response.interact_pointer_pos() {
+        if let Some(p) = pointer_pos {
             st.drag_current = Some(p);
         }
     }
+    
+    if let (Some(start), Some(curr)) = (st.drag_start, st.drag_current) {
+        let r = egui::Rect::from_two_pos(start, curr);
+        current_rect = Some(r);
+
+        // 3. Clear the selection area (Draw the original image over the dark overlay in this rect)
+        painter.image(
+            tex.id(),
+            r,
+            egui::Rect::from_min_max(
+                egui::pos2((r.min.x - full_rect.min.x) / full_rect.width(), (r.min.y - full_rect.min.y) / full_rect.height()),
+                egui::pos2((r.max.x - full_rect.min.x) / full_rect.width(), (r.max.y - full_rect.min.y) / full_rect.height()),
+            ),
+            Color32::WHITE,
+        );
+
+        // 4. Draw selection border
+        painter.rect_stroke(
+            r,
+            0.0,
+            Stroke::new(2.0, Color32::from_rgb(0, 255, 128)),
+            egui::StrokeKind::Outside,
+        );
+
+        // 5. Display Dimensions (W x H)
+        let (sx1, sy1) = st.pixel_to_screen(&full_rect, start);
+        let (sx2, sy2) = st.pixel_to_screen(&full_rect, curr);
+        let w = (sx1 - sx2).abs() as i32;
+        let h = (sy1 - sy2).abs() as i32;
+        
+        let label = format!("{} x {}", w, h);
+        let galley = ui.painter().layout_no_wrap(label, egui::FontId::proportional(14.0), Color32::WHITE);
+        let label_pos = curr + egui::vec2(10.0, 10.0);
+        let label_rect = egui::Rect::from_min_size(label_pos - egui::vec2(4.0, 2.0), galley.size() + egui::vec2(8.0, 4.0));
+        
+        painter.rect_filled(label_rect, 4.0, Color32::from_black_alpha(200));
+        painter.galley(label_pos, galley, Color32::WHITE);
+    }
+
+    // 6. Crosshair lines (if not dragging or always)
+    if let Some(p) = pointer_pos {
+        let stroke = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 100));
+        painter.line_segment([egui::pos2(full_rect.left(), p.y), egui::pos2(full_rect.right(), p.y)], stroke);
+        painter.line_segment([egui::pos2(p.x, full_rect.top()), egui::pos2(p.x, full_rect.bottom())], stroke);
+    }
+
     if response.drag_stopped() {
         if let (Some(a), Some(b)) = (st.drag_start, st.drag_current) {
-            if let Some(rect) = st.try_finish_rect(&img_rect, a, b) {
+            if let Some(rect) = st.try_finish_rect(&full_rect, a, b) {
                 let slot = st.slot_idx;
                 drop(st);
                 *outcome.lock() = Some(CropOutcome::Done { slot, rect });
@@ -170,15 +222,5 @@ fn crop_content(
         }
         st.drag_start = None;
         st.drag_current = None;
-    }
-
-    if let (Some(a), Some(b)) = (st.drag_start, st.drag_current) {
-        let r = egui::Rect::from_two_pos(a, b);
-        ui.painter().rect_stroke(
-            r,
-            0.0,
-            Stroke::new(2.0, Color32::from_rgb(0, 255, 128)),
-            egui::StrokeKind::Outside,
-        );
     }
 }
