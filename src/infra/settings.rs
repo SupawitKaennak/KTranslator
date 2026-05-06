@@ -17,7 +17,15 @@ pub enum OcrEngineType {
     Paddle,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UiLanguage {
+    System,
+    Thai,
+    English,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub provider: TranslationProvider,
     pub ocr_engine: OcrEngineType,
@@ -39,6 +47,8 @@ pub struct Settings {
     pub overlay_font_size: f32,
     pub overlay_padding: f32,
     pub overlay_corner_radius: f32,
+
+    pub ui_language: UiLanguage,
 }
 
 impl Default for Settings {
@@ -62,6 +72,7 @@ impl Default for Settings {
             overlay_font_size: 14.0,
             overlay_padding: 4.0,
             overlay_corner_radius: 4.0,
+            ui_language: UiLanguage::System,
         }
     }
 }

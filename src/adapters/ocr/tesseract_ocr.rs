@@ -1,26 +1,37 @@
-#[cfg(not(windows))]
 use anyhow::{Context, Result};
-use leptess::{LepTess, tesseract};
 use std::sync::Mutex;
 use crate::core::{
     ports::{FrameRgba, OcrEngine as OcrEngineTrait, OcrTextLine},
     types::LanguageTag,
 };
 
+#[cfg(feature = "tesseract")]
+use leptess::LepTess;
+
 pub struct TesseractOcr {
-    // Tesseract engine is NOT thread-safe, so we wrap it in a Mutex.
-    // We also use a simple cache or just one instance.
+    #[cfg(feature = "tesseract")]
     api: Mutex<LepTess>,
+    #[cfg(not(feature = "tesseract"))]
+    _stub: (),
 }
 
 impl TesseractOcr {
+    #[allow(unused_variables)]
     pub fn new(lang: &str) -> Result<Self> {
-        let api = LepTess::new(None, lang).context("Failed to initialize Tesseract")?;
-        Ok(Self {
-            api: Mutex::new(api),
-        })
+        #[cfg(feature = "tesseract")]
+        {
+            let api = LepTess::new(None, lang).context("Failed to initialize Tesseract")?;
+            Ok(Self {
+                api: Mutex::new(api),
+            })
+        }
+        #[cfg(not(feature = "tesseract"))]
+        {
+            Ok(Self { _stub: () })
+        }
     }
 
+    #[allow(dead_code)]
     fn lang_tag_to_tess(tag: Option<&LanguageTag>) -> &str {
         match tag.map(|t| t.0.as_str()) {
             Some("en") => "eng",
@@ -33,32 +44,40 @@ impl TesseractOcr {
 }
 
 impl OcrEngineTrait for TesseractOcr {
-    fn recognize(&self, frame: &FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
-        let mut api = self.api.lock().unwrap();
-        
-        // Tesseract needs to know which language to use.
-        // Note: Switching languages in Leptess might require re-init if not careful,
-        // but for now let's assume the init language is correct.
-        
-        api.set_image_from_mem(&frame.data, frame.width as i32, frame.height as i32, 4, (frame.width * 4) as i32)
-            .context("Failed to set image for Tesseract")?;
+    #[allow(unused_variables)]
+    fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
+        #[cfg(feature = "tesseract")]
+        {
+            let mut api = self.api.lock().unwrap();
             
-        let text = api.get_utf8_text().context("Tesseract failed to extract text")?;
-        Ok(text)
+            // Set image from memory (RGBA8)
+            api.set_image_from_mem(&frame.data, frame.width as i32, frame.height as i32, 4, (frame.width * 4) as i32)
+                .context("Failed to set image for Tesseract")?;
+                
+            let text = api.get_utf8_text().context("Tesseract failed to extract text")?;
+            Ok(text)
+        }
+        #[cfg(not(feature = "tesseract"))]
+        {
+            anyhow::bail!("Tesseract feature is not enabled")
+        }
     }
 
-    fn recognize_lines(&self, _frame: &FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
-        // Implementing recognize_lines for Tesseract is more complex as it requires
-        // iterate through ResultIterator to get bounding boxes. 
-        // For the first version, let's return a single block or implement a basic version.
-        // (We can refine this later to match Windows OCR's line-by-line precision)
-        
-        let text = self.recognize(_frame, _lang_hint)?;
-        if text.trim().is_empty() { return Ok(vec![]); }
-        
-        Ok(vec![OcrTextLine {
-            text,
-            x: 0.0, y: 0.0, w: _frame.width as f32, h: _frame.height as f32,
-        }])
+    #[allow(unused_variables)]
+    fn recognize_lines(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+        #[cfg(feature = "tesseract")]
+        {
+            let text = self.recognize(frame, lang_hint)?;
+            if text.trim().is_empty() { return Ok(vec![]); }
+            
+            Ok(vec![OcrTextLine {
+                text,
+                x: 0.0, y: 0.0, w: frame.width as f32, h: frame.height as f32,
+            }])
+        }
+        #[cfg(not(feature = "tesseract"))]
+        {
+            anyhow::bail!("Tesseract feature is not enabled")
+        }
     }
 }
