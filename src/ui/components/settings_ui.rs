@@ -363,13 +363,13 @@ pub fn show_settings_window(
                     ui.label(format!("{}:", i18n.ui_language));
                     egui::ComboBox::from_id_salt("ui_language_dropdown")
                         .selected_text(match settings.ui_language {
-                            UiLanguage::System => i18n.auto_detect,
-                            UiLanguage::Thai => "ภาษาไทย",
+                            UiLanguage::System => i18n.system_default,
+                            UiLanguage::Thai => "ไทย",
                             UiLanguage::English => "English",
                         })
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut settings.ui_language, UiLanguage::System, i18n.auto_detect);
-                            ui.selectable_value(&mut settings.ui_language, UiLanguage::Thai, "ภาษาไทย");
+                            ui.selectable_value(&mut settings.ui_language, UiLanguage::System, i18n.system_default);
+                            ui.selectable_value(&mut settings.ui_language, UiLanguage::Thai, "ไทย");
                             ui.selectable_value(&mut settings.ui_language, UiLanguage::English, "English");
                         });
                 });

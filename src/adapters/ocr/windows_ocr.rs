@@ -76,20 +76,36 @@ impl WindowsOcr {
     }
 }
 
-// Robust helper to block on Windows futures using tokio
+use std::sync::LazyLock;
+
+// Robust global runtime to handle Windows async calls from any thread (including non-tokio threads)
+static GLOBAL_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("Failed to create global OCR tokio runtime")
+});
+
 fn wait_for<F: std::future::Future>(f: F) -> F::Output {
-    tokio::runtime::Handle::current().block_on(f)
+    GLOBAL_RUNTIME.block_on(f)
 }
 
 impl OcrEngineTrait for WindowsOcr {
     fn recognize(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<String> {
         let (processed, _) = Self::preprocess(frame);
         
+        // Encode raw pixels to PNG in memory
+        let mut png_buffer = Vec::new();
+        let mut cursor = std::io::Cursor::new(&mut png_buffer);
+        let img = ImageBuffer::<Rgba<u8>, _>::from_raw(processed.width, processed.height, processed.data)
+            .ok_or_else(|| anyhow::anyhow!("Failed to create image buffer"))?;
+        image::DynamicImage::ImageRgba8(img).write_to(&mut cursor, image::ImageFormat::Png)?;
+
         let stream = InMemoryRandomAccessStream::new()?;
         let writer = stream.GetOutputStreamAt(0)?;
         {
             let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)?;
-            data_writer.WriteBytes(&processed.data)?;
+            data_writer.WriteBytes(&png_buffer)?;
             wait_for(data_writer.StoreAsync()?.into_future())?;
             wait_for(data_writer.FlushAsync()?.into_future())?;
         }
@@ -104,11 +120,18 @@ impl OcrEngineTrait for WindowsOcr {
     fn recognize_lines(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
         let (processed, scale) = Self::preprocess(frame);
         
+        // Encode raw pixels to PNG in memory
+        let mut png_buffer = Vec::new();
+        let mut cursor = std::io::Cursor::new(&mut png_buffer);
+        let img = ImageBuffer::<Rgba<u8>, _>::from_raw(processed.width, processed.height, processed.data)
+            .ok_or_else(|| anyhow::anyhow!("Failed to create image buffer"))?;
+        image::DynamicImage::ImageRgba8(img).write_to(&mut cursor, image::ImageFormat::Png)?;
+
         let stream = InMemoryRandomAccessStream::new()?;
         let writer = stream.GetOutputStreamAt(0)?;
         {
             let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)?;
-            data_writer.WriteBytes(&processed.data)?;
+            data_writer.WriteBytes(&png_buffer)?;
             wait_for(data_writer.StoreAsync()?.into_future())?;
             wait_for(data_writer.FlushAsync()?.into_future())?;
         }
@@ -123,7 +146,6 @@ impl OcrEngineTrait for WindowsOcr {
         for line in lines_api {
             let text = line.Text()?.to_string();
             
-            // Calculate line bounding box from its words, as OcrLine doesn't provide BoundingRect in this crate version
             let words = line.Words()?;
             let mut min_x = f32::MAX;
             let mut min_y = f32::MAX;
