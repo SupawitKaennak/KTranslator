@@ -11,35 +11,25 @@ pub fn setup_fonts(ctx: &egui::Context) {
     fonts.font_data.insert(
         "noto_sans_thai".to_owned(),
         Arc::new(egui::FontData::from_static(include_bytes!(
-            "../../assets/NotoSansThai.ttf"
+            "../../assets/fonts/NotoSansThai.ttf"
         ))),
     );
 
-    // 2. Windows system fonts loaded at runtime
-    //    We try each path; missing fonts are silently skipped.
-    let system_fonts: &[(&str, &str)] = &[
-        // CJK — Chinese (Simplified), Japanese, Korean
-        ("msyh",    r"C:\Windows\Fonts\msyh.ttc"),     // Microsoft YaHei  (zh)
-        ("msyh",    r"C:\Windows\Fonts\msyhbd.ttc"),
-        ("msgoth",  r"C:\Windows\Fonts\msgothic.ttc"),  // MS Gothic         (ja)
-        ("malgun",  r"C:\Windows\Fonts\malgun.ttf"),    // Malgun Gothic     (ko)
-        ("malgunbd",r"C:\Windows\Fonts\malgunbd.ttf"),
-        // Arabic, Hebrew, and wide Latin coverage
-        ("arial",   r"C:\Windows\Fonts\arial.ttf"),
-        ("tahoma",  r"C:\Windows\Fonts\tahoma.ttf"),
-        // Devanagari (Hindi, Nepali, Marathi) + other South-Asian scripts
-        ("nirmala", r"C:\Windows\Fonts\Nirmala.ttf"),
-        ("nirmalab",r"C:\Windows\Fonts\NirmalaB.ttf"),
-        ("mangal",  r"C:\Windows\Fonts\mangal.ttf"),
-        // Fallback Unicode catch-all (Office installs)
-        ("arialuni",r"C:\Windows\Fonts\ARIALUNI.TTF"),
+    // 2. Load additional fonts from assets/fonts (Runtime) or Windows system fonts
+    //    We prioritize our local Noto Sans fonts if they exist.
+    let mut loaded: Vec<String> = Vec::new();
+    
+    let local_fonts = &[
+        ("noto_jp", "assets/fonts/NotoSansJP-Regular.otf"),
+        ("noto_sc", "assets/fonts/NotoSansSC-Regular.otf"),
+        ("noto_tc", "assets/fonts/NotoSansTC-Regular.otf"),
+        ("noto_kr", "assets/fonts/NotoSansKR-Regular.otf"),
+        ("noto_arabic", "assets/fonts/NotoSansArabic-Regular.ttf"),
+        ("noto_devanagari", "assets/fonts/NotoSansDevanagari-Regular.ttf"),
+        ("noto_latin", "assets/fonts/NotoSans-Regular.ttf"),
     ];
 
-    let mut loaded: Vec<String> = Vec::new();
-    for (key, path) in system_fonts {
-        if loaded.contains(&key.to_string()) {
-            continue; // skip duplicate keys
-        }
+    for (key, path) in local_fonts {
         if let Ok(data) = std::fs::read(path) {
             fonts.font_data.insert(
                 (*key).to_owned(),
@@ -49,7 +39,29 @@ pub fn setup_fonts(ctx: &egui::Context) {
         }
     }
 
-    // 3. Register all fonts as fallbacks (Thai first, then system fonts)
+    // 3. Fallback to Windows system fonts if any local fonts are missing
+    let system_fonts: &[(&str, &str)] = &[
+        ("msyh",    r"C:\Windows\Fonts\msyh.ttc"),     // Simplified Chinese
+        ("msgoth",  r"C:\Windows\Fonts\msgothic.ttc"),  // Japanese
+        ("malgun",  r"C:\Windows\Fonts\malgun.ttf"),    // Korean
+        ("arial",   r"C:\Windows\Fonts\arial.ttf"),     // Arabic/Latin fallback
+        ("nirmala", r"C:\Windows\Fonts\Nirmala.ttf"),   // Devanagari
+    ];
+
+    for (key, path) in system_fonts {
+        // Only load if we don't have a better version already
+        if !loaded.iter().any(|l| l.contains(key)) {
+            if let Ok(data) = std::fs::read(path) {
+                fonts.font_data.insert(
+                    (*key).to_owned(),
+                    Arc::new(egui::FontData::from_owned(data)),
+                );
+                loaded.push(key.to_string());
+            }
+        }
+    }
+
+    // 4. Register all fonts as fallbacks (Thai first, then everything else)
     let fallback_order = {
         let mut v = vec!["noto_sans_thai".to_owned()];
         v.extend(loaded.iter().cloned());

@@ -199,14 +199,12 @@ pub fn render_slot_item(
         ui.add_space(4.0);
 
         ui.horizontal(|ui| {
-            if runtime.processing || runtime.busy {
+            if runtime.processing {
                 ui.add(egui::Spinner::new().size(12.0));
-                ui.label(egui::RichText::new(i18n.busy).size(13.0).strong());
-            } else {
-                ui.label("💤");
-                let status_text = if runtime.status == "Idle" || runtime.status.is_empty() { i18n.idle } else { &runtime.status };
-                ui.label(egui::RichText::new(status_text).size(13.0).strong());
             }
+
+            let status_text = if runtime.status.is_empty() { i18n.idle } else { &runtime.status };
+            ui.label(egui::RichText::new(status_text).size(13.0).strong());
         });
     });
 
