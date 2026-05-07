@@ -64,7 +64,7 @@ impl BackgroundCoordinator {
                         runtime.busy = false;
                         runtime.processing = false;
                         runtime.first_unstable_at = 0; // Reset on success
-                        runtime.status = "Idle".to_string();
+                        runtime.status = "Ready".to_string();
                         runtime.last_hash = frame_hash;
 
                         let now = Self::now_ms();
@@ -101,7 +101,7 @@ impl BackgroundCoordinator {
                 BgResult::Unchanged { slot_idx } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         runtime.busy = false;
-                        runtime.status = "Idle".to_string();
+                        runtime.status = "Ready".to_string();
                         runtime.first_unstable_at = 0; // Reset
                     }
                     let now = Self::now_ms();
@@ -120,7 +120,6 @@ impl BackgroundCoordinator {
                     }
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         runtime.busy = false;
-                        runtime.status = "Settling...".to_string();
                         // Initialize first_unstable_at if it's 0
                         if runtime.first_unstable_at == 0 {
                             runtime.first_unstable_at = now;
@@ -130,7 +129,6 @@ impl BackgroundCoordinator {
                 BgResult::WaitingDebounce { slot_idx } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         runtime.busy = false;
-                        runtime.status = "Waiting...".to_string();
                     }
                     let mut model = model_arc.lock();
                     if let Some(slot) = model.slots.get_mut(slot_idx) {
@@ -152,7 +150,7 @@ impl BackgroundCoordinator {
                         }
 
                         runtime.busy = false;
-                        runtime.status = "Idle (Cached)".to_string();
+                        runtime.status = "Ready (Cached)".to_string();
                         runtime.first_unstable_at = 0; // Reset
                         runtime.last_hash = frame_hash;
 
@@ -169,6 +167,9 @@ impl BackgroundCoordinator {
                 BgResult::StatusUpdate { slot_idx, status } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         runtime.status = status;
+                        if runtime.status.contains("Scanning") || runtime.status.contains("AI") {
+                            runtime.processing = true;
+                        }
                     }
                 }
                 BgResult::Error { slot_idx, language_version, err } => {
@@ -253,6 +254,7 @@ impl BackgroundCoordinator {
             }
 
             slots_runtime[i].busy = true;
+            slots_runtime[i].processing = false; // Reset processing at start of every tick
             {
                 let mut m = model_arc.lock();
                 if let Some(s) = m.slots.get_mut(i) {
@@ -278,7 +280,7 @@ impl BackgroundCoordinator {
             
             let ctx_worker = ctx.clone();
             self.pool.execute(move || {
-                let _ = tx.send(BgResult::StatusUpdate { slot_idx: i, status: "Capturing...".to_string() });
+                // let _ = tx.send(BgResult::StatusUpdate { slot_idx: i, status: "Taking Screenshot...".to_string() }); // REMOVED: Too fast, causes flickering
                 ctx_worker.request_repaint();
                 let tx_for_panic = tx.clone();
                 let ctx_for_panic = ctx_worker.clone();
@@ -286,7 +288,7 @@ impl BackgroundCoordinator {
                     let tx_inner = tx.clone();
                     let result = (|| -> anyhow::Result<BgResult> {
                         let frame = capture.capture_rect(rect, display_id)?;
-                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Hashing...".to_string() });
+                        // let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Analyzing...".to_string() }); // REMOVED: Too fast, causes flickering
                         ctx_worker.request_repaint();
                         let hash = smart_hash(&frame.data);
                         let now = Self::now_ms();
@@ -312,7 +314,7 @@ impl BackgroundCoordinator {
                         }
 
                         tracing::info!(slot = i, "Proceeding with OCR/Translation");
-                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "OCR...".to_string() });
+                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Scanning Text...".to_string() });
                         ctx_worker.request_repaint();
                         let ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
                         
@@ -369,7 +371,7 @@ impl BackgroundCoordinator {
                             });
                         }
 
-                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Translating (AI)...".to_string() });
+                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "AI Translating...".to_string() });
                         ctx_worker.request_repaint();
                         let translated = translator.as_ref()
                             .context("No translator provider selected")?
