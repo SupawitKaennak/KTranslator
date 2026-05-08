@@ -1,0 +1,104 @@
+use crate::core::ports::{OcrTextBlock, OcrTextLine};
+
+fn is_close(a: &OcrTextLine, b: &OcrTextLine) -> bool {
+    // Determine typical character size by taking the minimum of width and height.
+    // For a horizontal line, height is the char size. For a vertical line, width is the char size.
+    let char_size_a = a.w.min(a.h);
+    let char_size_b = b.w.min(b.h);
+    let char_size = char_size_a.max(char_size_b);
+    
+    // Expansion margin. We use 1.2x char size as a reasonable gap for lines within the same paragraph/bubble.
+    let expand_y = char_size * 1.2;
+    let expand_x = char_size * 1.2;
+    
+    let a_left = a.x - expand_x;
+    let a_right = a.x + a.w + expand_x;
+    let a_top = a.y - expand_y;
+    let a_bottom = a.y + a.h + expand_y;
+    
+    let b_left = b.x;
+    let b_right = b.x + b.w;
+    let b_top = b.y;
+    let b_bottom = b.y + b.h;
+    
+    // Check intersection
+    !(a_right < b_left || a_left > b_right || a_bottom < b_top || a_top > b_bottom)
+}
+
+fn merge_text(lines: &[OcrTextLine]) -> String {
+    // If lines contain mostly Asian characters, we don't insert space.
+    // Otherwise we insert space.
+    // A simple heuristic: if the text contains a lot of ASCII, add space.
+    // For now, to be safe and simple: just join them. We rely on the text cleaner 
+    // to have stripped unnecessary whitespace, but we might need spaces for English.
+    // Let's inspect the first line's characters.
+    let is_asian = lines.iter().any(|l| {
+        l.text.chars().any(|c| {
+            let u = c as u32;
+            (u >= 0x4E00 && u <= 0x9FFF) || // CJK Unified Ideographs
+            (u >= 0x3040 && u <= 0x309F) || // Hiragana
+            (u >= 0x30A0 && u <= 0x30FF)    // Katakana
+        })
+    });
+
+    let separator = if is_asian { "" } else { " " };
+    
+    lines.iter()
+        .map(|l| l.text.trim())
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>()
+        .join(separator)
+}
+
+pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool) -> Vec<OcrTextBlock> {
+    if lines.is_empty() {
+        return vec![];
+    }
+
+    if !smart_merge {
+        return lines.into_iter().map(|l| OcrTextBlock {
+            source_text: l.text.clone(),
+            lines: vec![l],
+        }).collect();
+    }
+
+    let mut blocks: Vec<OcrTextBlock> = Vec::new();
+
+    for line in lines {
+        // Find if this line intersects with any existing block
+        let mut matched_idx = None;
+        for (i, block) in blocks.iter().enumerate() {
+            if block.lines.iter().any(|existing_line| is_close(&line, existing_line)) {
+                matched_idx = Some(i);
+                break;
+            }
+        }
+
+        if let Some(idx) = matched_idx {
+            blocks[idx].lines.push(line);
+        } else {
+            blocks.push(OcrTextBlock {
+                lines: vec![line],
+                source_text: String::new(),
+            });
+        }
+    }
+
+    // Build the merged text for each block
+    for block in &mut blocks {
+        // Sort lines top-to-bottom, left-to-right to ensure logical reading order before merging
+        block.lines.sort_by(|_a, _b| {
+            // Give Y a higher weight to sort vertically first, then horizontally
+            // Note: For vertical manga text, reading order is Right-to-Left, Top-to-Bottom.
+            // But let's assume the OCR engine already returned them in a decent order.
+            // Actually, sorting might mess up PaddleOCR's natural order.
+            // Let's just trust the OCR engine's output order within the group.
+            // No sorting here to avoid breaking PaddleOCR's smart ordering.
+            std::cmp::Ordering::Equal
+        });
+        
+        block.source_text = merge_text(&block.lines);
+    }
+
+    blocks
+}
