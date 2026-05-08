@@ -9,7 +9,6 @@ use crate::{
         ocr::{windows_ocr::WindowsOcr, paddle_ocr::PaddleOcr},
         translate::{
             create_translator,
-            gemini::{GeminiModel, GeminiTranslator},
         },
     },
     core::{
@@ -47,7 +46,8 @@ pub struct App {
     settings_fetch_models_pending: bool,
     last_errors: std::collections::BTreeMap<usize, String>,
     /// Empty = use built-in fallback list until Refresh succeeds
-    gemini_models: Vec<GeminiModel>,
+    gemini_models: Arc<Mutex<Vec<String>>>,
+    gemini_fetching: Arc<Mutex<bool>>,
 
     /// Persistent state for the settings window while open to prevent frame-reset bug.
     settings_edit: Option<Arc<Mutex<Settings>>>,
@@ -85,6 +85,14 @@ pub struct App {
     /// Channel to signal error dismissal from the error viewport
     error_dismiss_tx: mpsc::Sender<()>,
     error_dismiss_rx: mpsc::Receiver<()>,
+
+    /// Groq models
+    groq_models: Arc<Mutex<Vec<String>>>,
+    groq_fetching: Arc<Mutex<bool>>,
+
+    /// Ollama models
+    ollama_models: Arc<Mutex<Vec<String>>>,
+    ollama_fetching: Arc<Mutex<bool>>,
 
     /// Custom OpenAI compatible models (Auto-fetched)
     custom_openai_models: Arc<Mutex<Vec<String>>>,
@@ -133,9 +141,14 @@ impl App {
 
         let coordinator = BackgroundCoordinator::new();
 
-        let paddle_ocr = Arc::new(PaddleOcr::new(settings.paddle_ocr_path.clone()));
-        let ocr_engine: Arc<dyn OcrEngine> = match settings.ocr_engine {
-            crate::infra::settings::OcrEngineType::Paddle => paddle_ocr,
+        let current_engine_type = match settings.ocr_mode {
+            crate::infra::settings::OcrMode::Game => settings.game_ocr_engine,
+            crate::infra::settings::OcrMode::Manga => settings.manga_ocr_engine,
+            crate::infra::settings::OcrMode::Document => settings.document_ocr_engine,
+        };
+
+        let ocr_engine: Arc<dyn OcrEngine> = match current_engine_type {
+            crate::infra::settings::OcrEngineType::Paddle => Arc::new(PaddleOcr::new(settings.paddle_ocr_path.clone())),
             _ => Arc::new(WindowsOcr::new()),
         };
 
@@ -145,7 +158,8 @@ impl App {
             show_settings: false,
             settings_fetch_models_pending: false,
             last_errors: std::collections::BTreeMap::new(),
-            gemini_models: Vec::new(),
+            gemini_models: Arc::new(Mutex::new(Vec::new())),
+            gemini_fetching: Arc::new(Mutex::new(false)),
             settings_edit: None,
             crop_session: None,
             crop_finish: Arc::new(Mutex::new(None)),
@@ -173,53 +187,15 @@ impl App {
             text_translation_cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
             error_dismiss_tx: err_tx,
             error_dismiss_rx: err_rx,
+            groq_models: Arc::new(Mutex::new(Vec::new())),
+            groq_fetching: Arc::new(Mutex::new(false)),
+            ollama_models: Arc::new(Mutex::new(Vec::new())),
+            ollama_fetching: Arc::new(Mutex::new(false)),
             custom_openai_models: Arc::new(Mutex::new(Vec::new())),
             custom_openai_fetching: Arc::new(Mutex::new(false)),
             custom_openai_error: Arc::new(Mutex::new(None)),
         }
     }
-
-    fn fallback_gemini_models() -> Vec<GeminiModel> {
-        vec![
-            GeminiModel {
-                id: "gemini-2.5-flash".to_string(),
-                display_name: "Gemini 2.5 Flash".to_string(),
-            },
-            GeminiModel {
-                id: "gemini-2.0-flash".to_string(),
-                display_name: "Gemini 2.0 Flash".to_string(),
-            },
-            GeminiModel {
-                id: "gemini-2.0-flash-lite".to_string(),
-                display_name: "Gemini 2.0 Flash Lite".to_string(),
-            },
-            GeminiModel {
-                id: "gemini-1.5-flash".to_string(),
-                display_name: "Gemini 1.5 Flash".to_string(),
-            },
-        ]
-    }
-
-    /// Choices for dropdown: API list if loaded, else fallback; ensure current setting appears.
-    fn model_choices(&self) -> Vec<GeminiModel> {
-        let mut v = if self.gemini_models.is_empty() {
-            Self::fallback_gemini_models()
-        } else {
-            self.gemini_models.clone()
-        };
-        let cur = self.settings.gemini_model.trim();
-        if !cur.is_empty() && !v.iter().any(|m| m.id == cur) {
-            v.insert(
-                0,
-                GeminiModel {
-                    id: cur.to_string(),
-                    display_name: format!("{cur} (current)"),
-                },
-            );
-        }
-        v
-    }
-
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
         let snapshot = { self.model.lock().clone() };
@@ -286,26 +262,6 @@ impl App {
             return;
         }
 
-        if self.settings_fetch_models_pending && !self.settings.gemini_api_key.trim().is_empty() {
-            self.settings_fetch_models_pending = false;
-            match GeminiTranslator::list_models(&self.settings.gemini_api_key) {
-                Ok(models) if !models.is_empty() => {
-                    self.gemini_models = models;
-                    self.last_errors.clear();
-                }
-                Ok(_) => {
-                    self.last_errors.insert(999, "listModels returned empty (using built-in list)".to_string());
-                }
-                Err(e) => {
-                    self.last_errors.insert(999, format!(
-                        "{e:#}\n(using built-in model list; check API key or click Refresh)"
-                    ));
-                }
-            }
-        }
-
-        let model_choices = self.model_choices();
-        
         // Use persistent settings_edit or initialize if missing (fallback)
         if self.settings_edit.is_none() {
             self.settings_edit = Some(Arc::new(Mutex::new(self.settings.clone())));
@@ -315,7 +271,12 @@ impl App {
         let resp = show_settings_window(
             ctx, 
             settings_arc.clone(), 
-            model_choices,
+            self.gemini_models.clone(),
+            self.gemini_fetching.clone(),
+            self.groq_models.clone(),
+            self.groq_fetching.clone(),
+            self.ollama_models.clone(),
+            self.ollama_fetching.clone(),
             self.custom_openai_models.clone(),
             self.custom_openai_fetching.clone(),
             self.custom_openai_error.clone(),
@@ -329,7 +290,13 @@ impl App {
             } else {
                 self.translator = create_translator(&self.settings);
                 // Rebuild OCR engine if settings changed
-                self.ocr_engine = match self.settings.ocr_engine {
+                let current_engine_type = match self.settings.ocr_mode {
+                    crate::infra::settings::OcrMode::Game => self.settings.game_ocr_engine,
+                    crate::infra::settings::OcrMode::Manga => self.settings.manga_ocr_engine,
+                    crate::infra::settings::OcrMode::Document => self.settings.document_ocr_engine,
+                };
+
+                self.ocr_engine = match current_engine_type {
                     crate::infra::settings::OcrEngineType::Paddle => {
                         Arc::new(PaddleOcr::new(self.settings.paddle_ocr_path.clone()))
                     }

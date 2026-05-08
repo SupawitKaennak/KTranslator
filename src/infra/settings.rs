@@ -9,12 +9,20 @@ pub enum TranslationProvider {
     Groq,
     Ollama,
     CustomOpenAI,
+    Google,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OcrEngineType {
     Windows,
     Paddle,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OcrMode {
+    Game,
+    Manga,
+    Document,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -28,7 +36,11 @@ pub enum UiLanguage {
 #[serde(default)]
 pub struct Settings {
     pub provider: TranslationProvider,
-    pub ocr_engine: OcrEngineType,
+    pub ocr_mode: OcrMode,
+    pub game_ocr_engine: OcrEngineType,
+    pub manga_ocr_engine: OcrEngineType,
+    pub document_ocr_engine: OcrEngineType,
+    pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
     pub paddle_ocr_path: String,
     pub gemini_api_key: String,
     pub gemini_model: String,
@@ -39,6 +51,7 @@ pub struct Settings {
     pub custom_openai_url: String,
     pub custom_openai_api_key: String,
     pub custom_openai_model: String,
+    pub custom_openai_use_list: bool,
     pub dark_mode: bool,
 
     // Overlay Customization
@@ -56,6 +69,10 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             provider: TranslationProvider::Gemini,
+            ocr_mode: OcrMode::Game,
+            game_ocr_engine: OcrEngineType::Windows,
+            manga_ocr_engine: OcrEngineType::Paddle,
+            document_ocr_engine: OcrEngineType::Windows,
             ocr_engine: OcrEngineType::Windows,
             paddle_ocr_path: String::new(),
             gemini_api_key: String::new(),
@@ -67,6 +84,7 @@ impl Default for Settings {
             custom_openai_url: "https://api.openai.com/v1".to_string(),
             custom_openai_api_key: String::new(),
             custom_openai_model: "gpt-4o-mini".to_string(),
+            custom_openai_use_list: false,
             dark_mode: true,
             overlay_bg_color: [0, 0, 0, 180], // Semi-transparent black
             overlay_text_color: [255, 255, 255, 255], // White
