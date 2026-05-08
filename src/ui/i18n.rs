@@ -53,8 +53,7 @@ const EN: I18n = I18n {
     ui_language: "UI Language",
     auto_detect: "Auto Detect",
     system_default: "System Default",
-    allow_capture: "Screenshot Mode (Allow Snip)",
-    
+    allow_capture: "Screenshot Mode (Allow Snip)", 
     region: "Region",
     active: "Active",
     select_area: "Select Area",
@@ -88,7 +87,6 @@ const TH: I18n = I18n {
     auto_detect: "ตรวจจับอัตโนมัติ",
     system_default: "ตามระบบเครื่อง",
     allow_capture: "โหมดแคปจอ (ปิดการล่องหน)",
-
     region: "พื้นที่",
     active: "ทำงานอยู่",
     select_area: "เลือกพื้นที่",
