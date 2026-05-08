@@ -8,9 +8,6 @@ impl PlatformServices for WindowsPlatform {
         crate::infra::win32::find_window(title)
     }
 
-    fn apply_overlay_transparency(&self, window_handle: isize) {
-        crate::infra::win32::apply_overlay_attributes(window_handle, true);
-    }
 
     fn boost_process_priority(&self) {
         crate::infra::win32::boost_process_priority();
