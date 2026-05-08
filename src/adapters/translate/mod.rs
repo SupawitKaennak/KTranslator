@@ -2,6 +2,7 @@ pub mod gemini;
 pub mod groq;
 pub mod ollama;
 pub mod openai;
+pub mod google;
 
 use std::sync::Arc;
 use crate::core::ports::Translator;
@@ -10,9 +11,13 @@ use self::gemini::GeminiTranslator;
 use self::groq::GroqTranslator;
 use self::ollama::OllamaTranslator;
 use self::openai::OpenAiTranslator;
+use self::google::GoogleTranslator;
 
 pub fn create_translator(settings: &Settings) -> Option<Arc<dyn Translator + Send + Sync>> {
     match settings.provider {
+        TranslationProvider::Google => GoogleTranslator::new()
+            .ok()
+            .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
         TranslationProvider::Gemini => GeminiTranslator::new(
             settings.gemini_api_key.clone(),
             settings.gemini_model.clone(),
