@@ -45,6 +45,7 @@ impl BackgroundCoordinator {
                     translated,
                     frame_hash,
                     ocr_lines,
+                    trans_lines,
                 } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         let mut model = model_arc.lock();
@@ -82,7 +83,7 @@ impl BackgroundCoordinator {
                             slot.last_ocr_text = ocr_text.clone();
                             slot.last_translation = translated.clone();
                             slot.last_ocr_lines = ocr_lines.clone();
-                            slot.last_trans_lines = Self::parse_numbered_lines(&translated, ocr_lines.len());
+                            slot.last_trans_lines = trans_lines.clone();
 
                             if frame_hash != 0 {
                                 let cache_key = (frame_hash, slot.source_lang.as_ref().map(|l| l.0.clone()), slot.target_lang.0.clone());
@@ -90,7 +91,7 @@ impl BackgroundCoordinator {
                             }
                         } else {
                             if !translated.trim().is_empty() {
-                                slot.last_trans_lines = Self::parse_numbered_lines(&translated, ocr_lines.len());
+                                slot.last_trans_lines = trans_lines;
                                 slot.last_ocr_lines = ocr_lines;
                                 slot.last_translation = translated;
                             }
@@ -135,7 +136,7 @@ impl BackgroundCoordinator {
                         slot.next_tick_at_ms = Self::now_ms() + 50;
                     }
                 }
-                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines } => {
+                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         let mut model = model_arc.lock();
                         let slot = match model.slots.get_mut(slot_idx) {
@@ -159,7 +160,7 @@ impl BackgroundCoordinator {
                         slot.last_ocr_lines = ocr_lines; // Update positions!
                         
                         // Re-align cached translation to the current OCR lines
-                        slot.last_trans_lines = Self::parse_numbered_lines(&translated, slot.last_ocr_lines.len());
+                        slot.last_trans_lines = trans_lines;
 
                         slot.next_tick_at_ms = Self::now_ms() + slot.refresh_ms.max(200);
                     }
@@ -211,6 +212,7 @@ impl BackgroundCoordinator {
         translator: &Option<Arc<dyn Translator + Send + Sync>>,
         translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
         text_translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
+        smart_merge: bool,
         ctx: egui::Context,
     ) {
         let now = Self::now_ms();
@@ -316,33 +318,53 @@ impl BackgroundCoordinator {
                         tracing::info!(slot = i, "Proceeding with OCR/Translation");
                         let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Scanning Text...".to_string() });
                         ctx_worker.request_repaint();
-                        let ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
+                        let raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
                         
-                        // --- Grouping disabled as it caused UI chaos and AI confusion ---
-                        // let ocr_lines = Self::group_ocr_lines(raw_ocr_lines);
+                        let blocks = crate::core::layout::build_blocks(raw_ocr_lines, smart_merge);
+                        
+                        let mut ocr_lines = Vec::new();
+                        let mut block_sizes = Vec::new();
+                        for block in &blocks {
+                            block_sizes.push(block.lines.len());
+                            for line in &block.lines {
+                                ocr_lines.push(line.clone());
+                            }
+                        }
+
+                        let raw_ocr_text = blocks.iter().map(|b| b.source_text.as_str()).collect::<Vec<_>>().join("\n");
+                        let ocr_text = TextCleaner::clean(&raw_ocr_text);
+
+                        // Helper to map block-level translations back to line-level `trans_lines`
+                        let build_trans_lines = |translated: &str| -> Vec<String> {
+                            let block_translations = Self::parse_numbered_lines(translated, blocks.len());
+                            let mut trans_lines = Vec::new();
+                            for (block_idx, size) in block_sizes.iter().enumerate() {
+                                trans_lines.push(block_translations.get(block_idx).cloned().unwrap_or_default());
+                                for _ in 1..*size {
+                                    trans_lines.push(String::new());
+                                }
+                            }
+                            trans_lines
+                        };
 
                         let cache_key = (hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
                         {
                             let cache = cache_arc.lock();
                             if let Some((ocr, tra)) = cache.get(&cache_key) {
+                                let trans_lines = build_trans_lines(tra);
                                 return Ok(BgResult::CacheHit {
-                                    slot_idx: i, language_version, ocr_text: ocr.clone(), translated: tra.clone(), frame_hash: hash, ocr_lines
+                                    slot_idx: i, language_version, ocr_text: ocr.clone(), translated: tra.clone(), frame_hash: hash, ocr_lines, trans_lines
                                 });
                             }
                         }
-                        
-                        let raw_ocr_text = ocr_lines.iter().map(|l| l.text.as_str()).collect::<Vec<_>>().join("\n");
-                        let ocr_text = TextCleaner::clean(&raw_ocr_text);
 
                         if ocr_text.is_empty() {
                             return Ok(BgResult::Done {
-                                slot_idx: i, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(),
+                                slot_idx: i, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(), trans_lines: Vec::new(),
                             });
                         }
 
                         // --- NEW: Aggressive Text-Level Cache Check ---
-                        // Even if the frame hash changed, if the OCR text is identical to what we
-                        // already translated, reuse it and update the frame-hash cache.
                         {
                             let text_hash = {
                                 let mut h: u64 = 0xcbf29ce484222325;
@@ -353,12 +375,12 @@ impl BackgroundCoordinator {
                             let cached = { let tc = text_cache_arc.lock(); tc.get(&tc_key).cloned() };
                             
                             if let Some(cached_trans) = cached {
-                                // Update frame-hash cache so next time we hit the fast-path earlier
                                 let mut fc = cache_arc.lock();
                                 fc.insert(cache_key, (ocr_text.clone(), cached_trans.clone()));
                                 
+                                let trans_lines = build_trans_lines(&cached_trans);
                                 return Ok(BgResult::Done {
-                                    slot_idx: i, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines
+                                    slot_idx: i, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines
                                 });
                             }
                         }
@@ -366,8 +388,9 @@ impl BackgroundCoordinator {
                         if source_lang.as_ref().map(|s| s.0 == target_lang.0).unwrap_or(false) {
                             let mut cache = cache_arc.lock();
                             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
+                            let trans_lines = build_trans_lines(&ocr_text);
                             return Ok(BgResult::Done {
-                                slot_idx: i, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines,
+                                slot_idx: i, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
                             });
                         }
 
@@ -376,6 +399,8 @@ impl BackgroundCoordinator {
                         let translated = translator.as_ref()
                             .context("No translator provider selected")?
                             .translate(&ocr_text, source_lang.as_ref(), &target_lang)?;
+
+                        let trans_lines = build_trans_lines(&translated);
 
                         {
                             let text_hash = {
@@ -390,7 +415,7 @@ impl BackgroundCoordinator {
                             let mut text_cache = text_cache_arc.lock();
                             text_cache.insert(text_cache_key, translated.clone());
                         }
-                        Ok(BgResult::Done { slot_idx: i, language_version, ocr_text, translated, frame_hash: hash, ocr_lines })
+                        Ok(BgResult::Done { slot_idx: i, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines })
                     })();
 
                     match result {
