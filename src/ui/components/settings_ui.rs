@@ -157,6 +157,10 @@ pub fn show_settings_window(
                 });
                 
                 ui.horizontal(|ui| {
+                    ui.checkbox(&mut settings.smart_merge, i18n.smart_merge);
+                });
+
+                ui.horizontal(|ui| {
                     let mut allow = !settings.hide_from_capture;
                     if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
                         settings.hide_from_capture = !allow;
