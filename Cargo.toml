@@ -25,8 +25,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sys-locale = "0.3"
 
-[target.'cfg(not(windows))'.dependencies]
-leptess = "0.14"
+
 
 [build-dependencies]
 winres = "0.1"
