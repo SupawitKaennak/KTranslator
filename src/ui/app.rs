@@ -392,7 +392,7 @@ impl eframe::App for App {
             .frame(egui::Frame::side_top_panel(ctx.style().as_ref()).inner_margin(8.0))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.heading("🚀 KTranslator");
+                    ui.heading("KTranslator");
                     ui.add_space(12.0);
                     
                     let mut model = self.model.lock();
