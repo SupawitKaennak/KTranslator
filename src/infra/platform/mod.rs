@@ -23,8 +23,6 @@ pub trait PlatformServices: Send + Sync {
     /// Find a window by its exact title. Returns an OS-specific handle.
     fn find_window_by_title(&self, title: &str) -> Option<isize>;
 
-    /// Apply transparency and capture-exclusion attributes to an overlay window.
-    fn apply_overlay_transparency(&self, window_handle: isize);
 
     /// Boost the current process priority for better responsiveness during gaming.
     fn boost_process_priority(&self);
@@ -46,6 +44,5 @@ struct StubPlatform;
 #[cfg(not(target_os = "windows"))]
 impl PlatformServices for StubPlatform {
     fn find_window_by_title(&self, _title: &str) -> Option<isize> { None }
-    fn apply_overlay_transparency(&self, _window_handle: isize) {}
     fn boost_process_priority(&self) {}
 }
