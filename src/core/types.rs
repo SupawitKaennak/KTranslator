@@ -14,3 +14,9 @@ pub struct Rect {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LanguageTag(pub String); // BCP-47-ish: "en", "th", "ja", ...
 
+impl LanguageTag {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
