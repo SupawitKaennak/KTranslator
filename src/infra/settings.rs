@@ -53,6 +53,7 @@ pub struct Settings {
     pub custom_openai_model: String,
     pub custom_openai_use_list: bool,
     pub dark_mode: bool,
+    pub smart_merge: bool,
 
     // Overlay Customization
     pub overlay_bg_color: [u8; 4],
@@ -86,6 +87,7 @@ impl Default for Settings {
             custom_openai_model: "gpt-4o-mini".to_string(),
             custom_openai_use_list: false,
             dark_mode: true,
+            smart_merge: false,
             overlay_bg_color: [0, 0, 0, 180], // Semi-transparent black
             overlay_text_color: [255, 255, 255, 255], // White
             overlay_font_size: 14.0,

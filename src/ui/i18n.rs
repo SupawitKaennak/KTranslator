@@ -19,6 +19,7 @@ pub struct I18n {
     pub auto_detect: &'static str,
     pub system_default: &'static str,
     pub allow_capture: &'static str,
+    pub smart_merge: &'static str,
     
     // Slot UI
     pub region: &'static str,
@@ -54,6 +55,7 @@ const EN: I18n = I18n {
     auto_detect: "Auto Detect",
     system_default: "System Default",
     allow_capture: "Screenshot Mode (Allow Snip)", 
+    smart_merge: "Smart Sentence Merge (Better grammar)",
     region: "Region",
     active: "Active",
     select_area: "Select Area",
@@ -87,6 +89,7 @@ const TH: I18n = I18n {
     auto_detect: "ตรวจจับอัตโนมัติ",
     system_default: "ตามระบบเครื่อง",
     allow_capture: "โหมดแคปจอ (ปิดการล่องหน)",
+    smart_merge: "รวมประโยคอัจฉริยะ (แปลลื่นไหลขึ้น)",
     region: "พื้นที่",
     active: "ทำงานอยู่",
     select_area: "เลือกพื้นที่",
