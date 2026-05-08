@@ -29,6 +29,40 @@ impl GroqTranslator {
             model,
         })
     }
+
+    pub fn list_models(api_key: &str) -> Result<Vec<String>> {
+        if api_key.trim().is_empty() {
+            bail!("Groq API key is empty");
+        }
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .context("build http client")?;
+
+        let resp = client
+            .get("https://api.groq.com/openai/v1/models")
+            .header("Authorization", format!("Bearer {}", api_key))
+            .send()
+            .context("send groq listModels request")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            bail!("Groq listModels error: {status} {body}");
+        }
+
+        let data: serde_json::Value = resp.json().context("parse groq models response")?;
+        let mut out = Vec::new();
+        if let Some(list) = data.get("data").and_then(|v| v.as_array()) {
+            for item in list {
+                if let Some(id) = item.get("id").and_then(|v| v.as_str()) {
+                    out.push(id.to_string());
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
 }
 
 impl Translator for GroqTranslator {

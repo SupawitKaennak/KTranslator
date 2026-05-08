@@ -29,6 +29,37 @@ impl OllamaTranslator {
             model,
         })
     }
+
+    pub fn list_models(url: &str) -> Result<Vec<String>> {
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .context("build http client")?;
+
+        let endpoint = format!("{}/api/tags", url.trim_end_matches('/'));
+        let resp = client
+            .get(&endpoint)
+            .send()
+            .context("send ollama listModels request")?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            bail!("Ollama listModels error: {status} {body}");
+        }
+
+        let data: serde_json::Value = resp.json().context("parse ollama models response")?;
+        let mut out = Vec::new();
+        if let Some(list) = data.get("models").and_then(|v| v.as_array()) {
+            for item in list {
+                if let Some(name) = item.get("name").and_then(|v| v.as_str()) {
+                    out.push(name.to_string());
+                }
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
 }
 
 impl Translator for OllamaTranslator {
