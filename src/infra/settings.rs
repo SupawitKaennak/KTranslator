@@ -98,7 +98,7 @@ impl Default for Settings {
 }
 
 fn settings_path() -> Result<PathBuf> {
-    let proj = ProjectDirs::from("com", "cursor", "screen_translator")
+    let proj = ProjectDirs::from("com", "ktranslator", "ktranslator")
         .context("ProjectDirs not available")?;
     Ok(proj.config_dir().join("settings.json"))
 }
