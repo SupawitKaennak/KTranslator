@@ -14,6 +14,8 @@ pub enum BgResult {
         frame_hash: u64,
         /// Per-line OCR bounding boxes for positional overlay rendering.
         ocr_lines: Vec<OcrTextLine>,
+        /// Translation split by newline, matching ocr_lines length.
+        trans_lines: Vec<String>,
     },
     /// The captured frame is identical to the previous one — skip API call.
     Unchanged {
@@ -36,6 +38,7 @@ pub enum BgResult {
         translated: String,
         frame_hash: u64,
         ocr_lines: Vec<OcrTextLine>,
+        trans_lines: Vec<String>,
     },
     /// Direct status update for the UI spinner/label
     StatusUpdate {

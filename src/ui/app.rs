@@ -253,6 +253,7 @@ impl App {
             &self.translator,
             &self.translation_cache,
             &self.text_translation_cache,
+            self.settings.smart_merge,
             ctx.clone(),
         );
     }
