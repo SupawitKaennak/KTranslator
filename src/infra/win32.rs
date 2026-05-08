@@ -41,7 +41,7 @@ pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
         let hwnd = HWND(hwnd_raw as *mut _);
         
         // Apply color key for transparency (Black 0x000000 is our key)
-        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0x000000), 255, LWA_COLORKEY | LWA_ALPHA);
+        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_COLORKEY | LWA_ALPHA);
         
         // Exclude from capture if requested to prevent OCR feedback loops
         if hide_from_capture {
