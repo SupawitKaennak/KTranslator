@@ -64,6 +64,16 @@ impl PaddleOcr {
             let working_dir = exe_path.parent().unwrap_or_else(|| std::path::Path::new("."));
 
             use std::os::windows::process::CommandExt;
+            
+            // Aggressively kill any orphaned or duplicate PaddleOCR processes before spawning a new one.
+            // This prevents RAM leaks from multiple instances remaining open.
+            let _ = Command::new("taskkill")
+                .args(&["/F", "/IM", "PaddleOCR-json.exe"])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+
             let child = Command::new(&self.exe_path)
                 .current_dir(working_dir)
                 .creation_flags(0x08000000) // CREATE_NO_WINDOW
