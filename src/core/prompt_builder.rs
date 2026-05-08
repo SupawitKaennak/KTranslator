@@ -68,10 +68,15 @@ pub fn build_translation_prompt(
 
     if lines.len() <= 1 {
         // ── Single-line mode ─────────────────────────────────────────────
+        let extra_rules = if target.0 == "th" {
+            " IMPORTANT: Add spaces between words to ensure correct word wrapping (e.g. วันนี้ จะ ไป)."
+        } else {
+            ""
+        };
         let system = format!(
             "You are a professional manga/game translator. \
              Translate the text to {target_name}. \
-             Output ONLY the translated text, no explanations, no quotes."
+             Output ONLY the translated text, no explanations, no quotes.{extra_rules}"
         );
         let user = if source.is_some() {
             format!("Translate from {source_name} to {target_name}:\n\n{}", lines.first().unwrap_or(&""))
@@ -87,6 +92,11 @@ pub fn build_translation_prompt(
             joined_input.push_str(&format!("{}. {}\n", i + 1, line));
         }
 
+        let mut extra_rules = String::new();
+        if target.0 == "th" {
+            extra_rules.push_str("             8. IMPORTANT: Add spaces between words to ensure correct word wrapping (e.g. วันนี้ จะ ไป).\n");
+        }
+
         let system = format!(
             "You are an expert professional manga/game translator.\n\
              Input: A numbered list of {count} text segments.\n\
@@ -99,9 +109,11 @@ pub fn build_translation_prompt(
              4. Do NOT add any notes, explanations, or meta-talk.\n\
              5. If a segment is empty, output the number and an empty translation (e.g. \"5. \").\n\
              6. Prevent hallucinations: translate ONLY what is written.\n\
-             7. Output ONLY the numbered list in {target_name}.",
+             7. Output ONLY the numbered list in {target_name}.\n\
+{extra_rules}",
             count = lines.len(),
             target_name = target_name,
+            extra_rules = extra_rules,
         );
 
         let user = if source.is_some() {

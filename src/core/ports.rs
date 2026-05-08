@@ -23,6 +23,13 @@ pub struct OcrTextLine {
     pub h: f32,
 }
 
+/// A block of OCR text grouped together (e.g. a paragraph or speech bubble).
+#[derive(Debug, Clone, Default)]
+pub struct OcrTextBlock {
+    pub lines: Vec<OcrTextLine>,
+    pub source_text: String,
+}
+
 pub trait FrameSource: Send + Sync {
     fn capture_rect(&self, rect: Rect, display_id: u32) -> Result<FrameRgba>;
 }
