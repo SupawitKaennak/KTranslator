@@ -331,7 +331,7 @@ impl BackgroundCoordinator {
                             }
                         }
 
-                        let raw_ocr_text = blocks.iter().map(|b| b.source_text.as_str()).collect::<Vec<_>>().join("\n");
+                        let raw_ocr_text = blocks.iter().map(|b| b.source_text.replace('\n', " ")).collect::<Vec<_>>().join("\n");
                         let ocr_text = TextCleaner::clean(&raw_ocr_text);
 
                         // Helper to map block-level translations back to line-level `trans_lines`

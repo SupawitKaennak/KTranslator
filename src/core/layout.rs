@@ -1,15 +1,21 @@
 use crate::core::ports::{OcrTextBlock, OcrTextLine};
 
+fn get_char_size(line: &OcrTextLine) -> f32 {
+    let chars_count = line.text.chars().filter(|c| !c.is_whitespace()).count().max(1) as f32;
+    let area = line.w * line.h;
+    (area / chars_count).sqrt()
+}
+
 fn is_close(a: &OcrTextLine, b: &OcrTextLine) -> bool {
-    // Determine typical character size by taking the minimum of width and height.
-    // For a horizontal line, height is the char size. For a vertical line, width is the char size.
-    let char_size_a = a.w.min(a.h);
-    let char_size_b = b.w.min(b.h);
+    // Calculate the true average character size based on area and character count
+    let char_size_a = get_char_size(a);
+    let char_size_b = get_char_size(b);
     let char_size = char_size_a.max(char_size_b);
     
-    // Expansion margin. We use 1.2x char size as a reasonable gap for lines within the same paragraph/bubble.
-    let expand_y = char_size * 1.2;
-    let expand_x = char_size * 1.2;
+    // Expansion margin. With accurate char sizes, 1.5x is perfect for merging lines 
+    // within the same bubble while strictly isolating different bubbles.
+    let expand_y = char_size * 1.5;
+    let expand_x = char_size * 1.5;
     
     let a_left = a.x - expand_x;
     let a_right = a.x + a.w + expand_x;
