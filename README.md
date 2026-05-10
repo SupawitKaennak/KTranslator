@@ -5,7 +5,7 @@
 ---
 <img width="1917" height="1126" alt="{DD417730-D74E-48D7-B8F4-86A07DC7E0A6}" src="https://github.com/user-attachments/assets/b46b82c1-8395-4023-9a4f-83da7191a998" /><br>
 <img width="1770" height="1068" alt="{C3BE31E9-110E-4894-8475-AFF12EEAE2B5}" src="https://github.com/user-attachments/assets/f1f0f849-1008-4acb-8806-6d7137ac9a33" /><br>
-<img width="1601" height="641" alt="{9F263879-62FF-4DBC-881C-12D1DACB282B}" src="https://github.com/user-attachments/assets/cb1260b8-4180-4c3c-b8ed-d5b8c94d567f" /><br>
+<img width="1423" height="955" alt="{16082F6C-D588-43EA-941E-460ED3B51C34}" src="https://github.com/user-attachments/assets/53dd9a98-6afc-40b1-a0e4-4795dc808d0f" /><br>
 <img width="2554" height="1440" alt="{2A531C0F-AEC0-4498-9C81-D541733D3BD8}" src="https://github.com/user-attachments/assets/d278fe67-4039-4216-ad13-4a62af842980" /><br>
 
 <a name="thai"></a>
