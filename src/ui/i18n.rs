@@ -34,6 +34,16 @@ pub struct I18n {
     pub open_popup: &'static str,
     pub manual_pos: &'static str,
     pub idle: &'static str,
+
+    // OCR Engine Descriptions
+    pub ocr_windows_desc: &'static str,
+    pub ocr_paddle_desc: &'static str,
+    pub ocr_manga_desc: &'static str,
+    pub choose_ocr: &'static str,
+    pub models_not_found: &'static str,
+    pub models_installed: &'static str,
+    pub download_install: &'static str,
+    pub reinstall_update: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -68,6 +78,14 @@ const EN: I18n = I18n {
     open_popup: "Open Popup",
     manual_pos: "Manual Position Adjustment",
     idle: "Idle",
+    ocr_windows_desc: "Windows OCR (Best for documents/standard games - Fast)",
+    ocr_paddle_desc: "PaddleOCR (Best for games/manga with stylized fonts)",
+    ocr_manga_desc: "MangaOCR (Best for Japanese/Vertical text - High Accuracy)",
+    choose_ocr: "Choose OCR Engine for this mode:",
+    models_not_found: "⚠ AI Models not found.",
+    models_installed: "✔ AI Models Installed.",
+    download_install: "📥 Download & Install Models (300MB+)",
+    reinstall_update: "🔄 Re-install/Update Models",
 };
 
 const TH: I18n = I18n {
@@ -102,6 +120,14 @@ const TH: I18n = I18n {
     open_popup: "เปิดหน้าต่างแยก",
     manual_pos: "ปรับตำแหน่งเอง",
     idle: "รอทำงาน",
+    ocr_windows_desc: "Windows OCR (เหมาะสำหรับเอกสารและเกมทั่วไป - รวดเร็ว)",
+    ocr_paddle_desc: "PaddleOCR (เหมาะสำหรับเกมและมังงะที่มีฟอนต์พิเศษ/ซับซ้อน)",
+    ocr_manga_desc: "MangaOCR (แม่นยำสูงสุดสำหรับภาษาญี่ปุ่น/มังงะแนวตั้ง)",
+    choose_ocr: "เลือกเอนจิน OCR สำหรับโหมดนี้:",
+    models_not_found: "⚠ ไม่พบไฟล์ AI Model",
+    models_installed: "✔ ติดตั้ง AI Model เรียบร้อยแล้ว",
+    download_install: "📥 ดาวน์โหลดและติดตั้งโมเดล (300MB+)",
+    reinstall_update: "🔄 ติดตั้งใหม่ / อัปเดตโมเดล",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {
