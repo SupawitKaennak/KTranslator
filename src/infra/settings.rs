@@ -16,6 +16,7 @@ pub enum TranslationProvider {
 pub enum OcrEngineType {
     Windows,
     Paddle,
+    MangaOCR,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
