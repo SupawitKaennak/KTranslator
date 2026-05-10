@@ -133,7 +133,8 @@ pub fn render_overlay_viewport(
                                 for (i, line) in block_lines.iter().enumerate() {
                                     let line_h_points = line.h / ppp;
                                     let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-                                    let wrap_width = (max_text_w - (line.x / ppp) + full_rect.left()).max(100.0);
+                                    // บังคับให้ตัดบรรทัดตามความกว้างของลูกโป่งที่ YOLO หาเจอ
+                                    let wrap_width = (line.w / ppp).max(30.0); 
 
                                     let chunk_text = chunks.get(i).cloned().unwrap_or_default();
                                     
@@ -159,7 +160,9 @@ pub fn render_overlay_viewport(
                                     
                                     if !chunk_text.is_empty() {
                                         let text_y = start_y + (bg_h - galley.size().y) / 2.0;
-                                        let text_pos = egui::pos2(line.x / ppp, text_y);
+                                        // จัดกึ่งกลางแนวนอน (Center Align)
+                                        let text_x = (line.x / ppp) + (line.w / ppp - galley.size().x) / 2.0;
+                                        let text_pos = egui::pos2(text_x, text_y);
                                         painter.galley(text_pos, galley, overlay_text_color);
                                     }
                                 }
