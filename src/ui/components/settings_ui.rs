@@ -122,9 +122,9 @@ pub fn show_settings_window(
                 ui.add_space(4.0);
                 
                 let ocr_modes = [
-                    (crate::infra::settings::OcrMode::Game, "🎮 Game Mode (Optimized for games)", "conf_ocr_game"),
-                    (crate::infra::settings::OcrMode::Manga, "📖 Manga/Comic Mode (Best for vertical/screentone)", "conf_ocr_manga"),
-                    (crate::infra::settings::OcrMode::Document, "📄 Document Mode (Standard docs/PDFs)", "conf_ocr_doc"),
+                    (crate::infra::settings::OcrMode::Game, i18n.mode_game, "conf_ocr_game"),
+                    (crate::infra::settings::OcrMode::Manga, i18n.mode_manga, "conf_ocr_manga"),
+                    (crate::infra::settings::OcrMode::Document, i18n.mode_document, "conf_ocr_doc"),
                 ];
 
                 for (mode, label, conf_id) in ocr_modes {
