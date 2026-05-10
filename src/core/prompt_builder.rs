@@ -176,9 +176,9 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     }
 
     // ── Strategy 2: Numbered list (Fallback) ─────────────────────────────
-    // Regex matches "1. text", "1: text", "[1] text", "1) text", etc.
+    // Regex matches "1. text", "**1.** text", "- 1. text", "[1] text", etc.
     static RE_NUMBERED: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"(?m)^\s*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->]+\s*(.*)$").unwrap()
+        regex::Regex::new(r"(?m)^[\s\*\-]*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->\*]+\s*(.*)$").unwrap()
     });
     
     let mut numbered_result = vec![String::new(); expected_count];
