@@ -274,6 +274,8 @@ pub fn show_settings_window(
                                     if *gemini_fetching.lock() { ui.spinner(); }
                                 });
                             }
+                            ui.add_space(4.0);
+                            ui.hyperlink_to("Get Gemini API Key", "https://aistudio.google.com/app/apikey");
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_gemini"), false));
@@ -401,6 +403,8 @@ pub fn show_settings_window(
                                     if *ollama_fetching.lock() { ui.spinner(); }
                                 });
                             }
+                            ui.add_space(4.0);
+                            ui.hyperlink_to("Browse Ollama Models", "https://ollama.com/library");
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_ollama"), false));
@@ -490,6 +494,15 @@ pub fn show_settings_window(
                                     ui.text_edit_singleline(&mut settings.custom_openai_model);
                                 });
                             }
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                ui.label("Get API Keys:");
+                                ui.hyperlink_to("OpenRouter", "https://openrouter.ai/keys");
+                                ui.label("|");
+                                ui.hyperlink_to("Together AI", "https://api.together.xyz/settings/api-keys");
+                                ui.label("|");
+                                ui.hyperlink_to("OpenAI", "https://platform.openai.com/api-keys");
+                            });
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_custom"), false));
