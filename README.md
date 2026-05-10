@@ -16,6 +16,9 @@
 ### ลักษณะการใช้งาน
 - **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
 - **แปลมังงะ:** อ่านข้อความจากภาพมังงะหรือคอมมิค (รองรับตัวหนังสือแนวตั้ง/เอียง/โค้ง)
+- **Professional Manga Mode (NEW):** ระบบ AI พิเศษ (Manga-OCR + YOLOv8) เพื่อการอ่านภาษาญี่ปุ่นแนวตั้งที่แม่นยำที่สุด
+- **Auto Bubble Detection (NEW):** ระบบค้นหาลูกโป่งคำพูดอัตโนมัติ ลากกรอบคลุมทั้งหน้าแล้วปล่อยให้ AI จัดการ
+- **Smart Thai Word Wrap (NEW):** ระบบตัดคำไทยอัตโนมัติในลูกโป่งแนวตั้ง (Zero Width Space Injection) ช่วยให้ข้อความเรียงตัวสวยงาม
 - **แปลบทความ:** แปลข้อความจากหน้าเว็บ เอกสาร หรือ PDF ที่ไม่สามารถก๊อปปี้ข้อความได้
 - **Smart Sentence Merge:** ระบบรวมประโยค ช่วยให้ AI เข้าใจบริบทและแปลออกมาได้ลื่นไหลเหมือนมนุษย์แปลเอง
 - **Customizable Overlay:** ปรับแต่งสีพื้นหลัง สีตัวอักษร ขนาดฟอนต์ และความโค้งมนของขอบได้ตามใจชอบ (Appearance Settings)
@@ -23,10 +26,12 @@
 ### ความต้องการของระบบ (Requirements)
 
 **1. ระบบ OCR (ตัวอ่านข้อความ)**
+- **Manga-OCR (NEW):** ระบบ AI (ONNX) รันผ่าน GPU แม่นยำที่สุดสำหรับภาษาญี่ปุ่นแนวตั้ง (ต้องมีไฟล์โมเดลในโฟลเดอร์ `models/`)
 - **Windows OCR:** (ติดมากับ Windows) ต้องติดตั้ง Language Pack ของภาษาต้นทางที่จะแปลให้เรียบร้อย (เช่น ญี่ปุ่น, จีน)
 - **PaddleOCR:** (แนะนำสำหรับมังงะ) ต้องดาวน์โหลดตัวโปรแกรม [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) และระบุที่อยู่ไฟล์ `.exe` ในหน้า Settings ของโปรแกรม
 
 **2. ระบบการแปล (Translator)**
+- **Google Translate (FREE):** แปลภาษาได้ทันทีโดยไม่ต้องใช้ API Key
 - **Gemini:** ต้องใช้ API Key สมัครฟรีได้ที่ [Google AI Studio](https://aistudio.google.com/) 
 - **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/) 
 - **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/) 
@@ -35,6 +40,8 @@
 ### เทคโนโลยีที่ใช้ (Tech Stack)
 - **Language:** Rust (edition 2024)
 - **UI Framework:** [egui](https://github.com/emilk/egui)
+- **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
+- **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
 - **OCR Engines:** Windows.Media.Ocr & PaddleOCR
 - **Graphics:** Win32 API (สำหรับระบบ Overlay โปร่งใส)
 - **Capture:** Screenshots crate พร้อมระบบ stabilization
@@ -48,7 +55,8 @@
    git clone https://github.com/SupawitKaennak/KTranslatorV2.git
    cd KTranslatorV2
    ```
-3. รันโปรแกรม:
+3. ดาวน์โหลดโมเดลมาวางไว้ที่ `models/manga-ocr/` (encoder, decoder, tokenizer, yolo)
+4. รันโปรแกรม:
    ```bash
    cargo run --release
    ```
@@ -71,6 +79,9 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 ### Key Features
 - **Game Translation:** Translate in-game dialogues, menus, and item descriptions.
 - **Manga/Comics:** Read manga with specialized support for vertical, stylized, or curved text.
+- **Pro Manga Mode (NEW):** Integrated **Manga-OCR + YOLOv8** for the highest accuracy in vertical Japanese recognition.
+- **Auto Bubble Detection (NEW):** AI-driven detection of speech bubbles within the selected area.
+- **Smart Thai Word Wrap (NEW):** Zero Width Space injection for professional-looking text within vertical bubbles.
 - **Article/Documents:** Translate text from websites, PDFs, or images that don't allow text copying.
 - **Smart Sentence Merge:** Group multiple lines into logical sentences for human-like translation context.
 - **Customizable Overlay:** Full control over background colors, text colors, font sizes, and corner radius.
@@ -78,10 +89,12 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 ### System Requirements
 
 **1. OCR Engines (Text Recognition)**
+- **Manga-OCR (NEW):** High-precision AI recognition (ONNX) with GPU support.
 - **Windows OCR:** Built-in. Requires language packs for source languages (e.g., Japanese, Chinese).
 - **PaddleOCR:** Recommended for manga. Download [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) and specify the `.exe` path in the app settings.
 
 **2. Translation Providers**
+- **Google Translate (FREE):** Instant translation without an API Key.
 - **Gemini:** API Key required. Get it at [Google AI Studio](https://aistudio.google.com/) (Supports **Auto-Fetch**).
 - **Groq:** High-speed API. Get your key at [Groq Console](https://console.groq.com/) (Supports **Auto-Fetch**).
 - **Ollama:** For local/offline translation. Download at [Ollama.com](https://ollama.com/) (Supports **Auto-Fetch**).
@@ -89,6 +102,8 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 
 ### Tech Stack
 - **Language:** Rust (edition 2024)
+- **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
+- **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
 - **UI Framework:** [egui](https://github.com/emilk/egui)
 - **OCR Engines:** Windows.Media.Ocr & PaddleOCR
 - **Graphics:** Win32 API (for transparent overlay system)
@@ -98,11 +113,7 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 
 **Installation (Developers):**
 1. Install [Rust Toolchain](https://rustup.rs/).
-2. Clone the repository:
-   ```bash
-   git clone https://github.com/SupawitKaennak/KTranslatorV2.git
-   cd KTranslatorV2
-   ```
+2. Clone the repository and place the ONNX models in `models/manga-ocr/`.
 3. Run the application:
    ```bash
    cargo run --release

@@ -98,6 +98,12 @@ pub struct App {
     custom_openai_models: Arc<Mutex<Vec<String>>>,
     custom_openai_fetching: Arc<Mutex<bool>>,
     custom_openai_error: Arc<Mutex<Option<String>>>,
+
+    /// Model download channels
+    download_trigger_tx: std::sync::mpsc::Sender<()>,
+    download_trigger_rx: std::sync::mpsc::Receiver<()>,
+    download_progress_rx: tokio::sync::mpsc::Receiver<crate::infra::asset_manager::DownloadProgress>,
+    download_progress_tx: tokio::sync::mpsc::Sender<crate::infra::asset_manager::DownloadProgress>,
 }
 
 impl App {
@@ -161,6 +167,9 @@ impl App {
             _ => Arc::new(WindowsOcr::new()),
         };
 
+        let (dt_tx, dt_rx) = std::sync::mpsc::channel();
+        let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
+
         Self {
             model: Arc::new(Mutex::new(AppModel::new_default())),
             settings,
@@ -203,6 +212,10 @@ impl App {
             custom_openai_models: Arc::new(Mutex::new(Vec::new())),
             custom_openai_fetching: Arc::new(Mutex::new(false)),
             custom_openai_error: Arc::new(Mutex::new(None)),
+            download_trigger_tx: dt_tx,
+            download_trigger_rx: dt_rx,
+            download_progress_tx: dp_tx,
+            download_progress_rx: dp_rx,
         }
     }
 
@@ -244,6 +257,43 @@ impl App {
         // 1. Process pending signals from popups/error window
         while let Ok(_) = self.error_dismiss_rx.try_recv() {
             self.last_errors.clear();
+        }
+
+        // 1b. Handle Download Trigger
+        while let Ok(_) = self.download_trigger_rx.try_recv() {
+            let tx = self.download_progress_tx.clone();
+            tokio::spawn(async move {
+                let _ = crate::infra::asset_manager::download_models(tx).await;
+            });
+        }
+
+        // 1c. Handle Download Progress
+        while let Ok(prog) = self.download_progress_rx.try_recv() {
+            let was_downloading = self.model.lock().download_progress.is_downloading;
+            self.model.lock().download_progress = prog.clone();
+            
+            // If download just finished successfully, reload the engine
+            if was_downloading && !prog.is_downloading && prog.error.is_none() {
+                let current_engine_type = match self.settings.ocr_mode {
+                    crate::infra::settings::OcrMode::Game => self.settings.game_ocr_engine,
+                    crate::infra::settings::OcrMode::Manga => self.settings.manga_ocr_engine,
+                    crate::infra::settings::OcrMode::Document => self.settings.document_ocr_engine,
+                };
+                
+                if current_engine_type == crate::infra::settings::OcrEngineType::MangaOCR {
+                    match OnnxMangaRecognizer::new("models/manga-ocr") {
+                        Ok(engine) => {
+                            self.ocr_engine = Arc::new(engine);
+                            println!("Manga-OCR reloaded successfully after download.");
+                        },
+                        Err(e) => {
+                            self.last_errors.insert(999, format!("Failed to load models after download: {}", e));
+                        }
+                    }
+                }
+            }
+            
+            ctx.request_repaint();
         }
 
         // 2. Delegate background logic to coordinator
@@ -290,6 +340,8 @@ impl App {
             self.custom_openai_models.clone(),
             self.custom_openai_fetching.clone(),
             self.custom_openai_error.clone(),
+            self.model.lock().download_progress.clone(),
+            self.download_trigger_tx.clone(),
         );
 
         if resp.save_clicked {
