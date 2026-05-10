@@ -457,6 +457,12 @@ impl eframe::App for App {
                                 slot.next_tick_at_ms = 0;
                                 slot.pending_text.clear();
                             }
+                            for runtime in &mut self.slots_runtime {
+                                runtime.last_hash = 0;
+                                runtime.first_unstable_at = 0;
+                            }
+                            self.translation_cache.lock().clear();
+                            self.text_translation_cache.lock().clear();
                         }
                     });
                 });
