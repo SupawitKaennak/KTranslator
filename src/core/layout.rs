@@ -12,10 +12,15 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine) -> bool {
     let char_size_b = get_char_size(b);
     let char_size = char_size_a.max(char_size_b);
     
-    // Expansion margin. With accurate char sizes, 1.5x is perfect for merging lines 
-    // within the same bubble while strictly isolating different bubbles.
-    let expand_y = char_size * 1.5;
-    let expand_x = char_size * 1.5;
+    // Expansion margin. Be more conservative to prevent merging separate bubbles.
+    let expand_y = char_size * 1.3; // Allow some vertical gap for multi-line text
+    let expand_x = char_size * 1.1; // Be strict with horizontal distance
+    
+    // Sanity check: Don't merge if font sizes are wildly different (e.g. title vs subtitle)
+    let size_ratio = char_size_a / char_size_b;
+    if size_ratio > 2.0 || size_ratio < 0.5 {
+        return false;
+    }
     
     let a_left = a.x - expand_x;
     let a_right = a.x + a.w + expand_x;
