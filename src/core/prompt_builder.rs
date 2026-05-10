@@ -76,6 +76,7 @@ pub fn build_translation_prompt(
         let system = format!(
             "You are a professional manga/game translator. \
              Translate the text to {target_name}. \
+             Maintain professional grammar, correct capitalization, and proper punctuation. \
              Output ONLY the translated text, no explanations, no quotes.{extra_rules}"
         );
         let user = if source.is_some() {
@@ -109,7 +110,8 @@ pub fn build_translation_prompt(
              4. Do NOT add any notes, explanations, or meta-talk.\n\
              5. If a segment is empty, output the number and an empty translation (e.g. \"5. \").\n\
              6. Prevent hallucinations: translate ONLY what is written.\n\
-             7. Output ONLY the numbered list in {target_name}.\n\
+             7. Maintain professional grammar, correct capitalization, and punctuation.\n\
+             8. Output ONLY the numbered list in {target_name}.\n\
 {extra_rules}",
             count = lines.len(),
             target_name = target_name,
@@ -174,9 +176,9 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     }
 
     // ── Strategy 2: Numbered list (Fallback) ─────────────────────────────
-    // Regex matches "1. text", "1: text", "[1] text", "1) text", etc.
+    // Regex matches "1. text", "**1.** text", "- 1. text", "[1] text", etc.
     static RE_NUMBERED: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"(?m)^\s*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->]+\s*(.*)$").unwrap()
+        regex::Regex::new(r"(?m)^[\s\*\-]*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->\*]+\s*(.*)$").unwrap()
     });
     
     let mut numbered_result = vec![String::new(); expected_count];

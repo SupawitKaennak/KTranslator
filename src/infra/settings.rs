@@ -33,6 +33,13 @@ pub enum UiLanguage {
     English,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextAlign {
+    Left,
+    Center,
+    Right,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -62,6 +69,7 @@ pub struct Settings {
     pub overlay_font_size: f32,
     pub overlay_padding: f32,
     pub overlay_corner_radius: f32,
+    pub overlay_text_align: TextAlign,
 
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
@@ -94,6 +102,7 @@ impl Default for Settings {
             overlay_font_size: 14.0,
             overlay_padding: 4.0,
             overlay_corner_radius: 4.0,
+            overlay_text_align: TextAlign::Center,
             ui_language: UiLanguage::System,
             hide_from_capture: true,
         }
