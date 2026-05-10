@@ -149,7 +149,8 @@ pub fn render_overlay_viewport(
                                         last_bottom_y = last_bottom_y.max(padded_bg.max.y);
 
                                         // Render the whole joined text inside the union rect
-                                        let full_text = chunks.join("\n");
+                                        let raw_text = chunks.join("\n");
+                                        let full_text = wrap_thai_text(&raw_text);
                                         let font_size = overlay_settings.overlay_font_size;
                                         let wrap_width = bg_rect.width().max(50.0);
 
@@ -160,6 +161,7 @@ pub fn render_overlay_viewport(
                                                 overlay_text_color,
                                                 wrap_width
                                             );
+                                            job.wrap.break_anywhere = false;
                                             job.halign = match overlay_settings.overlay_text_align {
                                                 crate::infra::settings::TextAlign::Left => egui::Align::Min,
                                                 crate::infra::settings::TextAlign::Center => egui::Align::Center,
@@ -185,14 +187,16 @@ pub fn render_overlay_viewport(
                                         let wrap_width = (line.w / ppp).max(30.0); 
 
                                         let chunk_text = chunks.get(i).cloned().unwrap_or_default();
+                                        let full_text = wrap_thai_text(&chunk_text);
                                         
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(
-                                                chunk_text,
+                                                full_text,
                                                 egui::FontId::proportional(font_size),
                                                 overlay_text_color,
                                                 wrap_width
                                             );
+                                            job.wrap.break_anywhere = false;
                                             job.halign = match overlay_settings.overlay_text_align {
                                                 crate::infra::settings::TextAlign::Left => egui::Align::Min,
                                                 crate::infra::settings::TextAlign::Center => egui::Align::Center,
@@ -419,4 +423,61 @@ pub fn render_popup_viewport(
             }
         },
     );
+}
+
+/// A helper function to handle Thai word-wrapping and character integrity.
+/// 
+/// 1. Converts regular spaces in Thai text into Zero-Width Spaces (\u{200B}) 
+///    to provide invisible breakpoints for egui's word-wrapper.
+/// 2. Injects Word Joiners (\u{2060}) between adjacent Thai characters to 
+///    ensure they stay together (preventing vowel/tone mark dropping).
+fn wrap_thai_text(text: &str) -> String {
+    if !text.chars().any(|c| c >= '\u{0E00}' && c <= '\u{0E7F}') {
+        return text.to_string();
+    }
+
+    let mut out = String::with_capacity(text.len() * 2);
+    let chars: Vec<char> = text.chars().collect();
+    let has_spaces = text.contains(' ');
+    
+    for i in 0..chars.len() {
+        let c = chars[i];
+        out.push(c);
+        
+        if i + 1 < chars.len() {
+            let next = chars[i+1];
+            
+            if next == ' ' || next == '\n' {
+                continue;
+            }
+
+            // --- LINGUISTIC RULES ---
+            
+            // 1. Mandatory Glue: Marks that MUST follow a consonant
+            let next_is_mark = "\u{0E30}\u{0E31}\u{0E32}\u{0E33}\u{0E34}\u{0E35}\u{0E36}\u{0E37}\u{0E38}\u{0E39}\u{0E45}\u{0E47}\u{0E48}\u{0E49}\u{0E4A}\u{0E4B}\u{0E4C}\u{0E4D}\u{0E4E}".contains(next);
+            
+            // 2. High-Confidence Break Points (ZWSP)
+            let next_is_leading = "\u{0E40}\u{0E41}\u{0E42}\u{0E43}\u{0E44}".contains(next);
+            let curr_is_ending = "\u{0E30}\u{0E32}\u{0E33}\u{0E45}\u{0E4C}\u{0E46}\u{0E2F}".contains(c);
+            
+            // 3. Cluster Glue: Consonant clusters and Silent H
+            let is_cluster = (c == 'ห' && "\u{0E19}\u{0E0D}\u{0E21}\u{0E22}\u{0E23}\u{0E25}\u{0E27}".contains(next)) || 
+                             ("\u{0E01}\u{0E02}\u{0E04}\u{0E15}\u{0E1B}\u{0E1C}\u{0E1E}\u{0E1F}".contains(c) && "\u{0E23}\u{0E25}\u{0E27}".contains(next));
+
+            if next_is_mark || is_cluster {
+                // GLUE: Don't break inside clusters or before marks
+                out.push('\u{2060}');
+            } else if next_is_leading || curr_is_ending {
+                // PREFERRED BREAK: Good places to wrap
+                out.push('\u{200B}');
+            } else if !has_spaces && c != ' ' && c != '\n' {
+                // FOR GOOGLE: Auto-break between consonant groups, but be conservative
+                out.push('\u{200B}');
+            } else if next != ' ' && next != '\n' && c != ' ' {
+                // FOR AI: Respect word boundaries by glueing everything else
+                out.push('\u{2060}');
+            }
+        }
+    }
+    out.replace(' ', "\u{200B}")
 }
