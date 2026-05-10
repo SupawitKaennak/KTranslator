@@ -34,6 +34,8 @@ pub fn show_settings_window(
     custom_models: Arc<Mutex<Vec<String>>>,
     custom_fetching: Arc<Mutex<bool>>,
     _custom_error: Arc<Mutex<Option<String>>>,
+    download_progress: crate::infra::asset_manager::DownloadProgress,
+    download_trigger_tx: std::sync::mpsc::Sender<()>,
 ) -> SettingsWindowResponse {
     let save_flag = Arc::new(AtomicBool::new(false));
     let close_flag = Arc::new(AtomicBool::new(false));
@@ -516,10 +518,12 @@ pub fn show_settings_window(
             for id in ["conf_ocr_game", "conf_ocr_manga", "conf_ocr_doc"] {
                 if ctx.data(|d| d.get_temp(egui::Id::new(id)).unwrap_or(false)) {
                     let settings_inner = settings_inner.clone();
+                    let download_progress = download_progress.clone();
+                    let download_trigger_tx = download_trigger_tx.clone();
                     let title = match id { "conf_ocr_game" => "Game Mode OCR Settings", "conf_ocr_manga" => "Manga Mode OCR Settings", _ => "Document Mode OCR Settings" };
                     ctx.show_viewport_immediate(
                         egui::ViewportId::from_hash_of(id),
-                        egui::ViewportBuilder::default().with_title(title).with_inner_size([400.0, 180.0]).with_always_on_top(),
+                        egui::ViewportBuilder::default().with_title(title).with_inner_size([400.0, 200.0]).with_always_on_top(),
                         move |ctx, _| {
                             if ctx.input(|i| i.viewport().close_requested()) { ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), false)); }
                             egui::CentralPanel::default().show(ctx, |ui| {
@@ -529,6 +533,32 @@ pub fn show_settings_window(
                                 ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Windows, "Windows OCR (Fast, System built-in)");
                                 ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Paddle, "PaddleOCR (Best for Manga/Japanese)");
                                 ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::MangaOCR, "MangaOCR (ONNX, High Accuracy for Manga)");
+                                
+                                if *engine_ref == crate::infra::settings::OcrEngineType::MangaOCR {
+                                    ui.add_space(8.0);
+                                    if download_progress.is_downloading {
+                                        ui.label(format!("Downloading: {}", download_progress.current_file));
+                                        ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+                                    } else {
+                                        if let Some(err) = &download_progress.error {
+                                            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), format!("Error: {}", err));
+                                        }
+
+                                        let models_exist = std::path::Path::new("models/manga-ocr/manga109_yolo_s.onnx").exists();
+                                        if !models_exist {
+                                            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), "⚠ AI Models not found.");
+                                            if ui.button("📥 Download & Install Models (300MB+)").clicked() {
+                                                let _ = download_trigger_tx.send(());
+                                            }
+                                        } else {
+                                            ui.colored_label(egui::Color32::from_rgb(100, 255, 100), "✔ AI Models Installed.");
+                                            if ui.button("🔄 Re-install/Update Models").clicked() {
+                                                let _ = download_trigger_tx.send(());
+                                            }
+                                        }
+                                    }
+                                }
+
                                 if *engine_ref == crate::infra::settings::OcrEngineType::Paddle {
                                     ui.add_space(8.0);
                                     ui.label("PaddleOCR-json path:");
