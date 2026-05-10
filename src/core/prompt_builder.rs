@@ -95,7 +95,7 @@ pub fn build_translation_prompt(
 
         let mut extra_rules = String::new();
         if target.0 == "th" {
-            extra_rules.push_str("             8. IMPORTANT: Add spaces between words to ensure correct word wrapping (e.g. วันนี้ จะ ไป).\n");
+            extra_rules.push_str("             8. IMPORTANT: Add spaces between words in Thai to allow proper line wrapping (e.g., 'วัน นี้ ผม ไป ตลาด').\n");
         }
 
         let system = format!(
