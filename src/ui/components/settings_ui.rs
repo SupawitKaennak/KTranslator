@@ -209,6 +209,14 @@ pub fn show_settings_window(
                         ui.label(format!("{}:", i18n.corner_radius));
                         ui.add(egui::Slider::new(&mut settings.overlay_corner_radius, 0.0..=20.0).suffix("px"));
                         ui.end_row();
+
+                        ui.label(format!("{}:", i18n.text_align));
+                        ui.horizontal(|ui| {
+                            ui.radio_value(&mut settings.overlay_text_align, crate::infra::settings::TextAlign::Left, i18n.align_left);
+                            ui.radio_value(&mut settings.overlay_text_align, crate::infra::settings::TextAlign::Center, i18n.align_center);
+                            ui.radio_value(&mut settings.overlay_text_align, crate::infra::settings::TextAlign::Right, i18n.align_right);
+                        });
+                        ui.end_row();
                     });
 
                 ui.add_space(12.0);
