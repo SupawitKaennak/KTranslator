@@ -233,15 +233,39 @@ pub fn show_settings_window(
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let mut settings = settings_inner.lock();
                             let i18n = get_i18n(settings.ui_language);
+                            
+                            let should_fetch = {
+                                let models = gemini_models.lock();
+                                let fetching = *gemini_fetching.lock();
+                                models.is_empty() && !fetching && !settings.gemini_api_key.trim().is_empty()
+                            };
+                            if should_fetch {
+                                let key = settings.gemini_api_key.clone();
+                                let models_arc = gemini_models.clone();
+                                let fetching_arc = gemini_fetching.clone();
+                                let ctx_clone = ctx.clone();
+                                *fetching_arc.lock() = true;
+                                std::thread::spawn(move || {
+                                    if let Ok(m_list) = crate::adapters::translate::gemini::GeminiTranslator::list_models(&key) {
+                                        *models_arc.lock() = m_list.into_iter().map(|m| m.id).collect();
+                                    }
+                                    *fetching_arc.lock() = false;
+                                    ctx_clone.request_repaint();
+                                });
+                            }
+
                             ui.horizontal(|ui| {
                                 ui.label(i18n.api_key);
-                                ui.add(egui::TextEdit::singleline(&mut settings.gemini_api_key).password(true));
+                                let resp = ui.add(egui::TextEdit::singleline(&mut settings.gemini_api_key).password(true));
+                                if resp.lost_focus() && resp.changed() {
+                                    gemini_models.lock().clear();
+                                }
                             });
                             if !settings.gemini_api_key.trim().is_empty() {
                                 ui.horizontal(|ui| {
                                     ui.label(i18n.model);
                                     let models = gemini_models.lock();
-                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetch models to see list)").italics()); }
+                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetching models...)").italics()); }
                                     else {
                                         egui::ComboBox::from_id_salt("gemini_model_dropdown").width(250.0).selected_text(settings.gemini_model.as_str()).show_ui(ui, |ui| {
                                             for m in models.iter() { ui.selectable_value(&mut settings.gemini_model, m.clone(), m); }
@@ -250,22 +274,10 @@ pub fn show_settings_window(
                                     if *gemini_fetching.lock() { ui.spinner(); }
                                 });
                             }
+                            ui.add_space(4.0);
+                            ui.hyperlink_to("Get Gemini API Key", "https://aistudio.google.com/app/apikey");
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
-                                if !settings.gemini_api_key.trim().is_empty() {
-                                    let key = settings.gemini_api_key.clone();
-                                    let models_arc = gemini_models.clone();
-                                    let fetching_arc = gemini_fetching.clone();
-                                    let ctx_clone = ctx.clone();
-                                    *fetching_arc.lock() = true;
-                                    std::thread::spawn(move || {
-                                        if let Ok(m_list) = crate::adapters::translate::gemini::GeminiTranslator::list_models(&key) {
-                                            *models_arc.lock() = m_list.into_iter().map(|m| m.id).collect();
-                                        }
-                                        *fetching_arc.lock() = false;
-                                        ctx_clone.request_repaint();
-                                    });
-                                }
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_gemini"), false));
                             }
                         });
@@ -286,15 +298,39 @@ pub fn show_settings_window(
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let mut settings = settings_inner.lock();
                             let i18n = get_i18n(settings.ui_language);
+                            
+                            let should_fetch = {
+                                let models = groq_models.lock();
+                                let fetching = *groq_fetching.lock();
+                                models.is_empty() && !fetching && !settings.groq_api_key.trim().is_empty()
+                            };
+                            if should_fetch {
+                                let key = settings.groq_api_key.clone();
+                                let models_arc = groq_models.clone();
+                                let fetching_arc = groq_fetching.clone();
+                                let ctx_clone = ctx.clone();
+                                *fetching_arc.lock() = true;
+                                std::thread::spawn(move || {
+                                    if let Ok(m_list) = crate::adapters::translate::groq::GroqTranslator::list_models(&key) {
+                                        *models_arc.lock() = m_list;
+                                    }
+                                    *fetching_arc.lock() = false;
+                                    ctx_clone.request_repaint();
+                                });
+                            }
+
                             ui.horizontal(|ui| {
                                 ui.label(i18n.api_key);
-                                ui.add(egui::TextEdit::singleline(&mut settings.groq_api_key).password(true));
+                                let resp = ui.add(egui::TextEdit::singleline(&mut settings.groq_api_key).password(true));
+                                if resp.lost_focus() && resp.changed() {
+                                    groq_models.lock().clear();
+                                }
                             });
                             if !settings.groq_api_key.trim().is_empty() {
                                 ui.horizontal(|ui| {
                                     ui.label(i18n.model);
                                     let models = groq_models.lock();
-                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetch models to see list)").italics()); }
+                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetching models...)").italics()); }
                                     else {
                                         egui::ComboBox::from_id_salt("groq_model_dropdown").width(280.0).selected_text(settings.groq_model.as_str()).show_ui(ui, |ui| {
                                             for name in models.iter() { ui.selectable_value(&mut settings.groq_model, name.clone(), name); }
@@ -306,20 +342,6 @@ pub fn show_settings_window(
                             ui.hyperlink_to("Get Groq API Key", "https://console.groq.com/keys");
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
-                                if !settings.groq_api_key.trim().is_empty() {
-                                    let key = settings.groq_api_key.clone();
-                                    let models_arc = groq_models.clone();
-                                    let fetching_arc = groq_fetching.clone();
-                                    let ctx_clone = ctx.clone();
-                                    *fetching_arc.lock() = true;
-                                    std::thread::spawn(move || {
-                                        if let Ok(m_list) = crate::adapters::translate::groq::GroqTranslator::list_models(&key) {
-                                            *models_arc.lock() = m_list;
-                                        }
-                                        *fetching_arc.lock() = false;
-                                        ctx_clone.request_repaint();
-                                    });
-                                }
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_groq"), false));
                             }
                         });
@@ -339,16 +361,40 @@ pub fn show_settings_window(
                         if ctx.input(|i| i.viewport().close_requested()) { ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_ollama"), false)); }
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let mut settings = settings_inner.lock();
+                            
+                            let should_fetch = {
+                                let models = ollama_models.lock();
+                                let fetching = *ollama_fetching.lock();
+                                models.is_empty() && !fetching && !settings.ollama_url.trim().is_empty()
+                            };
+                            if should_fetch {
+                                let url = settings.ollama_url.clone();
+                                let models_arc = ollama_models.clone();
+                                let fetching_arc = ollama_fetching.clone();
+                                let ctx_clone = ctx.clone();
+                                *fetching_arc.lock() = true;
+                                std::thread::spawn(move || {
+                                    if let Ok(m_list) = crate::adapters::translate::ollama::OllamaTranslator::list_models(&url) {
+                                        *models_arc.lock() = m_list;
+                                    }
+                                    *fetching_arc.lock() = false;
+                                    ctx_clone.request_repaint();
+                                });
+                            }
+
                             ui.label("Ollama (Local/Offline)");
                             ui.horizontal(|ui| {
                                 ui.label("Server URL");
-                                ui.text_edit_singleline(&mut settings.ollama_url);
+                                let resp = ui.text_edit_singleline(&mut settings.ollama_url);
+                                if resp.lost_focus() && resp.changed() {
+                                    ollama_models.lock().clear();
+                                }
                             });
                             if !settings.ollama_url.trim().is_empty() {
                                 ui.horizontal(|ui| {
                                     ui.label("Model");
                                     let models = ollama_models.lock();
-                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetch models to see list)").italics()); }
+                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetching models...)").italics()); }
                                     else {
                                         egui::ComboBox::from_id_salt("ollama_model_dropdown").width(250.0).selected_text(settings.ollama_model.as_str()).show_ui(ui, |ui| {
                                             for name in models.iter() { ui.selectable_value(&mut settings.ollama_model, name.clone(), name); }
@@ -357,22 +403,10 @@ pub fn show_settings_window(
                                     if *ollama_fetching.lock() { ui.spinner(); }
                                 });
                             }
+                            ui.add_space(4.0);
+                            ui.hyperlink_to("Browse Ollama Models", "https://ollama.com/library");
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
-                                if !settings.ollama_url.trim().is_empty() {
-                                    let url = settings.ollama_url.clone();
-                                    let models_arc = ollama_models.clone();
-                                    let fetching_arc = ollama_fetching.clone();
-                                    let ctx_clone = ctx.clone();
-                                    *fetching_arc.lock() = true;
-                                    std::thread::spawn(move || {
-                                        if let Ok(m_list) = crate::adapters::translate::ollama::OllamaTranslator::list_models(&url) {
-                                            *models_arc.lock() = m_list;
-                                        }
-                                        *fetching_arc.lock() = false;
-                                        ctx_clone.request_repaint();
-                                    });
-                                }
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_ollama"), false));
                             }
                         });
@@ -392,25 +426,61 @@ pub fn show_settings_window(
                         if ctx.input(|i| i.viewport().close_requested()) { ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_custom"), false)); }
                         egui::CentralPanel::default().show(ctx, |ui| {
                             let mut settings = settings_inner.lock();
+                            
+                            let should_fetch = {
+                                let models = custom_models.lock();
+                                let fetching = *custom_fetching.lock();
+                                settings.custom_openai_use_list && models.is_empty() && !fetching && !settings.custom_openai_url.trim().is_empty()
+                            };
+                            if should_fetch {
+                                let url = settings.custom_openai_url.clone();
+                                let key = settings.custom_openai_api_key.clone();
+                                let models_arc = custom_models.clone();
+                                let fetching_arc = custom_fetching.clone();
+                                let ctx_clone = ctx.clone();
+                                *fetching_arc.lock() = true;
+                                std::thread::spawn(move || {
+                                    let client = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(10)).build();
+                                    if let Ok(c) = client {
+                                        let endpoint = format!("{}/models", url.trim_end_matches('/'));
+                                        let mut req = c.get(&endpoint);
+                                        if !key.trim().is_empty() { req = req.bearer_auth(key.trim()); }
+                                        if let Ok(resp) = req.send() {
+                                            if resp.status().is_success() {
+                                                if let Ok(parsed) = serde_json::from_str::<OpenAiModelsResponse>(&resp.text().unwrap_or_default()) {
+                                                    let mut m_list = parsed.data.into_iter().map(|i| i.id).collect::<Vec<_>>();
+                                                    m_list.sort();
+                                                    *models_arc.lock() = m_list;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    *fetching_arc.lock() = false;
+                                    ctx_clone.request_repaint();
+                                });
+                            }
+
                             ui.horizontal(|ui| {
                                 ui.label("Base URL");
-                                ui.text_edit_singleline(&mut settings.custom_openai_url);
+                                let resp = ui.text_edit_singleline(&mut settings.custom_openai_url);
+                                if resp.lost_focus() && resp.changed() { custom_models.lock().clear(); }
                             });
                             ui.horizontal(|ui| {
                                 ui.label("API Key");
-                                ui.add(egui::TextEdit::singleline(&mut settings.custom_openai_api_key).password(true));
+                                let resp = ui.add(egui::TextEdit::singleline(&mut settings.custom_openai_api_key).password(true));
+                                if resp.lost_focus() && resp.changed() { custom_models.lock().clear(); }
                             });
                             ui.add_space(4.0);
                             ui.label("Model Selection Mode:");
                             ui.horizontal(|ui| {
-                                ui.radio_value(&mut settings.custom_openai_use_list, false, "Manual Entry");
-                                ui.radio_value(&mut settings.custom_openai_use_list, true, "Fetch from List");
+                                if ui.radio_value(&mut settings.custom_openai_use_list, false, "Manual Entry").changed() { custom_models.lock().clear(); }
+                                if ui.radio_value(&mut settings.custom_openai_use_list, true, "Fetch from List").changed() { custom_models.lock().clear(); }
                             });
                             if settings.custom_openai_use_list {
                                 ui.horizontal(|ui| {
                                     ui.label("Model");
                                     let models = custom_models.lock();
-                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetch models to see list)").italics()); }
+                                    if models.is_empty() { ui.label(egui::RichText::new("(Fetching models...)").italics()); }
                                     else {
                                         egui::ComboBox::from_id_salt("custom_model_dropdown").width(250.0).selected_text(settings.custom_openai_model.as_str()).show_ui(ui, |ui| {
                                             for m in models.iter() { ui.selectable_value(&mut settings.custom_openai_model, m.clone(), m); }
@@ -424,35 +494,17 @@ pub fn show_settings_window(
                                     ui.text_edit_singleline(&mut settings.custom_openai_model);
                                 });
                             }
+                            ui.add_space(4.0);
+                            ui.horizontal(|ui| {
+                                ui.label("Get API Keys:");
+                                ui.hyperlink_to("OpenRouter", "https://openrouter.ai/keys");
+                                ui.label("|");
+                                ui.hyperlink_to("Together AI", "https://api.together.xyz/settings/api-keys");
+                                ui.label("|");
+                                ui.hyperlink_to("OpenAI", "https://platform.openai.com/api-keys");
+                            });
                             ui.add_space(8.0);
                             if ui.button("Done").clicked() {
-                                if settings.custom_openai_use_list && !settings.custom_openai_url.trim().is_empty() {
-                                    let url = settings.custom_openai_url.clone();
-                                    let key = settings.custom_openai_api_key.clone();
-                                    let models_arc = custom_models.clone();
-                                    let fetching_arc = custom_fetching.clone();
-                                    let ctx_clone = ctx.clone();
-                                    *fetching_arc.lock() = true;
-                                    std::thread::spawn(move || {
-                                        let client = reqwest::blocking::Client::builder().timeout(std::time::Duration::from_secs(10)).build();
-                                        if let Ok(c) = client {
-                                            let endpoint = format!("{}/models", url.trim_end_matches('/'));
-                                            let mut req = c.get(&endpoint);
-                                            if !key.trim().is_empty() { req = req.bearer_auth(key.trim()); }
-                                            if let Ok(resp) = req.send() {
-                                                if resp.status().is_success() {
-                                                    if let Ok(parsed) = serde_json::from_str::<OpenAiModelsResponse>(&resp.text().unwrap_or_default()) {
-                                                        let mut m_list = parsed.data.into_iter().map(|i| i.id).collect::<Vec<_>>();
-                                                        m_list.sort();
-                                                        *models_arc.lock() = m_list;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        *fetching_arc.lock() = false;
-                                        ctx_clone.request_repaint();
-                                    });
-                                }
                                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("conf_custom"), false));
                             }
                         });

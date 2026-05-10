@@ -448,6 +448,22 @@ impl eframe::App for App {
                             self.settings_fetch_models_pending = true;
                             self.settings_edit = Some(Arc::new(Mutex::new(self.settings.clone())));
                         }
+
+                        if ui.button("🔄").on_hover_text("Clear Cache & Force Retranslate").clicked() {
+                            for slot in &mut model.slots {
+                                slot.last_ocr_text.clear();
+                                slot.last_translation.clear();
+                                slot.stable_hash = 0;
+                                slot.next_tick_at_ms = 0;
+                                slot.pending_text.clear();
+                            }
+                            for runtime in &mut self.slots_runtime {
+                                runtime.last_hash = 0;
+                                runtime.first_unstable_at = 0;
+                            }
+                            self.translation_cache.lock().clear();
+                            self.text_translation_cache.lock().clear();
+                        }
                     });
                 });
                 required_height += ui.min_size().y;
