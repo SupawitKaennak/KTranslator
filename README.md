@@ -39,7 +39,7 @@
 
 ### แหล่งที่มาของโมเดล (Model Resources)
 - **Manga-OCR 2025 (ONNX):** [l0wgear/manga-ocr-2025-onnx](https://huggingface.co/l0wgear/manga-ocr-2025-onnx) - โมเดล OCR คุณภาพสูงที่ปรับปรุงมาเพื่อมังงะญี่ปุ่นโดยเฉพาะ (เวอร์ชัน 2025)
-- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - โมเดลสำหรับตรวจจับตำแหน่งลูกโป่งคำพูดและตัวอักษรในมังงะ
+- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - ใช้โมเดลเวอร์ชัน **manga109_yolo_s** (YOLOv8-Small) ซึ่งถูกปรับจูนมาเพื่อการตรวจจับตำแหน่งลูกโป่งคำพูดและข้อความในมังงะโดยเฉพาะ มีความสมดุลระหว่างความเร็วและความแม่นยำ
 
 ### เทคโนโลยีที่ใช้ (Tech Stack)
 - **Language:** Rust (edition 2024)
@@ -132,7 +132,7 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 
 ### AI Models & Credits
 - **Manga-OCR 2025 (ONNX):** [l0wgear/manga-ocr-2025-onnx](https://huggingface.co/l0wgear/manga-ocr-2025-onnx) - High-quality OCR model optimized for Japanese manga.
-- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - State-of-the-art text and bubble detection for manga layouts.
+- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - Utilizing the **manga109_yolo_s** (Small) variant for real-time bubble and text detection with high precision and performance.
 
 ---
 
