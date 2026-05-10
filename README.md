@@ -17,7 +17,7 @@
 - **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
 - **แปลมังงะ:** อ่านข้อความจากภาพมังงะหรือคอมมิค (รองรับตัวหนังสือแนวตั้ง/เอียง/โค้ง)
 - **แปลบทความ:** แปลข้อความจากหน้าเว็บ เอกสาร หรือ PDF ที่ไม่สามารถก๊อปปี้ข้อความได้
-- **Smart Sentence Merge:** ระบบรวมประโยคอัจฉริยะ ช่วยให้ AI เข้าใจบริบทและแปลออกมาได้ลื่นไหลเหมือนมนุษย์แปลเอง
+- **Smart Sentence Merge:** ระบบรวมประโยค ช่วยให้ AI เข้าใจบริบทและแปลออกมาได้ลื่นไหลเหมือนมนุษย์แปลเอง
 - **Customizable Overlay:** ปรับแต่งสีพื้นหลัง สีตัวอักษร ขนาดฟอนต์ และความโค้งมนของขอบได้ตามใจชอบ (Appearance Settings)
 
 ### ความต้องการของระบบ (Requirements)
@@ -27,10 +27,10 @@
 - **PaddleOCR:** (แนะนำสำหรับมังงะ) ต้องดาวน์โหลดตัวโปรแกรม [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) และระบุที่อยู่ไฟล์ `.exe` ในหน้า Settings ของโปรแกรม
 
 **2. ระบบการแปล (Translator)**
-- **Gemini:** ต้องใช้ API Key สมัครฟรีได้ที่ [Google AI Studio](https://aistudio.google.com/) (รองรับ **Auto-Fetch** โมเดลอัตโนมัติ)
-- **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/) (รองรับ **Auto-Fetch** โมเดลอัตโนมัติ)
-- **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/) (รองรับ **Auto-Fetch** โมเดลอัตโนมัติ)
-- **Custom OpenAI:** รองรับ API ทุกเจ้าที่ใช้มาตรฐาน OpenAI (เช่น OpenRouter, DeepSeek, LM Studio) พร้อมระบบ **Auto-Fetch** ดึงรายชื่อโมเดลมาให้เลือกอัตโนมัติ
+- **Gemini:** ต้องใช้ API Key สมัครฟรีได้ที่ [Google AI Studio](https://aistudio.google.com/) 
+- **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/) 
+- **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/) 
+- **Custom OpenAI:** รองรับ API ทุกเจ้าที่ใช้มาตรฐาน OpenAI (เช่น OpenRouter, DeepSeek, LM Studio) 
 
 ### เทคโนโลยีที่ใช้ (Tech Stack)
 - **Language:** Rust (edition 2024)
