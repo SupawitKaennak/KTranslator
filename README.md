@@ -26,7 +26,7 @@
 ### ความต้องการของระบบ (Requirements)
 
 **1. ระบบ OCR (ตัวอ่านข้อความ)**
-- **Manga-OCR (NEW):** ระบบ AI (ONNX) รันผ่าน GPU แม่นยำที่สุดสำหรับภาษาญี่ปุ่นแนวตั้ง (ต้องมีไฟล์โมเดลในโฟลเดอร์ `models/`)
+- **Manga-OCR (NEW):** ระบบ AI (ONNX) รันผ่าน GPU แม่นยำที่สุดสำหรับภาษาญี่ปุ่นแนวตั้ง (มีระบบ **Model Installation Center** ในตัวโปรแกรมเพื่อโหลดไฟล์โมเดลอัตโนมัติ)
 - **Windows OCR:** (ติดมากับ Windows) ต้องติดตั้ง Language Pack ของภาษาต้นทางที่จะแปลให้เรียบร้อย (เช่น ญี่ปุ่น, จีน)
 - **PaddleOCR:** (แนะนำสำหรับมังงะ) ต้องดาวน์โหลดตัวโปรแกรม [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) และระบุที่อยู่ไฟล์ `.exe` ในหน้า Settings ของโปรแกรม
 
