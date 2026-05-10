@@ -37,7 +37,26 @@ impl TextCleaner {
         // c) Stuttering Filter (H-H-Hello -> Hello)
         s = Self::filter_stuttering(&s);
 
+        // d) URL Filter (Skip lines that look like links/paths)
+        s = Self::filter_urls(&s);
+
         s
+    }
+
+    fn filter_urls(s: &str) -> String {
+        let lower = s.to_lowercase();
+        // Detect common link patterns
+        let has_protocol = lower.contains("http") || lower.contains("www.");
+        let has_domain_path = (lower.contains(".moe/") || lower.contains(".com/") || lower.contains(".net/") || lower.contains(".org/")) && lower.contains("/");
+        let looks_like_path = s.starts_with("/") && s.split('/').count() > 3;
+
+        if has_protocol || has_domain_path || looks_like_path {
+            // If it's a tight string without spaces, it's almost certainly a URL/Path
+            if !s.contains(' ') {
+                return String::new();
+            }
+        }
+        s.to_string()
     }
 
     fn collapse_repeated_chars(s: &str) -> String {
