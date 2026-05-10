@@ -1,0 +1,3 @@
+[target.x86_64-pc-windows-msvc]
+# บังคับให้โปรเจกต์ใช้ Dynamic CRT (MD) เพื่อให้ทำงานร่วมกับ ONNX Runtime (ort) ได้
+rustflags = ["-C", "target-feature=-crt-static"]
