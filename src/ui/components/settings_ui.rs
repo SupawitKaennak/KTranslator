@@ -528,6 +528,7 @@ pub fn show_settings_window(
                                 ui.label("Choose OCR Engine for this mode:");
                                 ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Windows, "Windows OCR (Fast, System built-in)");
                                 ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Paddle, "PaddleOCR (Best for Manga/Japanese)");
+                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::MangaOCR, "MangaOCR (ONNX, High Accuracy for Manga)");
                                 if *engine_ref == crate::infra::settings::OcrEngineType::Paddle {
                                     ui.add_space(8.0);
                                     ui.label("PaddleOCR-json path:");

@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use crate::{
     adapters::{
         capture::screenshots_capture::ScreenshotsCapture,
-        ocr::{windows_ocr::WindowsOcr, paddle_ocr::PaddleOcr},
+        ocr::{windows_ocr::WindowsOcr, paddle_ocr::PaddleOcr, onnx_engine::OnnxMangaRecognizer},
         translate::{
             create_translator,
         },
@@ -149,6 +149,15 @@ impl App {
 
         let ocr_engine: Arc<dyn OcrEngine> = match current_engine_type {
             crate::infra::settings::OcrEngineType::Paddle => Arc::new(PaddleOcr::new(settings.paddle_ocr_path.clone())),
+            crate::infra::settings::OcrEngineType::MangaOCR => {
+                match OnnxMangaRecognizer::new("models/manga-ocr") {
+                    Ok(engine) => Arc::new(engine),
+                    Err(e) => {
+                        eprintln!("Failed to load MangaOCR: {}", e);
+                        Arc::new(WindowsOcr::new())
+                    }
+                }
+            }
             _ => Arc::new(WindowsOcr::new()),
         };
 
@@ -285,24 +294,46 @@ impl App {
 
         if resp.save_clicked {
             let updated = settings_arc.lock().clone();
+            
+            // Check if OCR engine needs rebuilding before updating self.settings
+            let current_engine_type = match updated.ocr_mode {
+                crate::infra::settings::OcrMode::Game => updated.game_ocr_engine,
+                crate::infra::settings::OcrMode::Manga => updated.manga_ocr_engine,
+                crate::infra::settings::OcrMode::Document => updated.document_ocr_engine,
+            };
+            
+            let old_engine_type = match self.settings.ocr_mode {
+                crate::infra::settings::OcrMode::Game => self.settings.game_ocr_engine,
+                crate::infra::settings::OcrMode::Manga => self.settings.manga_ocr_engine,
+                crate::infra::settings::OcrMode::Document => self.settings.document_ocr_engine,
+            };
+
+            let rebuild_ocr = current_engine_type != old_engine_type || updated.paddle_ocr_path != self.settings.paddle_ocr_path;
+
             self.settings = updated;
             if let Err(e) = save_settings(&self.settings) {
                 self.last_errors.insert(999, format!("{e:#}"));
             } else {
                 self.translator = create_translator(&self.settings);
-                // Rebuild OCR engine if settings changed
-                let current_engine_type = match self.settings.ocr_mode {
-                    crate::infra::settings::OcrMode::Game => self.settings.game_ocr_engine,
-                    crate::infra::settings::OcrMode::Manga => self.settings.manga_ocr_engine,
-                    crate::infra::settings::OcrMode::Document => self.settings.document_ocr_engine,
-                };
-
-                self.ocr_engine = match current_engine_type {
-                    crate::infra::settings::OcrEngineType::Paddle => {
-                        Arc::new(PaddleOcr::new(self.settings.paddle_ocr_path.clone()))
-                    }
-                    _ => Arc::new(WindowsOcr::new()),
-                };
+                
+                if rebuild_ocr {
+                    self.ocr_engine = match current_engine_type {
+                        crate::infra::settings::OcrEngineType::Paddle => {
+                            Arc::new(PaddleOcr::new(self.settings.paddle_ocr_path.clone()))
+                        }
+                        crate::infra::settings::OcrEngineType::MangaOCR => {
+                            match OnnxMangaRecognizer::new("models/manga-ocr") {
+                                Ok(engine) => Arc::new(engine),
+                                Err(e) => {
+                                    self.last_errors.insert(999, format!("Manga-OCR Error: {e:#}"));
+                                    Arc::new(WindowsOcr::new())
+                                }
+                            }
+                        }
+                        _ => Arc::new(WindowsOcr::new()),
+                    };
+                }
+                
                 self.last_errors.clear();
                 self.show_settings = false;
                 self.settings_edit = None; // Clean up
