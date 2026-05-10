@@ -15,8 +15,10 @@
 
 ### ลักษณะการใช้งาน
 - **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
-- **แปลมังงะ:** อ่านข้อความจากภาพมังงะหรือคอมมิค (รองรับตัวหนังสือเอียง/โค้ง)
+- **แปลมังงะ:** อ่านข้อความจากภาพมังงะหรือคอมมิค (รองรับตัวหนังสือแนวตั้ง/เอียง/โค้ง)
 - **แปลบทความ:** แปลข้อความจากหน้าเว็บ เอกสาร หรือ PDF ที่ไม่สามารถก๊อปปี้ข้อความได้
+- **Smart Sentence Merge:** ระบบรวมประโยคอัจฉริยะ ช่วยให้ AI เข้าใจบริบทและแปลออกมาได้ลื่นไหลเหมือนมนุษย์แปลเอง
+- **Customizable Overlay:** ปรับแต่งสีพื้นหลัง สีตัวอักษร ขนาดฟอนต์ และความโค้งมนของขอบได้ตามใจชอบ (Appearance Settings)
 
 ### ความต้องการของระบบ (Requirements)
 
@@ -25,9 +27,9 @@
 - **PaddleOCR:** (แนะนำสำหรับมังงะ) ต้องดาวน์โหลดตัวโปรแกรม [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) และระบุที่อยู่ไฟล์ `.exe` ในหน้า Settings ของโปรแกรม
 
 **2. ระบบการแปล (Translator)**
-- **Gemini:** ต้องใช้ API Key สมัครฟรีได้ที่ [Google AI Studio](https://aistudio.google.com/)
-- **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/)
-- **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/)
+- **Gemini:** ต้องใช้ API Key สมัครฟรีได้ที่ [Google AI Studio](https://aistudio.google.com/) (รองรับ **Auto-Fetch** โมเดลอัตโนมัติ)
+- **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/) (รองรับ **Auto-Fetch** โมเดลอัตโนมัติ)
+- **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/) (รองรับ **Auto-Fetch** โมเดลอัตโนมัติ)
 - **Custom OpenAI:** รองรับ API ทุกเจ้าที่ใช้มาตรฐาน OpenAI (เช่น OpenRouter, DeepSeek, LM Studio) พร้อมระบบ **Auto-Fetch** ดึงรายชื่อโมเดลมาให้เลือกอัตโนมัติ
 
 ### เทคโนโลยีที่ใช้ (Tech Stack)
@@ -57,6 +59,7 @@
 3. เลือกภาษาต้นทาง (From) และภาษาปลายทาง (To)
 4. กดปุ่ม **Start** เพื่อเริ่มการแปล
 5. เปิดโหมด **Overlay Mode** หากต้องการให้คำแปลแสดงทับตำแหน่งเดิมบนหน้าจอ
+6. ปรับแต่งรูปลักษณ์ของ Overlay ได้ที่ **Appearance Settings** เช่น สีพื้นหลัง ความโปร่งใส และขนาดฟอนต์
 
 ---
 
@@ -67,8 +70,10 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 
 ### Key Features
 - **Game Translation:** Translate in-game dialogues, menus, and item descriptions.
-- **Manga/Comics:** Read manga with specialized support for stylized or curved text.
+- **Manga/Comics:** Read manga with specialized support for vertical, stylized, or curved text.
 - **Article/Documents:** Translate text from websites, PDFs, or images that don't allow text copying.
+- **Smart Sentence Merge:** Group multiple lines into logical sentences for human-like translation context.
+- **Customizable Overlay:** Full control over background colors, text colors, font sizes, and corner radius.
 
 ### System Requirements
 
@@ -77,9 +82,9 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 - **PaddleOCR:** Recommended for manga. Download [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) and specify the `.exe` path in the app settings.
 
 **2. Translation Providers**
-- **Gemini:** API Key required. Get it for free at [Google AI Studio](https://aistudio.google.com/).
-- **Groq:** High-speed API. Get your key at [Groq Console](https://console.groq.com/).
-- **Ollama:** For local/offline translation. Download at [Ollama.com](https://ollama.com/).
+- **Gemini:** API Key required. Get it at [Google AI Studio](https://aistudio.google.com/) (Supports **Auto-Fetch**).
+- **Groq:** High-speed API. Get your key at [Groq Console](https://console.groq.com/) (Supports **Auto-Fetch**).
+- **Ollama:** For local/offline translation. Download at [Ollama.com](https://ollama.com/) (Supports **Auto-Fetch**).
 - **Custom OpenAI:** Supports any OpenAI-compatible API (OpenRouter, DeepSeek, LM Studio) with **Auto-Fetch** model selection support.
 
 ### Tech Stack
