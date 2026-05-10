@@ -76,6 +76,8 @@ pub fn build_translation_prompt(
         let system = format!(
             "You are a professional manga/game translator. \
              Translate the text to {target_name}. \
+             Maintain professional grammar, correct capitalization, and proper punctuation. \
+             Skip or preserve URLs, email addresses, and metadata without translation. \
              Output ONLY the translated text, no explanations, no quotes.{extra_rules}"
         );
         let user = if source.is_some() {
@@ -109,7 +111,9 @@ pub fn build_translation_prompt(
              4. Do NOT add any notes, explanations, or meta-talk.\n\
              5. If a segment is empty, output the number and an empty translation (e.g. \"5. \").\n\
              6. Prevent hallucinations: translate ONLY what is written.\n\
-             7. Output ONLY the numbered list in {target_name}.\n\
+             7. Maintain professional grammar, correct capitalization, and punctuation.\n\
+             8. Skip or preserve URLs, email addresses, and metadata without translation.\n\
+             9. Output ONLY the numbered list in {target_name}.\n\
 {extra_rules}",
             count = lines.len(),
             target_name = target_name,
