@@ -4,3 +4,7 @@
 
 # Local settings (sensitive API keys)
 settings.json
+
+# AI Models (Large files - handled by in-app downloader)
+/models/manga-ocr/*
+!/models/manga-ocr/.gitkeep
