@@ -26,7 +26,7 @@
 ### ความต้องการของระบบ (Requirements)
 
 **1. ระบบ OCR (ตัวอ่านข้อความ)**
-- **Manga-OCR (NEW):** ระบบ AI (ONNX) รันผ่าน GPU แม่นยำที่สุดสำหรับภาษาญี่ปุ่นแนวตั้ง (ต้องมีไฟล์โมเดลในโฟลเดอร์ `models/`)
+- **Manga-OCR (NEW):** ระบบ AI (ONNX) รันผ่าน GPU แม่นยำที่สุดสำหรับภาษาญี่ปุ่นแนวตั้ง (มีระบบ **Model Installation Center** ในตัวโปรแกรมเพื่อโหลดไฟล์โมเดลอัตโนมัติ)
 - **Windows OCR:** (ติดมากับ Windows) ต้องติดตั้ง Language Pack ของภาษาต้นทางที่จะแปลให้เรียบร้อย (เช่น ญี่ปุ่น, จีน)
 - **PaddleOCR:** (แนะนำสำหรับมังงะ) ต้องดาวน์โหลดตัวโปรแกรม [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) และระบุที่อยู่ไฟล์ `.exe` ในหน้า Settings ของโปรแกรม
 
@@ -36,6 +36,10 @@
 - **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/) 
 - **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/) 
 - **Custom OpenAI:** รองรับ API ทุกเจ้าที่ใช้มาตรฐาน OpenAI (เช่น OpenRouter, DeepSeek, LM Studio) 
+
+### แหล่งที่มาของโมเดล (Model Resources)
+- **Manga-OCR 2025 (ONNX):** [l0wgear/manga-ocr-2025-onnx](https://huggingface.co/l0wgear/manga-ocr-2025-onnx) - โมเดล OCR คุณภาพสูงที่ปรับปรุงมาเพื่อมังงะญี่ปุ่นโดยเฉพาะ (เวอร์ชัน 2025)
+- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - ใช้โมเดลเวอร์ชัน **manga109_yolo/v2023.12.07_s** (YOLOv8-Small) ซึ่งถูกปรับจูนมาเพื่อการตรวจจับตำแหน่งลูกโป่งคำพูดและข้อความในมังงะโดยเฉพาะ มีความสมดุลระหว่างความเร็วและความแม่นยำ
 
 ### เทคโนโลยีที่ใช้ (Tech Stack)
 - **Language:** Rust (edition 2024)
@@ -125,6 +129,10 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 3. Select Source (From) and Target (To) languages.
 4. Click **Start** to begin the real-time translation loop.
 5. Enable **Overlay Mode** to display translations directly over the original text.
+
+### AI Models & Credits
+- **Manga-OCR 2025 (ONNX):** [l0wgear/manga-ocr-2025-onnx](https://huggingface.co/l0wgear/manga-ocr-2025-onnx) - High-quality OCR model optimized for Japanese manga.
+- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - Utilizing the **manga109_yolo/v2023.12.07_s** (Small) variant for real-time bubble and text detection with high precision and performance.
 
 ---
 
