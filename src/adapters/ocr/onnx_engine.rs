@@ -68,15 +68,29 @@ pub struct OnnxMangaRecognizer {
 
 impl OnnxMangaRecognizer {
     pub fn new<P: AsRef<Path>>(models_dir: P) -> Result<Self> {
-        let models_dir = models_dir.as_ref();
+        let models_dir_input = models_dir.as_ref();
+        let mut resolved_path = models_dir_input.to_path_buf();
         
-        let encoder_path = models_dir.join("encoder_model.onnx");
-        let decoder_path = models_dir.join("decoder_model.onnx");
-        let tokenizer_path = models_dir.join("tokenizer.json");
-        let yolo_path = models_dir.join("manga109_yolo_s.onnx");
+        // 1. Try relative to CWD (Normal for cargo run)
+        if !resolved_path.exists() {
+            // 2. Try relative to EXE (Normal for standalone build)
+            if let Ok(exe_path) = std::env::current_exe() {
+                if let Some(exe_dir) = exe_path.parent() {
+                    let exe_relative = exe_dir.join(models_dir_input);
+                    if exe_relative.exists() {
+                        resolved_path = exe_relative;
+                    }
+                }
+            }
+        }
+
+        let encoder_path = resolved_path.join("encoder_model.onnx");
+        let decoder_path = resolved_path.join("decoder_model.onnx");
+        let tokenizer_path = resolved_path.join("tokenizer.json");
+        let yolo_path = resolved_path.join("manga109_yolo_s.onnx");
 
         if !encoder_path.exists() || !decoder_path.exists() || !tokenizer_path.exists() || !yolo_path.exists() {
-            anyhow::bail!("Manga-OCR models not found in {:?}. Please ensure encoder_model.onnx, decoder_model.onnx, tokenizer.json, and manga109_yolo_s.onnx are present.", models_dir);
+            anyhow::bail!("Manga-OCR models not found. Please ensure the 'models' folder is present at {:?} or next to the .exe", resolved_path);
         }
 
         let encoder = SessionBuilder::new()
