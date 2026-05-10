@@ -44,6 +44,11 @@ pub struct I18n {
     pub models_installed: &'static str,
     pub download_install: &'static str,
     pub reinstall_update: &'static str,
+
+    // Mode Names
+    pub mode_game: &'static str,
+    pub mode_manga: &'static str,
+    pub mode_document: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -86,6 +91,9 @@ const EN: I18n = I18n {
     models_installed: "✔ AI Models Installed.",
     download_install: "📥 Download & Install Models (300MB+)",
     reinstall_update: "🔄 Re-install/Update Models",
+    mode_game: "🎮 Game Mode",
+    mode_manga: "📖 Manga/Comic Mode",
+    mode_document: "📄 Document Mode",
 };
 
 const TH: I18n = I18n {
@@ -128,6 +136,9 @@ const TH: I18n = I18n {
     models_installed: "✔ ติดตั้ง AI Model เรียบร้อยแล้ว",
     download_install: "📥 ดาวน์โหลดและติดตั้งโมเดล (300MB+)",
     reinstall_update: "🔄 ติดตั้งใหม่ / อัปเดตโมเดล",
+    mode_game: "🎮 โหมดเกม",
+    mode_manga: "📖 โหมดมังงะ / คอมมิค",
+    mode_document: "📄 โหมดเอกสาร",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {
