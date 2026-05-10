@@ -528,11 +528,12 @@ pub fn show_settings_window(
                             if ctx.input(|i| i.viewport().close_requested()) { ctx.data_mut(|d| d.insert_temp(egui::Id::new(id), false)); }
                             egui::CentralPanel::default().show(ctx, |ui| {
                                 let mut settings = settings_inner.lock();
+                                let i18n = get_i18n(settings.ui_language);
                                 let engine_ref = match id { "conf_ocr_game" => &mut settings.game_ocr_engine, "conf_ocr_manga" => &mut settings.manga_ocr_engine, _ => &mut settings.document_ocr_engine };
-                                ui.label("Choose OCR Engine for this mode:");
-                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Windows, "Windows OCR (Fast, System built-in)");
-                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Paddle, "PaddleOCR (Best for Manga/Japanese)");
-                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::MangaOCR, "MangaOCR (ONNX, High Accuracy for Manga)");
+                                ui.label(i18n.choose_ocr);
+                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Windows, i18n.ocr_windows_desc);
+                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::Paddle, i18n.ocr_paddle_desc);
+                                ui.radio_value(engine_ref, crate::infra::settings::OcrEngineType::MangaOCR, i18n.ocr_manga_desc);
                                 
                                 if *engine_ref == crate::infra::settings::OcrEngineType::MangaOCR {
                                     ui.add_space(8.0);
@@ -546,13 +547,13 @@ pub fn show_settings_window(
 
                                         let models_exist = std::path::Path::new("models/manga-ocr/manga109_yolo_s.onnx").exists();
                                         if !models_exist {
-                                            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), "⚠ AI Models not found.");
-                                            if ui.button("📥 Download & Install Models (300MB+)").clicked() {
+                                            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), i18n.models_not_found);
+                                            if ui.button(i18n.download_install).clicked() {
                                                 let _ = download_trigger_tx.send(());
                                             }
                                         } else {
-                                            ui.colored_label(egui::Color32::from_rgb(100, 255, 100), "✔ AI Models Installed.");
-                                            if ui.button("🔄 Re-install/Update Models").clicked() {
+                                            ui.colored_label(egui::Color32::from_rgb(100, 255, 100), i18n.models_installed);
+                                            if ui.button(i18n.reinstall_update).clicked() {
                                                 let _ = download_trigger_tx.send(());
                                             }
                                         }
