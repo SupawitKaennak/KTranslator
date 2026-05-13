@@ -11,13 +11,13 @@ use crate::core::{
 pub struct BackgroundCoordinator {
     pub bg_tx: mpsc::Sender<BgResult>,
     pub bg_rx: mpsc::Receiver<BgResult>,
-    pool: threadpool::ThreadPool,
+    pool: Mutex<threadpool::ThreadPool>,
 }
 
 impl BackgroundCoordinator {
     pub fn new() -> Self {
         let (bg_tx, bg_rx) = mpsc::channel();
-        let pool = threadpool::ThreadPool::new(4); // 4 persistent worker threads
+        let pool = Mutex::new(threadpool::ThreadPool::new(4)); // Default 4 worker threads
         Self { bg_tx, bg_rx, pool }
     }
 
@@ -34,6 +34,7 @@ impl BackgroundCoordinator {
         slots_runtime: &mut Vec<SlotRuntimeState>,
         err_handler: &crate::core::usecases::error_handler::ErrorHandler,
         translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
+        settings: &crate::infrastructure::settings::Settings,
     ) {
         while let Ok(result) = self.bg_rx.try_recv() {
             match result {
@@ -72,27 +73,86 @@ impl BackgroundCoordinator {
 
                         let new_ocr = ocr_text.trim();
                         let old_ocr = slot.last_ocr_text.trim();
+                        let realtime = &settings.realtime;
 
                         if new_ocr.is_empty() {
-                            slot.last_ocr_text = String::new();
-                            slot.last_translation = String::new();
-                            slot.last_ocr_lines.clear();
-                            slot.last_trans_lines.clear();
-                        } else if new_ocr != old_ocr {
-                            slot.last_ocr_text = ocr_text.clone();
-                            slot.last_translation = translated.clone();
-                            slot.last_ocr_lines = ocr_lines.clone();
-                            slot.last_trans_lines = trans_lines.clone();
-
-                            if frame_hash != 0 {
-                                let cache_key = (frame_hash, slot.source_lang.as_ref().map(|l| l.0.clone()), slot.target_lang.0.clone());
-                                translation_cache.lock().insert(cache_key, (ocr_text, translated));
+                            // ── Persistence Check ──
+                            if now < runtime.last_seen_text_at_ms + realtime.subtitle_persistence_ms {
+                                // Keep persistent subtitles on screen!
+                                let pers_trans = runtime.persistent_translation.lock().clone();
+                                let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
+                                let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
+                                
+                                if let Some(pt) = pers_trans {
+                                    slot.last_translation = pt;
+                                    slot.last_ocr_lines = pers_ocr;
+                                    slot.last_trans_lines = pers_trans_lines;
+                                } else {
+                                    slot.last_ocr_text.clear();
+                                    slot.last_translation.clear();
+                                    slot.last_ocr_lines.clear();
+                                    slot.last_trans_lines.clear();
+                                }
+                            } else {
+                                // Persistence expired, clear fully
+                                slot.last_ocr_text.clear();
+                                slot.last_translation.clear();
+                                slot.last_ocr_lines.clear();
+                                slot.last_trans_lines.clear();
+                                *runtime.persistent_translation.lock() = None;
+                                runtime.persistent_ocr_lines.lock().clear();
+                                runtime.persistent_trans_lines.lock().clear();
                             }
                         } else {
-                            if !translated.trim().is_empty() {
-                                slot.last_trans_lines = trans_lines;
-                                slot.last_ocr_lines = ocr_lines;
-                                slot.last_translation = translated;
+                            // ── Debounce Check (Typewriter effect) ──
+                            if new_ocr == runtime.last_stable_ocr_text.trim() {
+                                runtime.identical_frames_count = runtime.identical_frames_count.saturating_add(1);
+                            } else {
+                                runtime.last_stable_ocr_text = new_ocr.to_string();
+                                runtime.identical_frames_count = 1;
+                            }
+
+                            if runtime.identical_frames_count >= realtime.stability_threshold_frames {
+                                // Text is fully stable, render new translation!
+                                runtime.last_seen_text_at_ms = now; // Update timestamp for persistence
+                                
+                                if new_ocr != old_ocr {
+                                    slot.last_ocr_text = ocr_text.clone();
+                                    slot.last_translation = translated.clone();
+                                    slot.last_ocr_lines = ocr_lines.clone();
+                                    slot.last_trans_lines = trans_lines.clone();
+
+                                    if frame_hash != 0 {
+                                        let cache_key = (frame_hash, slot.source_lang.as_ref().map(|l| l.0.clone()), slot.target_lang.0.clone());
+                                        translation_cache.lock().insert(cache_key, (ocr_text, translated.clone()));
+                                    }
+                                } else {
+                                    if !translated.trim().is_empty() {
+                                        slot.last_trans_lines = trans_lines.clone();
+                                        slot.last_ocr_lines = ocr_lines.clone();
+                                        slot.last_translation = translated.clone();
+                                    }
+                                }
+
+                                // Save to persistence store
+                                if !slot.last_translation.trim().is_empty() {
+                                    *runtime.persistent_translation.lock() = Some(slot.last_translation.clone());
+                                    *runtime.persistent_ocr_lines.lock() = slot.last_ocr_lines.clone();
+                                    *runtime.persistent_trans_lines.lock() = slot.last_trans_lines.clone();
+                                }
+                            } else {
+                                // Still debouncing typewriter animation, keep displaying previous persistent text
+                                let pers_trans = runtime.persistent_translation.lock().clone();
+                                let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
+                                let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
+                                
+                                if let Some(pt) = pers_trans {
+                                    slot.last_translation = pt;
+                                    slot.last_ocr_lines = pers_ocr;
+                                    slot.last_trans_lines = pers_trans_lines;
+                                }
+                                // Force quick tick to read the next frame of the animation
+                                slot.next_tick_at_ms = now.saturating_add(50);
                             }
                         }
                     }
@@ -214,6 +274,9 @@ impl BackgroundCoordinator {
         settings: &crate::infrastructure::settings::Settings,
         ctx: egui::Context,
     ) {
+        // Dynamically apply user-configured worker thread counts
+        self.pool.lock().set_num_threads(settings.perf.worker_threads.max(1));
+
         let now = Self::now_ms();
         let snapshot = { model_arc.lock().clone() };
         if !snapshot.running { return; }
@@ -286,7 +349,7 @@ impl BackgroundCoordinator {
             let last_frame_arc = slots_runtime[i].last_frame.clone();
             
             let ctx_worker = ctx.clone();
-            self.pool.execute(move || {
+            self.pool.lock().execute(move || {
                 ctx_worker.request_repaint();
                 let tx_for_panic = tx.clone();
                 let ctx_for_panic = ctx_worker.clone();

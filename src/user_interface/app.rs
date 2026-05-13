@@ -253,6 +253,7 @@ impl App {
             &mut self.slots_runtime,
             &self.err_handler,
             &self.translation_cache,
+            &self.settings,
         );
 
         self.coordinator.tick(
@@ -288,8 +289,11 @@ impl App {
         if updated != self.settings {
             let current_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&updated);
             let old_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
-            let rebuild_ocr = current_engine_type != old_engine_type || updated.paddle_ocr_path != self.settings.paddle_ocr_path;
+            let rebuild_ocr = current_engine_type != old_engine_type 
+                || updated.paddle_ocr_path != self.settings.paddle_ocr_path
+                || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
             
+            let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
             let rebuild_trans = updated.provider != self.settings.provider 
                 || updated.gemini_api_key != self.settings.gemini_api_key
                 || updated.gemini_model != self.settings.gemini_model
@@ -299,7 +303,8 @@ impl App {
                 || updated.ollama_model != self.settings.ollama_model
                 || updated.custom_openai_url != self.settings.custom_openai_url
                 || updated.custom_openai_api_key != self.settings.custom_openai_api_key
-                || updated.custom_openai_model != self.settings.custom_openai_model;
+                || updated.custom_openai_model != self.settings.custom_openai_model
+                || trans_behavior_changed;
 
             self.settings = updated;
             if let Err(e) = save_settings(&self.settings) {
@@ -307,6 +312,10 @@ impl App {
             } else {
                 if rebuild_trans {
                     self.translator = create_translator(&self.settings);
+                    if trans_behavior_changed {
+                        self.translation_cache.lock().clear();
+                        self.text_translation_cache.lock().clear();
+                    }
                 }
                 
                 if rebuild_ocr {
