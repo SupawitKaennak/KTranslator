@@ -34,6 +34,29 @@ impl OpenAiTranslator {
             model,
         })
     }
+
+    pub fn list_models(base_url: &str, api_key: &str) -> Result<Vec<String>> {
+        let client = Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
+        let endpoint = format!("{}/models", base_url.trim_end_matches('/'));
+        let mut req = client.get(&endpoint);
+        if !api_key.trim().is_empty() {
+            req = req.bearer_auth(api_key.trim());
+        }
+        let resp = req.send()?;
+        if resp.status().is_success() {
+            #[derive(serde::Deserialize)]
+            struct ModelsResp { data: Vec<ModelItem> }
+            #[derive(serde::Deserialize)]
+            struct ModelItem { id: String }
+
+            let parsed: ModelsResp = serde_json::from_str(&resp.text().unwrap_or_default())?;
+            let mut m_list: Vec<String> = parsed.data.into_iter().map(|i| i.id).collect();
+            m_list.sort();
+            Ok(m_list)
+        } else {
+            bail!("Failed to list models: {}", resp.status());
+        }
+    }
 }
 
 impl Translator for OpenAiTranslator {

@@ -161,20 +161,6 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    // ── Strategy 1: ||| separator (Primary) ─────────────────────────────
-    if trimmed.contains(LINE_SEPARATOR) {
-        let parts: Vec<String> = trimmed
-            .split(LINE_SEPARATOR)
-            .map(|s| s.trim().to_string())
-            .collect();
-        if parts.len() == expected_count {
-            return parts;
-        }
-        if parts.len() >= expected_count {
-            return parts[..expected_count].to_vec();
-        }
-    }
-
     // ── Strategy 2: Numbered list (Fallback) ─────────────────────────────
     // Regex matches "1. text", "**1.** text", "- 1. text", "[1] text", etc.
     static RE_NUMBERED: LazyLock<regex::Regex> = LazyLock::new(|| {

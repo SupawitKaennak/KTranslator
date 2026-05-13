@@ -6,7 +6,6 @@ use parking_lot::Mutex;
 use crate::{
     adapters::{
         capture::screenshots_capture::ScreenshotsCapture,
-        ocr::{windows_ocr::WindowsOcr, paddle_ocr::PaddleOcr, onnx_engine::OnnxMangaRecognizer},
         translate::{
             create_translator,
         },
@@ -17,11 +16,11 @@ use crate::{
         ports::{FrameSource, OcrEngine, Translator},
         worker::SlotRuntimeState,
     },
-    infra::{
+    infrastructure::{
         settings::{load_settings, save_settings, Settings},
         platform::{self, PlatformServices},
     },
-    ui::{
+    user_interface::{
         components::{
             settings_ui::show_settings_window,
             slot_ui::render_slot_item,
@@ -44,13 +43,8 @@ pub struct App {
     show_settings: bool,
     /// true once when user opens Settings: try to fetch models from API
     settings_fetch_models_pending: bool,
-    last_errors: std::collections::BTreeMap<usize, String>,
-    /// Empty = use built-in fallback list until Refresh succeeds
-    gemini_models: Arc<Mutex<Vec<String>>>,
-    gemini_fetching: Arc<Mutex<bool>>,
-
-    /// Persistent state for the settings window while open to prevent frame-reset bug.
-    settings_edit: Option<Arc<Mutex<Settings>>>,
+    err_handler: crate::core::usecases::error_handler::ErrorHandler,
+    settings_ctrl: crate::core::usecases::settings_controller::SettingsController,
 
     /// Fullscreen drag-to-select overlay (one at a time).
     crop_session: Option<Arc<Mutex<CropOverlayState>>>,
@@ -86,24 +80,11 @@ pub struct App {
     error_dismiss_tx: mpsc::Sender<()>,
     error_dismiss_rx: mpsc::Receiver<()>,
 
-    /// Groq models
-    groq_models: Arc<Mutex<Vec<String>>>,
-    groq_fetching: Arc<Mutex<bool>>,
-
-    /// Ollama models
-    ollama_models: Arc<Mutex<Vec<String>>>,
-    ollama_fetching: Arc<Mutex<bool>>,
-
-    /// Custom OpenAI compatible models (Auto-fetched)
-    custom_openai_models: Arc<Mutex<Vec<String>>>,
-    custom_openai_fetching: Arc<Mutex<bool>>,
-    custom_openai_error: Arc<Mutex<Option<String>>>,
-
     /// Model download channels
     download_trigger_tx: std::sync::mpsc::Sender<()>,
     download_trigger_rx: std::sync::mpsc::Receiver<()>,
-    download_progress_rx: tokio::sync::mpsc::Receiver<crate::infra::asset_manager::DownloadProgress>,
-    download_progress_tx: tokio::sync::mpsc::Sender<crate::infra::asset_manager::DownloadProgress>,
+    download_progress_rx: tokio::sync::mpsc::Receiver<crate::infrastructure::asset_manager::DownloadProgress>,
+    download_progress_tx: tokio::sync::mpsc::Sender<crate::infrastructure::asset_manager::DownloadProgress>,
 }
 
 impl App {
@@ -147,25 +128,11 @@ impl App {
 
         let coordinator = BackgroundCoordinator::new();
 
-        let current_engine_type = match settings.ocr_mode {
-            crate::infra::settings::OcrMode::Game => settings.game_ocr_engine,
-            crate::infra::settings::OcrMode::Manga => settings.manga_ocr_engine,
-            crate::infra::settings::OcrMode::Document => settings.document_ocr_engine,
-        };
-
-        let ocr_engine: Arc<dyn OcrEngine> = match current_engine_type {
-            crate::infra::settings::OcrEngineType::Paddle => Arc::new(PaddleOcr::new(settings.paddle_ocr_path.clone())),
-            crate::infra::settings::OcrEngineType::MangaOCR => {
-                match OnnxMangaRecognizer::new("models/manga-ocr") {
-                    Ok(engine) => Arc::new(engine),
-                    Err(e) => {
-                        eprintln!("Failed to load MangaOCR: {}", e);
-                        Arc::new(WindowsOcr::new())
-                    }
-                }
-            }
-            _ => Arc::new(WindowsOcr::new()),
-        };
+        let err_handler = crate::core::usecases::error_handler::ErrorHandler::new();
+        let (ocr_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&settings);
+        if let Some(err) = err_opt {
+            err_handler.report_simple(err);
+        }
 
         let (dt_tx, dt_rx) = std::sync::mpsc::channel();
         let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
@@ -175,10 +142,8 @@ impl App {
             settings,
             show_settings: false,
             settings_fetch_models_pending: false,
-            last_errors: std::collections::BTreeMap::new(),
-            gemini_models: Arc::new(Mutex::new(Vec::new())),
-            gemini_fetching: Arc::new(Mutex::new(false)),
-            settings_edit: None,
+            err_handler,
+            settings_ctrl: crate::core::usecases::settings_controller::SettingsController::new(),
             crop_session: None,
             crop_finish: Arc::new(Mutex::new(None)),
             capture: Arc::new(ScreenshotsCapture::new()),
@@ -205,13 +170,6 @@ impl App {
             text_translation_cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
             error_dismiss_tx: err_tx,
             error_dismiss_rx: err_rx,
-            groq_models: Arc::new(Mutex::new(Vec::new())),
-            groq_fetching: Arc::new(Mutex::new(false)),
-            ollama_models: Arc::new(Mutex::new(Vec::new())),
-            ollama_fetching: Arc::new(Mutex::new(false)),
-            custom_openai_models: Arc::new(Mutex::new(Vec::new())),
-            custom_openai_fetching: Arc::new(Mutex::new(false)),
-            custom_openai_error: Arc::new(Mutex::new(None)),
             download_trigger_tx: dt_tx,
             download_trigger_rx: dt_rx,
             download_progress_tx: dp_tx,
@@ -256,14 +214,14 @@ impl App {
     fn tick_background(&mut self, ctx: &egui::Context) {
         // 1. Process pending signals from popups/error window
         while let Ok(_) = self.error_dismiss_rx.try_recv() {
-            self.last_errors.clear();
+            self.err_handler.clear_all();
         }
 
         // 1b. Handle Download Trigger
         while let Ok(_) = self.download_trigger_rx.try_recv() {
             let tx = self.download_progress_tx.clone();
             tokio::spawn(async move {
-                let _ = crate::infra::asset_manager::download_models(tx).await;
+                let _ = crate::infrastructure::asset_manager::download_models(tx).await;
             });
         }
 
@@ -274,21 +232,14 @@ impl App {
             
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
-                let current_engine_type = match self.settings.ocr_mode {
-                    crate::infra::settings::OcrMode::Game => self.settings.game_ocr_engine,
-                    crate::infra::settings::OcrMode::Manga => self.settings.manga_ocr_engine,
-                    crate::infra::settings::OcrMode::Document => self.settings.document_ocr_engine,
-                };
-                
-                if current_engine_type == crate::infra::settings::OcrEngineType::MangaOCR {
-                    match OnnxMangaRecognizer::new("models/manga-ocr") {
-                        Ok(engine) => {
-                            self.ocr_engine = Arc::new(engine);
-                            println!("Manga-OCR reloaded successfully after download.");
-                        },
-                        Err(e) => {
-                            self.last_errors.insert(999, format!("Failed to load models after download: {}", e));
-                        }
+                let factory_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
+                if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR {
+                    let (new_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&self.settings);
+                    self.ocr_engine = new_engine;
+                    if let Some(err) = err_opt {
+                        self.err_handler.report_simple(err);
+                    } else {
+                        println!("Manga-OCR reloaded successfully after download.");
                     }
                 }
             }
@@ -300,7 +251,7 @@ impl App {
         self.coordinator.process_results(
             &self.model,
             &mut self.slots_runtime,
-            &mut self.last_errors,
+            &self.err_handler,
             &self.translation_cache,
         );
 
@@ -322,88 +273,66 @@ impl App {
             return;
         }
 
-        // Use persistent settings_edit or initialize if missing (fallback)
-        if self.settings_edit.is_none() {
-            self.settings_edit = Some(Arc::new(Mutex::new(self.settings.clone())));
-        }
-        let settings_arc = self.settings_edit.as_ref().unwrap().clone();
+        let settings_arc = self.settings_ctrl.begin_edit(&self.settings);
         
         let resp = show_settings_window(
             ctx, 
             settings_arc.clone(), 
-            self.gemini_models.clone(),
-            self.gemini_fetching.clone(),
-            self.groq_models.clone(),
-            self.groq_fetching.clone(),
-            self.ollama_models.clone(),
-            self.ollama_fetching.clone(),
-            self.custom_openai_models.clone(),
-            self.custom_openai_fetching.clone(),
-            self.custom_openai_error.clone(),
+            &self.settings_ctrl,
             self.model.lock().download_progress.clone(),
             self.download_trigger_tx.clone(),
         );
 
-        if resp.save_clicked {
-            let updated = settings_arc.lock().clone();
-            
-            // Check if OCR engine needs rebuilding before updating self.settings
-            let current_engine_type = match updated.ocr_mode {
-                crate::infra::settings::OcrMode::Game => updated.game_ocr_engine,
-                crate::infra::settings::OcrMode::Manga => updated.manga_ocr_engine,
-                crate::infra::settings::OcrMode::Document => updated.document_ocr_engine,
-            };
-            
-            let old_engine_type = match self.settings.ocr_mode {
-                crate::infra::settings::OcrMode::Game => self.settings.game_ocr_engine,
-                crate::infra::settings::OcrMode::Manga => self.settings.manga_ocr_engine,
-                crate::infra::settings::OcrMode::Document => self.settings.document_ocr_engine,
-            };
-
+        let updated = settings_arc.lock().clone();
+        if updated != self.settings {
+            let current_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&updated);
+            let old_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
             let rebuild_ocr = current_engine_type != old_engine_type || updated.paddle_ocr_path != self.settings.paddle_ocr_path;
+            
+            let rebuild_trans = updated.provider != self.settings.provider 
+                || updated.gemini_api_key != self.settings.gemini_api_key
+                || updated.gemini_model != self.settings.gemini_model
+                || updated.groq_api_key != self.settings.groq_api_key
+                || updated.groq_model != self.settings.groq_model
+                || updated.ollama_url != self.settings.ollama_url
+                || updated.ollama_model != self.settings.ollama_model
+                || updated.custom_openai_url != self.settings.custom_openai_url
+                || updated.custom_openai_api_key != self.settings.custom_openai_api_key
+                || updated.custom_openai_model != self.settings.custom_openai_model;
 
             self.settings = updated;
             if let Err(e) = save_settings(&self.settings) {
-                self.last_errors.insert(999, format!("{e:#}"));
+                self.err_handler.report_simple(format!("{e:#}"));
             } else {
-                self.translator = create_translator(&self.settings);
-                
-                if rebuild_ocr {
-                    self.ocr_engine = match current_engine_type {
-                        crate::infra::settings::OcrEngineType::Paddle => {
-                            Arc::new(PaddleOcr::new(self.settings.paddle_ocr_path.clone()))
-                        }
-                        crate::infra::settings::OcrEngineType::MangaOCR => {
-                            match OnnxMangaRecognizer::new("models/manga-ocr") {
-                                Ok(engine) => Arc::new(engine),
-                                Err(e) => {
-                                    self.last_errors.insert(999, format!("Manga-OCR Error: {e:#}"));
-                                    Arc::new(WindowsOcr::new())
-                                }
-                            }
-                        }
-                        _ => Arc::new(WindowsOcr::new()),
-                    };
+                if rebuild_trans {
+                    self.translator = create_translator(&self.settings);
                 }
                 
-                self.last_errors.clear();
-                self.show_settings = false;
-                self.settings_edit = None; // Clean up
+                if rebuild_ocr {
+                    let (new_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&self.settings);
+                    self.ocr_engine = new_engine;
+                    if let Some(err) = err_opt {
+                        self.err_handler.report_simple(err);
+                    }
+                }
             }
+            
+            // Request immediate repaint to show live update results on screen
+            ctx.request_repaint();
         }
 
         if resp.close_clicked {
             self.show_settings = false;
-            self.settings_edit = None; // Clean up
+            self.settings_ctrl.end_edit();
         }
     }
 
     fn ui_error_popup(&mut self, ctx: &egui::Context) {
-        if self.last_errors.is_empty() { return; }
+        if !self.err_handler.has_errors() { return; }
         
         let viewport_id = egui::ViewportId::from_hash_of("error_popup");
         let tx = self.error_dismiss_tx.clone();
-        let errors: Vec<String> = self.last_errors.values().cloned().collect();
+        let errors: Vec<String> = self.err_handler.get_all_errors().into_iter().map(|e| e.message).collect();
         
         ctx.show_viewport_immediate(
             viewport_id,
@@ -500,7 +429,7 @@ impl eframe::App for App {
                                 slot.next_tick_at_ms = 0;
                             }
                             // Also clear errors when manually starting
-                            self.last_errors.clear();
+                            self.err_handler.clear_all();
                         }
                     }
                     
@@ -529,7 +458,7 @@ impl eframe::App for App {
                         if ui.button("⚙").on_hover_text("Open Settings").clicked() {
                             self.show_settings = true;
                             self.settings_fetch_models_pending = true;
-                            self.settings_edit = Some(Arc::new(Mutex::new(self.settings.clone())));
+                            let _ = self.settings_ctrl.begin_edit(&self.settings);
                         }
 
                         if ui.button("🔄").on_hover_text("Clear Cache & Force Retranslate").clicked() {
@@ -546,6 +475,7 @@ impl eframe::App for App {
                             }
                             self.translation_cache.lock().clear();
                             self.text_translation_cache.lock().clear();
+                            self.settings_ctrl.reset_models_cache();
                         }
                     });
                 });
@@ -570,10 +500,10 @@ impl eframe::App for App {
                             Ok(st) => {
                                 *self.crop_finish.lock() = None;
                                 self.crop_session = Some(Arc::new(Mutex::new(st)));
-                                self.last_errors.clear();
+                                self.err_handler.clear_all();
                             }
                             Err(e) => {
-                                self.last_errors.insert(999, format!("{e:#}"));
+                                self.err_handler.report_simple(format!("{e:#}"));
                             }
                         }
                     }

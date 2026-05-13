@@ -4,8 +4,8 @@ use crate::core::{
     types::{LanguageTag, Rect},
 };
 use crate::core::worker::SlotRuntimeState;
-use crate::infra::settings::UiLanguage;
-use crate::ui::i18n::get_i18n;
+use crate::infrastructure::settings::UiLanguage;
+use crate::user_interface::i18n::get_i18n;
 
 pub struct SlotUiResponse {
     pub do_crop: bool,
@@ -113,7 +113,7 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.label(format!("🌐 {}:", i18n.from));
+            ui.label(format!("{}:", i18n.from));
             let mut src = slot.source_lang.as_ref().map(|l| l.0.clone()).unwrap_or_default();
             egui::ComboBox::from_id_salt(format!("src_{slot_idx}"))
                 .selected_text(
@@ -130,7 +130,7 @@ pub fn render_slot_item(
             slot.source_lang = if src.is_empty() { None } else { Some(LanguageTag(src)) };
 
             ui.add_space(10.0);
-            ui.label(format!("➡️ {}:", i18n.to));
+            ui.label(format!("{}:", i18n.to));
             let mut tgt = slot.target_lang.0.clone();
             egui::ComboBox::from_id_salt(format!("tgt_{slot_idx}"))
                 .selected_text(

@@ -1,4 +1,4 @@
-use crate::infra::settings::UiLanguage;
+use crate::infrastructure::settings::UiLanguage;
 
 pub struct I18n {
     pub settings: &'static str,
@@ -12,6 +12,7 @@ pub struct I18n {
     pub corner_radius: &'static str,
     pub bg_color: &'static str,
     pub text_color: &'static str,
+    pub opacity: &'static str,
     pub text_align: &'static str,
     pub align_left: &'static str,
     pub align_center: &'static str,
@@ -53,6 +54,13 @@ pub struct I18n {
     pub mode_game: &'static str,
     pub mode_manga: &'static str,
     pub mode_document: &'static str,
+
+    // Settings Tabs
+    pub tab_general: &'static str,
+    pub tab_ai_provider: &'static str,
+    pub tab_ocr: &'static str,
+    pub tab_text_processing: &'static str,
+    pub tab_overlay: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -67,6 +75,7 @@ const EN: I18n = I18n {
     corner_radius: "Corner Radius",
     bg_color: "Background Color",
     text_color: "Text Color",
+    opacity: "Opacity",
     text_align: "Text Alignment",
     align_left: "Left",
     align_center: "Center",
@@ -102,6 +111,11 @@ const EN: I18n = I18n {
     mode_game: "🎮 Game Mode",
     mode_manga: "📖 Manga/Comic Mode",
     mode_document: "📄 Document Mode",
+    tab_general: "General",
+    tab_ai_provider: "AI Provider",
+    tab_ocr: "OCR Engine",
+    tab_text_processing: "Text Processing",
+    tab_overlay: "Overlay",
 };
 
 const TH: I18n = I18n {
@@ -116,6 +130,7 @@ const TH: I18n = I18n {
     corner_radius: "ความโค้งมน",
     bg_color: "สีพื้นหลัง",
     text_color: "สีตัวอักษร",
+    opacity: "ความทึบแสง",
     text_align: "การจัดวางข้อความ",
     align_left: "ชิดซ้าย",
     align_center: "กึ่งกลาง",
@@ -151,6 +166,11 @@ const TH: I18n = I18n {
     mode_game: "🎮 โหมดเกม",
     mode_manga: "📖 โหมดมังงะ / คอมมิค",
     mode_document: "📄 โหมดเอกสาร",
+    tab_general: "ทั่วไป",
+    tab_ai_provider: "ผู้ให้บริการ AI",
+    tab_ocr: "เอนจิน OCR",
+    tab_text_processing: "การประมวลผลข้อความ",
+    tab_overlay: "หน้าตาซ้อนทับ",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {
