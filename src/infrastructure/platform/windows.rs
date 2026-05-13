@@ -5,11 +5,11 @@ pub struct WindowsPlatform;
 
 impl PlatformServices for WindowsPlatform {
     fn find_window_by_title(&self, title: &str) -> Option<isize> {
-        crate::infra::win32::find_window(title)
+        crate::infrastructure::win32::find_window(title)
     }
 
 
     fn boost_process_priority(&self) {
-        crate::infra::win32::boost_process_priority();
+        crate::infrastructure::win32::boost_process_priority();
     }
 }

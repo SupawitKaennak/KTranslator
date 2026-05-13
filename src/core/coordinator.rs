@@ -1,12 +1,11 @@
 use std::sync::{mpsc, Arc};
 use std::collections::HashMap;
-use anyhow::Context;
 use parking_lot::Mutex;
 use crate::core::{
     model::AppModel,
     ports::{FrameSource, Translator, OcrEngine},
-    worker::{BgResult, SlotRuntimeState, smart_hash},
-    text_cleaner::TextCleaner,
+    usecases::pipeline::TranslationPipeline,
+    worker::{BgResult, SlotRuntimeState},
 };
 
 pub struct BackgroundCoordinator {
@@ -33,7 +32,7 @@ impl BackgroundCoordinator {
         &self,
         model_arc: &Arc<Mutex<AppModel>>,
         slots_runtime: &mut Vec<SlotRuntimeState>,
-        last_errors: &mut std::collections::BTreeMap<usize, String>,
+        err_handler: &crate::core::usecases::error_handler::ErrorHandler,
         translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
     ) {
         while let Ok(result) = self.bg_rx.try_recv() {
@@ -97,7 +96,7 @@ impl BackgroundCoordinator {
                             }
                         }
                     }
-                    last_errors.remove(&slot_idx);
+                    err_handler.dismiss(slot_idx);
                 }
                 BgResult::Unchanged { slot_idx } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
@@ -192,7 +191,7 @@ impl BackgroundCoordinator {
                             let first_line = err.lines().next().unwrap_or(&err).trim().to_string();
                             format!("Region {}: {first_line}", slot_idx + 1)
                         };
-                        last_errors.insert(slot_idx, friendly);
+                        err_handler.report_simple(friendly);
                         
                         if language_version == slot.language_version {
                             slot.next_tick_at_ms = Self::now_ms() + 2000;
@@ -288,135 +287,12 @@ impl BackgroundCoordinator {
                 let ctx_for_panic = ctx_worker.clone();
                 let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
                     let tx_inner = tx.clone();
-                    let result = (|| -> anyhow::Result<BgResult> {
-                        let frame = capture.capture_rect(rect, display_id)?;
-                        // let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Analyzing...".to_string() }); // REMOVED: Too fast, causes flickering
-                        ctx_worker.request_repaint();
-                        let hash = smart_hash(&frame.data);
-                        let now = Self::now_ms();
-
-                        tracing::debug!(slot = i, hash = %hash, "Frame captured and hashed");
-
-                        // Stability Logic
-                        let is_changing = hash != stable_hash || stable_since_ms == 0;
-                        let unstable_dur = if stable_since_ms == 0 { 0 } else { now.saturating_sub(stable_since_ms) };
-                        
-                        // If we've been unstable for a long time (e.g. 1.5s), FORCE proceed.
-                        let unstable_since_start = if first_unstable_at == 0 { 0 } else { now.saturating_sub(first_unstable_at) };
-                        let force_proceed = unstable_since_start > 1500; 
-
-                        if is_changing && !force_proceed {
-                            return Ok(BgResult::HashChanged { slot_idx: i, new_hash: hash });
-                        }
-                        if !force_proceed && unstable_dur < 400 {
-                            return Ok(BgResult::WaitingDebounce { slot_idx: i });
-                        }
-                        if hash == prev_hash && prev_hash != 0 && !force_proceed {
-                            return Ok(BgResult::Unchanged { slot_idx: i });
-                        }
-
-                        tracing::info!(slot = i, "Proceeding with OCR/Translation");
-                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "Scanning Text...".to_string() });
-                        ctx_worker.request_repaint();
-                        let raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
-                        
-                        let blocks = crate::core::layout::build_blocks(raw_ocr_lines, smart_merge);
-                        
-                        let mut ocr_lines = Vec::new();
-                        let mut block_sizes = Vec::new();
-                        for block in &blocks {
-                            block_sizes.push(block.lines.len());
-                            for line in &block.lines {
-                                ocr_lines.push(line.clone());
-                            }
-                        }
-
-                        let raw_ocr_text = blocks.iter().map(|b| b.source_text.replace('\n', " ")).collect::<Vec<_>>().join("\n");
-                        let ocr_text = TextCleaner::clean(&raw_ocr_text);
-
-                        // Helper to map block-level translations back to line-level `trans_lines`
-                        let build_trans_lines = |translated: &str| -> Vec<String> {
-                            let block_translations = Self::parse_numbered_lines(translated, blocks.len());
-                            let mut trans_lines = Vec::new();
-                            for (block_idx, size) in block_sizes.iter().enumerate() {
-                                trans_lines.push(block_translations.get(block_idx).cloned().unwrap_or_default());
-                                for _ in 1..*size {
-                                    trans_lines.push(String::new());
-                                }
-                            }
-                            trans_lines
-                        };
-
-                        let cache_key = (hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
-                        {
-                            let cache = cache_arc.lock();
-                            if let Some((ocr, tra)) = cache.get(&cache_key) {
-                                let trans_lines = build_trans_lines(tra);
-                                return Ok(BgResult::CacheHit {
-                                    slot_idx: i, language_version, ocr_text: ocr.clone(), translated: tra.clone(), frame_hash: hash, ocr_lines, trans_lines
-                                });
-                            }
-                        }
-
-                        if ocr_text.is_empty() {
-                            return Ok(BgResult::Done {
-                                slot_idx: i, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(), trans_lines: Vec::new(),
-                            });
-                        }
-
-                        // --- NEW: Aggressive Text-Level Cache Check ---
-                        {
-                            let text_hash = {
-                                let mut h: u64 = 0xcbf29ce484222325;
-                                for b in ocr_text.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
-                                h
-                            };
-                            let tc_key = (text_hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
-                            let cached = { let tc = text_cache_arc.lock(); tc.get(&tc_key).cloned() };
-                            
-                            if let Some(cached_trans) = cached {
-                                let mut fc = cache_arc.lock();
-                                fc.insert(cache_key, (ocr_text.clone(), cached_trans.clone()));
-                                
-                                let trans_lines = build_trans_lines(&cached_trans);
-                                return Ok(BgResult::Done {
-                                    slot_idx: i, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines
-                                });
-                            }
-                        }
-
-                        if source_lang.as_ref().map(|s| s.0 == target_lang.0).unwrap_or(false) {
-                            let mut cache = cache_arc.lock();
-                            cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
-                            let trans_lines = build_trans_lines(&ocr_text);
-                            return Ok(BgResult::Done {
-                                slot_idx: i, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
-                            });
-                        }
-
-                        let _ = tx_inner.send(BgResult::StatusUpdate { slot_idx: i, status: "AI Translating...".to_string() });
-                        ctx_worker.request_repaint();
-                        let translated = translator.as_ref()
-                            .context("No translator provider selected")?
-                            .translate(&ocr_text, source_lang.as_ref(), &target_lang)?;
-
-                        let trans_lines = build_trans_lines(&translated);
-
-                        {
-                            let text_hash = {
-                                let mut h: u64 = 0xcbf29ce484222325;
-                                for b in ocr_text.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
-                                h
-                            };
-                            let text_cache_key = (text_hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
-                            let mut frame_cache = cache_arc.lock();
-                            frame_cache.insert(cache_key, (ocr_text.clone(), translated.clone()));
-                            drop(frame_cache);
-                            let mut text_cache = text_cache_arc.lock();
-                            text_cache.insert(text_cache_key, translated.clone());
-                        }
-                        Ok(BgResult::Done { slot_idx: i, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines })
-                    })();
+                    let result = TranslationPipeline::execute_slot(
+                        i, rect, display_id, source_lang, target_lang,
+                        capture, ocr_engine, translator, prev_hash, stable_hash,
+                        stable_since_ms, language_version, cache_arc, text_cache_arc,
+                        first_unstable_at, smart_merge, tx_inner, ctx_worker.clone(),
+                    );
 
                     match result {
                         Ok(res) => { 
@@ -438,17 +314,6 @@ impl BackgroundCoordinator {
                 }
             });
         }
-    }
-
-    /// Parse a translation response back into a Vec aligned to the original
-    /// OCR lines. Delegates to the centralized multi-strategy parser in
-    /// `prompt_builder` and applies TextCleaner post-processing.
-    fn parse_numbered_lines(raw: &str, ocr_count: usize) -> Vec<String> {
-        let mut result = crate::core::prompt_builder::parse_translation_response(raw, ocr_count);
-        for s in result.iter_mut() {
-            *s = TextCleaner::clean(s);
-        }
-        result
     }
 }
 
