@@ -60,6 +60,7 @@ pub struct I18n {
     pub tab_ai_provider: &'static str,
     pub tab_ocr: &'static str,
     pub tab_text_processing: &'static str,
+    pub tab_image_processing: &'static str,
     pub tab_overlay: &'static str,
 }
 
@@ -115,6 +116,7 @@ const EN: I18n = I18n {
     tab_ai_provider: "AI Provider",
     tab_ocr: "OCR Engine",
     tab_text_processing: "Text Processing",
+    tab_image_processing: "Image Processing",
     tab_overlay: "Overlay",
 };
 
@@ -170,6 +172,7 @@ const TH: I18n = I18n {
     tab_ai_provider: "ผู้ให้บริการ AI",
     tab_ocr: "เอนจิน OCR",
     tab_text_processing: "การประมวลผลข้อความ",
+    tab_image_processing: "การปรับแต่งภาพ (Pre-OCR)",
     tab_overlay: "หน้าตาซ้อนทับ",
 };
 
