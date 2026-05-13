@@ -77,6 +77,14 @@ pub struct SlotRuntimeState {
     pub last_capture_hide: Arc<Mutex<Option<bool>>>,
     /// Pristine copy of the last captured frame buffer stored locally in RAM for real-time Preview rendering
     pub last_frame: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
+    
+    // ── Realtime Stability Trackers ──
+    pub last_stable_ocr_text: String,
+    pub identical_frames_count: u32,
+    pub last_seen_text_at_ms: u64,
+    pub persistent_translation: Arc<Mutex<Option<String>>>,
+    pub persistent_ocr_lines: Arc<Mutex<Vec<OcrTextLine>>>,
+    pub persistent_trans_lines: Arc<Mutex<Vec<String>>>,
 }
 
 impl SlotRuntimeState {
@@ -91,6 +99,12 @@ impl SlotRuntimeState {
             first_unstable_at: 0,
             last_capture_hide: Arc::new(Mutex::new(None)),
             last_frame: Arc::new(Mutex::new(None)),
+            last_stable_ocr_text: String::new(),
+            identical_frames_count: 0,
+            last_seen_text_at_ms: 0,
+            persistent_translation: Arc::new(Mutex::new(None)),
+            persistent_ocr_lines: Arc::new(Mutex::new(Vec::new())),
+            persistent_trans_lines: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
