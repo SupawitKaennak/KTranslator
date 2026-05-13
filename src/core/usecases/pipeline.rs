@@ -40,10 +40,13 @@ impl TranslationPipeline {
         text_cache_arc: Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
         first_unstable_at: u64,
         smart_merge: bool,
+        img_proc_cfg: crate::infrastructure::settings::ImageProcessingSettings,
+        last_frame_arc: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
         status_tx: mpsc::Sender<BgResult>,
         ctx: egui::Context,
     ) -> anyhow::Result<BgResult> {
-        let frame = capture.capture_rect(rect, display_id)?;
+        let mut frame = capture.capture_rect(rect, display_id)?;
+        *last_frame_arc.lock() = Some(frame.clone());
         ctx.request_repaint();
         let hash = smart_hash(&frame.data);
         let now = now_ms();
@@ -71,7 +74,27 @@ impl TranslationPipeline {
         tracing::info!(slot = slot_idx, "Proceeding with OCR/Translation");
         let _ = status_tx.send(BgResult::StatusUpdate { slot_idx, status: "Scanning Text...".to_string() });
         ctx.request_repaint();
-        let raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
+
+        // Apply Image Pre-processing module before sending to OCR Engine
+        let (proc_data, proc_w, proc_h) = crate::core::usecases::image_processor::process_image_for_ocr(
+            &frame.data, frame.width, frame.height, &img_proc_cfg
+        );
+        frame.data = proc_data;
+        frame.width = proc_w;
+        frame.height = proc_h;
+
+        let mut raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
+        
+        // Rescale bounding boxes back to screen resolution coordinates if scaled
+        if (img_proc_cfg.resize_scale - 1.0).abs() > 0.01 {
+            let scale = img_proc_cfg.resize_scale;
+            for line in &mut raw_ocr_lines {
+                line.x /= scale;
+                line.y /= scale;
+                line.w /= scale;
+                line.h /= scale;
+            }
+        }
         
         let blocks = crate::core::layout::build_blocks(raw_ocr_lines, smart_merge);
         
