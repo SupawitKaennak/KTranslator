@@ -14,10 +14,16 @@ pub struct OpenAiTranslator {
     base_url: String,
     api_key: String,
     model: String,
+    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
 }
 
 impl OpenAiTranslator {
-    pub fn new(base_url: String, api_key: String, model: String) -> Result<Self> {
+    pub fn new(
+        base_url: String, 
+        api_key: String, 
+        model: String,
+        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    ) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .tcp_keepalive(std::time::Duration::from_secs(60))
@@ -32,6 +38,7 @@ impl OpenAiTranslator {
             base_url,
             api_key,
             model,
+            behavior,
         })
     }
 
@@ -71,7 +78,9 @@ impl Translator for OpenAiTranslator {
         }
 
         let lines: Vec<&str> = text.lines().collect();
-        let prompt = prompt_builder::build_translation_prompt(&lines, source, target);
+        let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
+        
+        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.3);
 
         let req_body = OpenAiRequest {
             model: self.model.clone(),
@@ -85,7 +94,7 @@ impl Translator for OpenAiTranslator {
                     content: prompt.user,
                 },
             ],
-            temperature: 0.3,
+            temperature: temp,
         };
 
         let endpoint = format!("{}/chat/completions", self.base_url);

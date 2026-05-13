@@ -13,10 +13,15 @@ pub struct GroqTranslator {
     client: Client,
     api_key: String,
     model: String,
+    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
 }
 
 impl GroqTranslator {
-    pub fn new(api_key: String, model: String) -> Result<Self> {
+    pub fn new(
+        api_key: String, 
+        model: String,
+        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    ) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .tcp_keepalive(std::time::Duration::from_secs(60))
@@ -27,6 +32,7 @@ impl GroqTranslator {
             client,
             api_key,
             model,
+            behavior,
         })
     }
 
@@ -77,7 +83,9 @@ impl Translator for GroqTranslator {
         }
 
         let lines: Vec<&str> = text.lines().collect();
-        let prompt = prompt_builder::build_translation_prompt(&lines, source, target);
+        let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
+        
+        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.2);
 
         let req = GroqChatRequest {
             model: self.model.clone(),
@@ -91,7 +99,7 @@ impl Translator for GroqTranslator {
                     content: prompt.user,
                 },
             ],
-            temperature: 0.2,
+            temperature: temp,
             max_tokens: 4096,
         };
 
