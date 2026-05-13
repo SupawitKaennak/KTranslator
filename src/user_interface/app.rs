@@ -263,7 +263,7 @@ impl App {
             &self.translator,
             &self.translation_cache,
             &self.text_translation_cache,
-            self.settings.smart_merge,
+            &self.settings,
             ctx.clone(),
         );
     }
@@ -281,6 +281,7 @@ impl App {
             &self.settings_ctrl,
             self.model.lock().download_progress.clone(),
             self.download_trigger_tx.clone(),
+            &self.slots_runtime,
         );
 
         let updated = settings_arc.lock().clone();
