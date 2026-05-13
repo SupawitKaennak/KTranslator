@@ -211,7 +211,7 @@ impl BackgroundCoordinator {
         translator: &Option<Arc<dyn Translator + Send + Sync>>,
         translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
         text_translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
-        smart_merge: bool,
+        settings: &crate::infrastructure::settings::Settings,
         ctx: egui::Context,
     ) {
         let now = Self::now_ms();
@@ -225,7 +225,7 @@ impl BackgroundCoordinator {
                 slots_runtime.push(SlotRuntimeState::new());
             }
 
-            // Language change detection logic (moved from app.rs)
+            // Language change detection logic
             let cur_src = slot.source_lang.as_ref().map(|l| l.0.clone());
             let cur_tgt = slot.target_lang.0.clone();
             let lang_changed = slots_runtime[i].last_langs != (cur_src.clone(), cur_tgt.clone());
@@ -255,7 +255,7 @@ impl BackgroundCoordinator {
             }
 
             slots_runtime[i].busy = true;
-            slots_runtime[i].processing = false; // Reset processing at start of every tick
+            slots_runtime[i].processing = false; 
             {
                 let mut m = model_arc.lock();
                 if let Some(s) = m.slots.get_mut(i) {
@@ -278,10 +278,12 @@ impl BackgroundCoordinator {
             let cache_arc = translation_cache.clone();
             let text_cache_arc = text_translation_cache.clone();
             let first_unstable_at = slots_runtime[i].first_unstable_at;
+            let smart_merge = settings.smart_merge;
+            let img_proc_cfg = settings.img_proc.clone();
+            let last_frame_arc = slots_runtime[i].last_frame.clone();
             
             let ctx_worker = ctx.clone();
             self.pool.execute(move || {
-                // let _ = tx.send(BgResult::StatusUpdate { slot_idx: i, status: "Taking Screenshot...".to_string() }); // REMOVED: Too fast, causes flickering
                 ctx_worker.request_repaint();
                 let tx_for_panic = tx.clone();
                 let ctx_for_panic = ctx_worker.clone();
@@ -291,7 +293,7 @@ impl BackgroundCoordinator {
                         i, rect, display_id, source_lang, target_lang,
                         capture, ocr_engine, translator, prev_hash, stable_hash,
                         stable_since_ms, language_version, cache_arc, text_cache_arc,
-                        first_unstable_at, smart_merge, tx_inner, ctx_worker.clone(),
+                        first_unstable_at, smart_merge, img_proc_cfg, last_frame_arc, tx_inner, ctx_worker.clone(),
                     );
 
                     match result {

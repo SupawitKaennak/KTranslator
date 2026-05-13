@@ -75,6 +75,8 @@ pub struct SlotRuntimeState {
     pub first_unstable_at: u64,
     /// Whether the last capture attempt resulted in an instruction to hide the overlay
     pub last_capture_hide: Arc<Mutex<Option<bool>>>,
+    /// Pristine copy of the last captured frame buffer stored locally in RAM for real-time Preview rendering
+    pub last_frame: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
 }
 
 impl SlotRuntimeState {
@@ -88,6 +90,7 @@ impl SlotRuntimeState {
             last_langs: (None, String::new()),
             first_unstable_at: 0,
             last_capture_hide: Arc::new(Mutex::new(None)),
+            last_frame: Arc::new(Mutex::new(None)),
         }
     }
 }
