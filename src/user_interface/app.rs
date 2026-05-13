@@ -440,6 +440,9 @@ impl eframe::App for App {
                         let theme_icon = if self.settings.dark_mode { "🌙" } else { "🔆" };
                         if ui.button(theme_icon).on_hover_text("Toggle Dark/Light mode").clicked() {
                             self.settings.dark_mode = !self.settings.dark_mode;
+                            if let Some(edit_arc) = &self.settings_ctrl.settings_edit {
+                                edit_arc.lock().dark_mode = self.settings.dark_mode;
+                            }
                             let mut visuals = if self.settings.dark_mode { 
                                 egui::Visuals::dark() 
                             } else { 
