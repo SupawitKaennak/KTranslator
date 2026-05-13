@@ -14,10 +14,16 @@ pub struct OpenAiTranslator {
     base_url: String,
     api_key: String,
     model: String,
+    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
 }
 
 impl OpenAiTranslator {
-    pub fn new(base_url: String, api_key: String, model: String) -> Result<Self> {
+    pub fn new(
+        base_url: String, 
+        api_key: String, 
+        model: String,
+        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    ) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .tcp_keepalive(std::time::Duration::from_secs(60))
@@ -32,7 +38,31 @@ impl OpenAiTranslator {
             base_url,
             api_key,
             model,
+            behavior,
         })
+    }
+
+    pub fn list_models(base_url: &str, api_key: &str) -> Result<Vec<String>> {
+        let client = Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
+        let endpoint = format!("{}/models", base_url.trim_end_matches('/'));
+        let mut req = client.get(&endpoint);
+        if !api_key.trim().is_empty() {
+            req = req.bearer_auth(api_key.trim());
+        }
+        let resp = req.send()?;
+        if resp.status().is_success() {
+            #[derive(serde::Deserialize)]
+            struct ModelsResp { data: Vec<ModelItem> }
+            #[derive(serde::Deserialize)]
+            struct ModelItem { id: String }
+
+            let parsed: ModelsResp = serde_json::from_str(&resp.text().unwrap_or_default())?;
+            let mut m_list: Vec<String> = parsed.data.into_iter().map(|i| i.id).collect();
+            m_list.sort();
+            Ok(m_list)
+        } else {
+            bail!("Failed to list models: {}", resp.status());
+        }
     }
 }
 
@@ -48,7 +78,9 @@ impl Translator for OpenAiTranslator {
         }
 
         let lines: Vec<&str> = text.lines().collect();
-        let prompt = prompt_builder::build_translation_prompt(&lines, source, target);
+        let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
+        
+        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.3);
 
         let req_body = OpenAiRequest {
             model: self.model.clone(),
@@ -62,7 +94,7 @@ impl Translator for OpenAiTranslator {
                     content: prompt.user,
                 },
             ],
-            temperature: 0.3,
+            temperature: temp,
         };
 
         let endpoint = format!("{}/chat/completions", self.base_url);
