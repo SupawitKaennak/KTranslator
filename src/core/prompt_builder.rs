@@ -128,6 +128,90 @@ pub fn build_translation_prompt(
     }
 }
 
+pub fn build_translation_prompt_with_behavior(
+    lines: &[&str],
+    source: Option<&LanguageTag>,
+    target: &LanguageTag,
+    behavior: Option<&crate::infrastructure::settings::TranslationBehaviorSettings>,
+) -> TranslationPrompt {
+    let mut base = build_translation_prompt(lines, source, target);
+    
+    if let Some(beh) = behavior {
+        // Apply Prompt Customization Overrides if enabled
+        if beh.custom_prompts.enabled {
+            let target_name = lang_name(target);
+            let source_name = lang_name_or_auto(source);
+            
+            base.system = beh.custom_prompts.system_prompt
+                .replace("{source_lang}", source_name)
+                .replace("{target_lang}", target_name);
+                
+            if lines.len() <= 1 {
+                let txt = lines.first().unwrap_or(&"");
+                base.user = beh.custom_prompts.single_line_user_prompt
+                    .replace("{source_lang}", source_name)
+                    .replace("{target_lang}", target_name)
+                    .replace("{text}", txt);
+            } else {
+                let mut joined_input = String::new();
+                for (i, line) in lines.iter().enumerate() {
+                    joined_input.push_str(&format!("{}. {}\n", i + 1, line));
+                }
+                base.user = beh.custom_prompts.multi_line_user_prompt
+                    .replace("{source_lang}", source_name)
+                    .replace("{target_lang}", target_name)
+                    .replace("{count}", &lines.len().to_string())
+                    .replace("{numbered_lines}", &joined_input);
+            }
+        }
+
+        let mut custom_guidance = String::new();
+        
+        // 1. Literal vs Natural slider
+        if beh.literal_natural_slider < 0.35 {
+            custom_guidance.push_str(" - Focus on highly literal accuracy, maintaining source sentence structure and idioms directly.\n");
+        } else if beh.literal_natural_slider > 0.65 {
+            custom_guidance.push_str(" - Focus on highly natural localization, seamlessly rewriting idioms for professional native flow.\n");
+        } else {
+            custom_guidance.push_str(" - Balance literal semantic fidelity with smooth, natural readability.\n");
+        }
+        
+        // 2. Preservations
+        if beh.preserve_honorifics {
+            custom_guidance.push_str(" - STRONGLY PRESERVE character honorifics (e.g. -san, -sama, senpai, sensei) as-is in the translated text.\n");
+        }
+        if beh.preserve_emojis {
+            custom_guidance.push_str(" - Retain all original emojis, kaomojis, and expressive punctuation icons.\n");
+        }
+        if beh.profanity_filter {
+            custom_guidance.push_str(" - STRICT PROFANITY FILTER: Mask or replace offensive language with professional mild expressions.\n");
+        }
+        
+        // 3. Tone
+        match beh.tone {
+            crate::infrastructure::settings::TranslationTone::Formal => custom_guidance.push_str(" - TONE: Maintain a formal, respectable, and polite voice.\n"),
+            crate::infrastructure::settings::TranslationTone::Casual => custom_guidance.push_str(" - TONE: Maintain a highly informal, casual, and lively conversational voice.\n"),
+            crate::infrastructure::settings::TranslationTone::Polite => custom_guidance.push_str(" - TONE: Use standard polite forms suitable for respectful public communication.\n"),
+            _ => {}
+        }
+        
+        // 4. Presets
+        match beh.preset {
+            crate::infrastructure::settings::TranslationStylePreset::JrpgMode => custom_guidance.push_str(" - STYLE PRESET: JRPG Mode. Use epic fantasy jargon for skills, clear crisp terms for items, and dramatic dialogue styling.\n"),
+            crate::infrastructure::settings::TranslationStylePreset::AnimeSubtitle => custom_guidance.push_str(" - STYLE PRESET: Anime Subtitle Mode. Prioritize punchy, highly dynamic, fast-paced dialog subtitles.\n"),
+            crate::infrastructure::settings::TranslationStylePreset::VisualNovel => custom_guidance.push_str(" - STYLE PRESET: Visual Novel Mode. Capture rich subtext, emotional depth, and immersive descriptive text accurately.\n"),
+            crate::infrastructure::settings::TranslationStylePreset::StreamerMode => custom_guidance.push_str(" - STYLE PRESET: Streamer Overlay Mode. Keep translations concise, readable at a glance, and strictly safe-for-work.\n"),
+            _ => {}
+        }
+        
+        if !custom_guidance.is_empty() {
+            base.system.push_str(&format!("\n\nBEHAVIOR & STYLE OVERRIDES:\n{}", custom_guidance));
+        }
+    }
+    
+    base
+}
+
 // ---------------------------------------------------------------------------
 // Response parser — multi-strategy alignment
 // ---------------------------------------------------------------------------

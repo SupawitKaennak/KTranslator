@@ -13,10 +13,15 @@ pub struct OllamaTranslator {
     client: Client,
     url: String, // e.g. "http://localhost:11434"
     model: String,
+    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
 }
 
 impl OllamaTranslator {
-    pub fn new(url: String, model: String) -> Result<Self> {
+    pub fn new(
+        url: String, 
+        model: String,
+        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    ) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(60)) // Reduced from 300s to avoid long hangs while gaming
             .tcp_keepalive(std::time::Duration::from_secs(60))
@@ -27,6 +32,7 @@ impl OllamaTranslator {
             client,
             url: url.trim_end_matches('/').to_string(),
             model,
+            behavior,
         })
     }
 
@@ -70,14 +76,16 @@ impl Translator for OllamaTranslator {
         target: &LanguageTag,
     ) -> Result<String> {
         let lines: Vec<&str> = text.lines().collect();
-        let prompt = prompt_builder::build_translation_prompt(&lines, source, target);
+        let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
+        
+        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.1);
 
-        self.call_ollama(&prompt.system, &prompt.user)
+        self.call_ollama(&prompt.system, &prompt.user, temp)
     }
 }
 
 impl OllamaTranslator {
-    fn call_ollama(&self, system_prompt: &str, user_prompt: &str) -> Result<String> {
+    fn call_ollama(&self, system_prompt: &str, user_prompt: &str, temp: f32) -> Result<String> {
         let req = OllamaChatRequest {
             model: self.model.clone(),
             messages: vec![
@@ -92,7 +100,7 @@ impl OllamaTranslator {
             ],
             stream: false,
             options: Some(OllamaOptions {
-                temperature: 0.1,
+                temperature: temp,
                 num_predict: -1,
                 repeat_penalty: 1.2,   // Penalty for repeating the same words
                 presence_penalty: 0.6, // Penalty for repeating topics/lines

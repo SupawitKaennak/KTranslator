@@ -22,17 +22,23 @@ impl TranslatorFactory {
             TranslationProvider::Gemini => GeminiTranslator::new(
                 settings.gemini_api_key.clone(),
                 settings.gemini_model.clone(),
+                Some(settings.trans_behavior.clone()),
             )
             .ok()
             .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
             TranslationProvider::Groq => {
-                GroqTranslator::new(settings.groq_api_key.clone(), settings.groq_model.clone())
-                    .ok()
-                    .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>)
+                GroqTranslator::new(
+                    settings.groq_api_key.clone(), 
+                    settings.groq_model.clone(),
+                    Some(settings.trans_behavior.clone()),
+                )
+                .ok()
+                .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>)
             }
             TranslationProvider::Ollama => OllamaTranslator::new(
                 settings.ollama_url.clone(),
                 settings.ollama_model.clone(),
+                Some(settings.trans_behavior.clone()),
             )
             .ok()
             .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
@@ -40,6 +46,7 @@ impl TranslatorFactory {
                 settings.custom_openai_url.clone(),
                 settings.custom_openai_api_key.clone(),
                 settings.custom_openai_model.clone(),
+                Some(settings.trans_behavior.clone()),
             )
             .ok()
             .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),

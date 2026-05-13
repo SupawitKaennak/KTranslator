@@ -87,6 +87,20 @@ impl Default for ImageProcessingSettings {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChineseConversionMode {
+    None,
+    SimplifiedToTraditional,
+    TraditionalToSimplified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ThaiSegmentationMode {
+    Standard,
+    DictionaryAssisted,
+    SyllableLevel,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TextProcessingSettings {
@@ -101,6 +115,19 @@ pub struct TextProcessingSettings {
     pub consonant_spam_filter: bool,
     pub kana_spam_filter: bool,
     pub punctuation_normalization: bool,
+    
+    // ── Language-Specific Processing ──
+    pub jp_merge_vertical: bool,
+    pub jp_kana_normalization: bool,
+    pub jp_remove_furigana: bool,
+    pub jp_preserve_honorifics: bool,
+    
+    pub cn_conversion: ChineseConversionMode,
+    
+    pub th_segmentation: ThaiSegmentationMode,
+    pub th_zero_width_cleanup: bool,
+    
+    pub ar_rtl_correction: bool,
 }
 
 impl Default for TextProcessingSettings {
@@ -117,6 +144,18 @@ impl Default for TextProcessingSettings {
             consonant_spam_filter: true,
             kana_spam_filter: true,
             punctuation_normalization: true,
+            
+            jp_merge_vertical: true,
+            jp_kana_normalization: true,
+            jp_remove_furigana: true,
+            jp_preserve_honorifics: false,
+            
+            cn_conversion: ChineseConversionMode::None,
+            
+            th_segmentation: ThaiSegmentationMode::Standard,
+            th_zero_width_cleanup: true,
+            
+            ar_rtl_correction: true,
         }
     }
 }
@@ -158,6 +197,196 @@ pub struct GlossaryEntry {
     pub priority: i32, // Higher priority overrides lower ones
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TranslationTone {
+    Auto,
+    Formal,
+    Casual,
+    Polite,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TranslationStylePreset {
+    Standard,
+    JrpgMode,
+    AnimeSubtitle,
+    VisualNovel,
+    StreamerMode,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TranslationBehaviorSettings {
+    pub literal_natural_slider: f32, // 0.0 (Literal) to 1.0 (Natural), default 0.5
+    pub preserve_formatting: bool,
+    pub preserve_line_breaks: bool,
+    pub preserve_punctuation: bool,
+    pub preserve_honorifics: bool,
+    pub preserve_emojis: bool,
+    pub contextual_translation: bool,
+    pub creativity: f32,             // 0.0 to 1.0, default 0.2
+    pub profanity_filter: bool,
+    pub tone: TranslationTone,
+    pub preset: TranslationStylePreset,
+    pub custom_prompts: CustomPromptSettings,
+}
+
+impl Default for TranslationBehaviorSettings {
+    fn default() -> Self {
+        Self {
+            literal_natural_slider: 0.5,
+            preserve_formatting: true,
+            preserve_line_breaks: true,
+            preserve_punctuation: true,
+            preserve_honorifics: false,
+            preserve_emojis: true,
+            contextual_translation: true,
+            creativity: 0.2,
+            profanity_filter: false,
+            tone: TranslationTone::Auto,
+            preset: TranslationStylePreset::Standard,
+            custom_prompts: CustomPromptSettings::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RealtimeStabilitySettings {
+    pub stability_threshold_frames: u32, // Wait N identical text frames before translating (typewriter debounce)
+    pub subtitle_persistence_ms: u64,    // Keep text on screen for N ms after source disappears
+    pub context_window_size: u32,        // N previous segment translations passed as context
+    pub fade_smoothing: bool,            // Apply crossfade/smoothing animations
+}
+
+impl Default for RealtimeStabilitySettings {
+    fn default() -> Self {
+        Self {
+            stability_threshold_frames: 1, // Default 1 (translates immediately on first full-text grab, or 2 for games)
+            subtitle_persistence_ms: 2500, // Hold subtitles for 2.5 seconds
+            context_window_size: 2,        // 2 prior segments
+            fade_smoothing: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PerformancePreset {
+    Eco,
+    Balanced,
+    Performance,
+    Ultra,
+    Custom,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GpuBackend {
+    Auto,
+    Cpu,
+    Cuda,
+    DirectMl,
+    TensorRt,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PerformanceSettings {
+    pub preset: PerformancePreset,
+    pub worker_threads: usize,
+    pub gpu_backend: GpuBackend,
+    pub parallel_ocr: bool,
+    pub enable_batching: bool,
+    pub memory_cleanup_interval_secs: u64,
+    pub max_cache_entries: usize,
+    pub vram_limit_mb: u32, // 0 = unlimited
+}
+
+impl Default for PerformanceSettings {
+    fn default() -> Self {
+        Self {
+            preset: PerformancePreset::Balanced,
+            worker_threads: 4,
+            gpu_backend: GpuBackend::Auto,
+            parallel_ocr: true,
+            enable_batching: true,
+            memory_cleanup_interval_secs: 300, // 5 minutes
+            max_cache_entries: 5000,
+            vram_limit_mb: 0,
+        }
+    }
+}
+
+impl PerformanceSettings {
+    pub fn apply_preset(&mut self, preset: PerformancePreset) {
+        self.preset = preset;
+        match preset {
+            PerformancePreset::Eco => {
+                self.worker_threads = 2;
+                self.parallel_ocr = false;
+                self.enable_batching = true;
+                self.memory_cleanup_interval_secs = 60;
+                self.max_cache_entries = 1000;
+                self.vram_limit_mb = 1024;
+            }
+            PerformancePreset::Balanced => {
+                self.worker_threads = 4;
+                self.parallel_ocr = true;
+                self.enable_batching = true;
+                self.memory_cleanup_interval_secs = 300;
+                self.max_cache_entries = 5000;
+                self.vram_limit_mb = 0;
+            }
+            PerformancePreset::Performance => {
+                self.worker_threads = 8;
+                self.parallel_ocr = true;
+                self.enable_batching = true;
+                self.memory_cleanup_interval_secs = 600;
+                self.max_cache_entries = 20000;
+                self.vram_limit_mb = 0;
+            }
+            PerformancePreset::Ultra => {
+                self.worker_threads = 16;
+                self.parallel_ocr = true;
+                self.enable_batching = true;
+                self.memory_cleanup_interval_secs = 1200;
+                self.max_cache_entries = 50000;
+                self.vram_limit_mb = 0;
+            }
+            PerformancePreset::Custom => {
+                // Keep values as-is to allow manual user fine-tuning
+            }
+        }
+    }
+
+    pub fn enforce_preset_locks(&mut self) {
+        // Automatically restore locked preset values if preset is not Custom
+        let current_preset = self.preset;
+        if current_preset != PerformancePreset::Custom {
+            self.apply_preset(current_preset);
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CustomPromptSettings {
+    pub enabled: bool,
+    pub system_prompt: String,
+    pub single_line_user_prompt: String,
+    pub multi_line_user_prompt: String,
+}
+
+impl Default for CustomPromptSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            system_prompt: "You are a professional manga/game translator. Translate the text to {target_lang}. Maintain professional grammar, correct capitalization, and proper punctuation. Output ONLY the translated text, no explanations, no quotes.".to_string(),
+            single_line_user_prompt: "Translate from {source_lang} to {target_lang}:\n\n{text}".to_string(),
+            multi_line_user_prompt: "Translate these {count} segments from {source_lang} to {target_lang}:\n\n{numbered_lines}".to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -195,6 +424,9 @@ pub struct Settings {
     pub txt_proc: TextProcessingSettings,
     pub regex_rules: Vec<RegexRule>,
     pub glossary_entries: Vec<GlossaryEntry>,
+    pub trans_behavior: TranslationBehaviorSettings,
+    pub realtime: RealtimeStabilitySettings,
+    pub perf: PerformanceSettings,
 }
 
 impl Default for Settings {
@@ -231,6 +463,9 @@ impl Default for Settings {
             txt_proc: TextProcessingSettings::default(),
             regex_rules: vec![],
             glossary_entries: vec![],
+            trans_behavior: TranslationBehaviorSettings::default(),
+            realtime: RealtimeStabilitySettings::default(),
+            perf: PerformanceSettings::default(),
         }
     }
 }
