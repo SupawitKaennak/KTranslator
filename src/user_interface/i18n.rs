@@ -62,6 +62,19 @@ pub struct I18n {
     pub tab_text_processing: &'static str,
     pub tab_image_processing: &'static str,
     pub tab_overlay: &'static str,
+
+    // Text Processing Details
+    pub clean_remove_dups: &'static str,
+    pub clean_merge_broken: &'static str,
+    pub clean_merge_fragments: &'static str,
+    pub clean_remove_garbage: &'static str,
+    pub clean_recurring: &'static str,
+    pub clean_repeat_char: &'static str,
+    pub clean_min_len: &'static str,
+    pub clean_spec_ratio: &'static str,
+    pub clean_consonant_spam: &'static str,
+    pub clean_kana_spam: &'static str,
+    pub clean_punc_norm: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -118,6 +131,17 @@ const EN: I18n = I18n {
     tab_text_processing: "Text Processing",
     tab_image_processing: "Image Processing",
     tab_overlay: "Overlay",
+    clean_remove_dups: "Remove Duplicate Lines",
+    clean_merge_broken: "Merge Broken Lines",
+    clean_merge_fragments: "Merge Subtitle Fragments",
+    clean_remove_garbage: "Remove OCR Garbage",
+    clean_recurring: "Recurring Text Suppression",
+    clean_repeat_char: "Repeated Character Cleanup",
+    clean_min_len: "Minimum Text Length",
+    clean_spec_ratio: "Special Character Limit Ratio",
+    clean_consonant_spam: "Consonant Spam Filter (e.g. wwwww)",
+    clean_kana_spam: "Kana Spam Cleanup (e.g. ののの)",
+    clean_punc_norm: "Punctuation Normalization",
 };
 
 const TH: I18n = I18n {
@@ -174,6 +198,17 @@ const TH: I18n = I18n {
     tab_text_processing: "การประมวลผลข้อความ",
     tab_image_processing: "การปรับแต่งภาพ (Pre-OCR)",
     tab_overlay: "หน้าตาซ้อนทับ",
+    clean_remove_dups: "ลบบรรทัดซ้ำซ้อน (ระวังพิกัดคลาดเคลื่อน)",
+    clean_merge_broken: "ผสานบรรทัดที่ขาดหาย",
+    clean_merge_fragments: "สมานเศษประโยคซับไตเติล",
+    clean_remove_garbage: "กรองอักษรขยะจาก OCR",
+    clean_recurring: "ยุบข้อความที่วนซ้ำซาก",
+    clean_repeat_char: "ยุบตัวอักษรที่รัวซ้ำๆ",
+    clean_min_len: "ความยาวอักษรขั้นต่ำ",
+    clean_spec_ratio: "สัดส่วนอักษรพิเศษสูงสุด",
+    clean_consonant_spam: "กรองสแปมพยัญชนะ (เช่น wwwww)",
+    clean_kana_spam: "กรองสแปมคานะ (เช่น ののの)",
+    clean_punc_norm: "ปรับเครื่องหมายวรรคตอนมาตรฐาน",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {

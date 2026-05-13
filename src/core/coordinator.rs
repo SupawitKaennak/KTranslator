@@ -280,6 +280,9 @@ impl BackgroundCoordinator {
             let first_unstable_at = slots_runtime[i].first_unstable_at;
             let smart_merge = settings.smart_merge;
             let img_proc_cfg = settings.img_proc.clone();
+            let txt_proc_cfg = settings.txt_proc.clone();
+            let regex_rules = settings.regex_rules.clone();
+            let glossary_entries = settings.glossary_entries.clone();
             let last_frame_arc = slots_runtime[i].last_frame.clone();
             
             let ctx_worker = ctx.clone();
@@ -293,7 +296,7 @@ impl BackgroundCoordinator {
                         i, rect, display_id, source_lang, target_lang,
                         capture, ocr_engine, translator, prev_hash, stable_hash,
                         stable_since_ms, language_version, cache_arc, text_cache_arc,
-                        first_unstable_at, smart_merge, img_proc_cfg, last_frame_arc, tx_inner, ctx_worker.clone(),
+                        first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
                     );
 
                     match result {

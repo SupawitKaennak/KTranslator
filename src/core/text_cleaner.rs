@@ -1,40 +1,92 @@
 use unicode_normalization::UnicodeNormalization;
 
+use crate::infrastructure::settings::TextProcessingSettings;
+
 pub struct TextCleaner;
 
 impl TextCleaner {
-    /// Comprehensive cleaning pipeline inspired by LunaTranslator.
-    pub fn clean(text: &str) -> String {
+    /// Line-level filter applied directly to raw OCR results to discard backgrounds or dust recognized as letters.
+    pub fn is_line_valid(line: &str, config: &TextProcessingSettings) -> bool {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return false;
+        }
+
+        // Allow standalone important question/exclamation marks regardless of length limit
+        let is_standalone_symbol = trimmed == "?" || trimmed == "!" || trimmed == "？" || trimmed == "！";
+        
+        if !is_standalone_symbol && trimmed.chars().count() < config.min_text_length {
+            return false;
+        }
+
+        if config.remove_garbage {
+            let total_chars = trimmed.chars().count() as f32;
+            let special_chars = trimmed.chars().filter(|c| !c.is_alphanumeric()).count() as f32;
+            if total_chars > 0.0 && (special_chars / total_chars) > config.special_char_ratio_limit {
+                return false;
+            }
+        }
+
+        if config.consonant_spam_filter {
+            // Filter pure repeated consonant strings like "wwwwww" or "zzzz"
+            let is_all_w = trimmed.chars().all(|c| c == 'w' || c == 'W');
+            let is_all_z = trimmed.chars().all(|c| c == 'z' || c == 'Z');
+            if (is_all_w || is_all_z) && trimmed.len() > 2 {
+                return false;
+            }
+        }
+
+        if config.kana_spam_filter {
+            // Filter repeating single kana artifacts from screentones e.g. "ののの"
+            let first_char = trimmed.chars().next().unwrap_or(' ');
+            let is_kana = (first_char as u32) >= 0x3040 && (first_char as u32) <= 0x30FF;
+            if is_kana && trimmed.chars().count() > 2 && trimmed.chars().all(|c| c == first_char) {
+                return false;
+            }
+        }
+
+        true
+    }
+
+    /// Comprehensive cleaning pipeline incorporating dynamic Setting sensitivity.
+    pub fn clean(text: &str, config: &TextProcessingSettings) -> String {
         if text.is_empty() {
             return String::new();
         }
 
         // 1. Unicode Normalization (NFKC)
-        let normalized: String = text.nfkc().collect();
+        let mut normalized: String = text.nfkc().collect();
 
-        // 2. Process each line individually, PRESERVING line count.
+        // Punctuation Normalization
+        if config.punctuation_normalization {
+            normalized = normalized.replace(",,", ",")
+                                   .replace("..", ".")
+                                   .replace("。。", "。")
+                                   .replace("！！", "！")
+                                   .replace("？？", "？");
+        }
+
+        // Process each line individually, PRESERVING line count for bounding box coordinates.
         let lines: Vec<String> = normalized
             .lines()
-            .map(|l| Self::process_single_line(l.trim()))
+            .map(|l| Self::process_single_line(l.trim(), config))
             .collect();
-
-        // NOTE: We no longer deduplicate adjacent lines globally here 
-        // because it breaks the 1-to-1 mapping with OCR boxes.
-        // The AI or the UI logic should handle spatial merging if needed.
 
         lines.join("\n")
     }
 
-    fn process_single_line(line: &str) -> String {
+    fn process_single_line(line: &str, config: &TextProcessingSettings) -> String {
         let mut s = line.to_string();
 
-        // a) Character Repetition Collapse
-        s = Self::collapse_repeated_chars(&s);
+        if config.repeated_char_collapse {
+            s = Self::collapse_repeated_chars(&s);
+        }
 
-        // b) Phrase Cycle Detection (ABCABC -> ABC)
-        s = Self::collapse_repeated_phrases(&s);
+        if config.recurring_suppression {
+            s = Self::collapse_repeated_phrases(&s);
+        }
 
-        // c) Stuttering Filter (H-H-Hello -> Hello)
+        // Stuttering Filter
         s = Self::filter_stuttering(&s);
 
         s
@@ -53,16 +105,10 @@ impl TextCleaner {
                 count += 1;
             }
 
-            // In manga/games:
-            // - "..." -> "..." (Keep up to 3)
-            // - "!!!" -> "!!!" (Keep up to 3)
-            // - "AAAAA" -> "A" (Collapse if more than 2)
-            // - "LL" -> "LL" (Keep double letters as they are common in English/Thai)
-            
             let limit = if c == '.' || c == '!' || c == '?' || c == '。' || c == '！' || c == '？' || c == '…' {
                 3
             } else if c.is_alphanumeric() {
-                if count >= 3 { 1 } else { count } // Only collapse if 3+ times
+                if count >= 3 { 1 } else { count } 
             } else {
                 1
             };
@@ -79,8 +125,6 @@ impl TextCleaner {
         if s.len() < 4 { return s.to_string(); }
         
         let result = s.to_string();
-        
-        // Try different window sizes for cycles (2 to length/2)
         let chars: Vec<char> = result.chars().collect();
         let len = chars.len();
         
@@ -137,15 +181,17 @@ mod tests {
 
     #[test]
     fn test_char_collapse() {
-        assert_eq!(TextCleaner::clean("AAAAABBB"), "AB");
-        assert_eq!(TextCleaner::clean("Hellooooo"), "Hello");
-        assert_eq!(TextCleaner::clean("Wait!!!!!!"), "Wait!!!");
+        let cfg = TextProcessingSettings::default();
+        assert_eq!(TextCleaner::clean("AAAAABBB", &cfg), "AB");
+        assert_eq!(TextCleaner::clean("Hellooooo", &cfg), "Hello");
+        assert_eq!(TextCleaner::clean("Wait!!!!!!", &cfg), "Wait!!!");
     }
 
     #[test]
     fn test_cycle_collapse() {
-        assert_eq!(TextCleaner::clean("ABCABCABC"), "ABC");
-        assert_eq!(TextCleaner::clean("ในที่สุดในที่สุด"), "ในที่สุด");
+        let cfg = TextProcessingSettings::default();
+        assert_eq!(TextCleaner::clean("ABCABCABC", &cfg), "ABC");
+        assert_eq!(TextCleaner::clean("ในที่สุดในที่สุด", &cfg), "ในที่สุด");
     }
 
 }

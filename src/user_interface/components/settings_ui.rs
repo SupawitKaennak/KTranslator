@@ -340,9 +340,182 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.heading(i18n.tab_text_processing);
     ui.add_space(8.0);
 
-    section_header(ui, "📝 Text Processing");
+    section_header(ui, "📝 Sentence / Block Layout Alignment");
     ui.add_space(4.0);
     ui.checkbox(&mut settings.smart_merge, i18n.smart_merge);
+    
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, "🧹 Post-OCR Text Cleanup Filters");
+    ui.label(egui::RichText::new("Advanced filters applied to scrub raw recognized text before entering Translation modules:").italics());
+    ui.add_space(6.0);
+
+    let tp = &mut settings.txt_proc;
+
+    egui::Grid::new("txt_proc_grid")
+        .num_columns(2)
+        .spacing([20.0, 8.0])
+        .show(ui, |ui| {
+            ui.checkbox(&mut tp.remove_duplicates, i18n.clean_remove_dups);
+            ui.checkbox(&mut tp.merge_broken_lines, i18n.clean_merge_broken);
+            ui.end_row();
+
+            ui.checkbox(&mut tp.merge_subtitle_fragments, i18n.clean_merge_fragments);
+            ui.checkbox(&mut tp.remove_garbage, i18n.clean_remove_garbage);
+            ui.end_row();
+
+            ui.checkbox(&mut tp.recurring_suppression, i18n.clean_recurring);
+            ui.checkbox(&mut tp.repeated_char_collapse, i18n.clean_repeat_char);
+            ui.end_row();
+
+            ui.checkbox(&mut tp.consonant_spam_filter, i18n.clean_consonant_spam);
+            ui.checkbox(&mut tp.kana_spam_filter, i18n.clean_kana_spam);
+            ui.end_row();
+
+            ui.checkbox(&mut tp.punctuation_normalization, i18n.clean_punc_norm);
+            ui.end_row();
+        });
+
+    ui.add_space(8.0);
+    ui.horizontal(|ui| {
+        ui.label(format!("{}:", i18n.clean_min_len));
+        ui.add(egui::Slider::new(&mut tp.min_text_length, 1..=10).suffix(" chars"));
+    });
+    
+    if tp.remove_garbage {
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.label(format!("{}:", i18n.clean_spec_ratio));
+            ui.add(egui::Slider::new(&mut tp.special_char_ratio_limit, 0.1..=1.0));
+        });
+    }
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, "🔤 Power User Regex Rule Engine");
+    ui.label(egui::RichText::new("Advanced regular expression pipeline applied to OCR blocks or output translated text:").italics());
+    ui.add_space(6.0);
+
+    let mut remove_idx = None;
+
+    for (idx, rule) in settings.regex_rules.iter_mut().enumerate() {
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut rule.enabled, format!("#{idx}"));
+                
+                egui::ComboBox::from_id_salt(format!("type_{idx}"))
+                    .selected_text(format!("{:?}", rule.rule_type))
+                    .show_ui(ui, |ui| {
+                        use crate::infrastructure::settings::RegexRuleType::*;
+                        ui.selectable_value(&mut rule.rule_type, Ignore, "Ignore (Strip pattern)");
+                        ui.selectable_value(&mut rule.rule_type, PreTranslation, "PreTranslation (Replace before AI)");
+                        ui.selectable_value(&mut rule.rule_type, Protected, "Protected (Mask word from AI)");
+                        ui.selectable_value(&mut rule.rule_type, Replace, "Replace (General cleanup)");
+                        ui.selectable_value(&mut rule.rule_type, Split, "Split (Match -> Newline)");
+                        ui.selectable_value(&mut rule.rule_type, PostTranslation, "PostTranslation (Repair output)");
+                    });
+
+                if ui.button("🗑").clicked() {
+                    remove_idx = Some(idx);
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Pattern:");
+                ui.add(egui::TextEdit::singleline(&mut rule.pattern).desired_width(140.0));
+
+                let requires_replacement = match rule.rule_type {
+                    crate::infrastructure::settings::RegexRuleType::Ignore 
+                    | crate::infrastructure::settings::RegexRuleType::Split 
+                    | crate::infrastructure::settings::RegexRuleType::Protected => false,
+                    _ => true,
+                };
+
+                if requires_replacement {
+                    ui.label("Replace:");
+                    ui.add(egui::TextEdit::singleline(&mut rule.replacement).desired_width(100.0));
+                }
+            });
+        });
+        ui.add_space(4.0);
+    }
+
+    if let Some(idx) = remove_idx {
+        settings.regex_rules.remove(idx);
+    }
+
+    if ui.button("➕ Add Regex Rule").clicked() {
+        settings.regex_rules.push(crate::infrastructure::settings::RegexRule {
+            enabled: true,
+            pattern: String::new(),
+            replacement: String::new(),
+            rule_type: crate::infrastructure::settings::RegexRuleType::PreTranslation,
+        });
+    }
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, "📖 Custom Dictionary / Glossary Engine");
+    ui.label(egui::RichText::new("Enforce specific translations for characters, skills, items, slang, or memory overrides:").italics());
+    ui.add_space(6.0);
+
+    let mut remove_gloss_idx = None;
+
+    for (idx, entry) in settings.glossary_entries.iter_mut().enumerate() {
+        ui.group(|ui| {
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut entry.enabled, format!("#{idx}"));
+
+                egui::ComboBox::from_id_salt(format!("gtype_{idx}"))
+                    .selected_text(format!("{:?}", entry.entry_type))
+                    .show_ui(ui, |ui| {
+                        use crate::infrastructure::settings::GlossaryType::*;
+                        ui.selectable_value(&mut entry.entry_type, CharacterName, "Character Name");
+                        ui.selectable_value(&mut entry.entry_type, GameTerminology, "Game Terminology");
+                        ui.selectable_value(&mut entry.entry_type, SlangJargon, "Slang / Jargon");
+                        ui.selectable_value(&mut entry.entry_type, ProtectedWord, "Protected Word (Masked)");
+                        ui.selectable_value(&mut entry.entry_type, PhraseOverride, "Phrase Override (Pre-replace)");
+                        ui.selectable_value(&mut entry.entry_type, TranslationMemory, "Translation Memory (100% Hit)");
+                    });
+
+                ui.label("Prio:");
+                ui.add(egui::DragValue::new(&mut entry.priority).range(0..=100));
+
+                if ui.button("🗑").clicked() {
+                    remove_gloss_idx = Some(idx);
+                }
+            });
+
+            ui.horizontal(|ui| {
+                ui.label("Source:");
+                ui.add(egui::TextEdit::singleline(&mut entry.source).desired_width(120.0));
+
+                ui.label("Target:");
+                ui.add(egui::TextEdit::singleline(&mut entry.target).desired_width(120.0));
+            });
+        });
+        ui.add_space(4.0);
+    }
+
+    if let Some(idx) = remove_gloss_idx {
+        settings.glossary_entries.remove(idx);
+    }
+
+    if ui.button("➕ Add Glossary Entry").clicked() {
+        settings.glossary_entries.push(crate::infrastructure::settings::GlossaryEntry {
+            enabled: true,
+            source: String::new(),
+            target: String::new(),
+            entry_type: crate::infrastructure::settings::GlossaryType::GameTerminology,
+            priority: 10,
+        });
+    }
 }
 
 // ─────────────────────────────────────────────
