@@ -15,6 +15,7 @@ enum SettingsTab {
     AiProvider,
     Ocr,
     TextProcessing,
+    ImageProcessing,
     Overlay,
 }
 
@@ -26,12 +27,17 @@ pub fn show_settings_window(
     ctrl: &crate::core::usecases::settings_controller::SettingsController,
     download_progress: crate::infrastructure::asset_manager::DownloadProgress,
     download_trigger_tx: std::sync::mpsc::Sender<()>,
+    slots_runtime: &[crate::core::worker::SlotRuntimeState],
 ) -> SettingsWindowResponse {
     let close_flag = Arc::new(AtomicBool::new(false));
     
     let close_flag_inner = close_flag.clone();
     let settings_inner = settings_arc.clone();
     let ctrl_inner = ctrl.clone();
+    
+    // Extract the pristine captured frame from the first active slot that has one
+    let sample_frame = slots_runtime.iter()
+        .find_map(|slot| slot.last_frame.lock().clone());
     
     let viewport_id = egui::ViewportId::from_hash_of("settings_viewport");
 
@@ -72,6 +78,7 @@ pub fn show_settings_window(
                         (SettingsTab::AiProvider,     i18n.tab_ai_provider),
                         (SettingsTab::Ocr,            i18n.tab_ocr),
                         (SettingsTab::TextProcessing, i18n.tab_text_processing),
+                        (SettingsTab::ImageProcessing, i18n.tab_image_processing),
                         (SettingsTab::Overlay,        i18n.tab_overlay),
                     ];
 
@@ -101,6 +108,7 @@ pub fn show_settings_window(
                         SettingsTab::AiProvider => render_tab_ai_provider(ui, ctx, &mut settings, i18n, &ctrl_inner),
                         SettingsTab::Ocr => render_tab_ocr(ui, &mut settings, i18n, &download_progress, &download_trigger_tx),
                         SettingsTab::TextProcessing => render_tab_text_processing(ui, &mut settings, i18n),
+                        SettingsTab::ImageProcessing => render_tab_image_processing(ui, ctx, &mut settings, i18n, sample_frame.as_ref()),
                         SettingsTab::Overlay => render_tab_overlay(ui, &mut settings, i18n),
                     }
                 });
@@ -503,4 +511,150 @@ fn try_fetch_custom(ctx: &egui::Context, settings: &Settings, models: &Arc<Mutex
         if let Ok(list) = crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, &key) { *m.lock() = list; }
         *f.lock() = false; c.request_repaint();
     });
+}
+
+// ─────────────────────────────────────────────
+// Tab 4b: Image Processing (Pre-OCR)
+// ─────────────────────────────────────────────
+fn render_tab_image_processing(
+    ui: &mut egui::Ui,
+    ctx: &egui::Context,
+    settings: &mut Settings,
+    i18n: &crate::user_interface::i18n::I18n,
+    captured_frame: Option<&crate::core::ports::FrameRgba>,
+) {
+    ui.heading(i18n.tab_image_processing);
+    ui.add_space(8.0);
+
+    let img_proc = &mut settings.img_proc;
+
+    // --- LIVE PREVIEW SECTION ---
+    section_header(ui, "📺 Live Preview Processed Image");
+    ui.label("Real-time preview of filters applied before OCR engine extraction:");
+    ui.add_space(4.0);
+
+    // Let's handle vector allocation cleanly to satisfy strict compiler references:
+    let dummy_buffer;
+    let raw_pixels: &[u8];
+    let w;
+    let h;
+
+    if let Some(frame) = captured_frame {
+        raw_pixels = &frame.data;
+        w = frame.width;
+        h = frame.height;
+        if frame.width > 0 {
+            ui.label(egui::RichText::new(format!("📌 Using live captured frame ({}x{})", w, h)).color(egui::Color32::LIGHT_GREEN));
+        }
+    } else {
+        let fw = 400;
+        let fh = 80;
+        let mut sample = vec![240u8; (fw * fh * 4) as usize];
+        for y in 20..60 {
+            for x in 40..360 {
+                if (x / 15) % 2 == 0 && (y / 5) % 2 == 0 {
+                    let idx = ((y * fw + x) * 4) as usize;
+                    sample[idx]   = 40; 
+                    sample[idx+1] = 40; 
+                    sample[idx+2] = 40; 
+                    sample[idx+3] = 255;
+                }
+            }
+        }
+        dummy_buffer = sample;
+        raw_pixels = &dummy_buffer;
+        w = fw;
+        h = fh;
+        ui.label(egui::RichText::new("📌 Using placeholder sample text (capture screen to view live frame)").color(egui::Color32::LIGHT_YELLOW));
+    }
+    ui.add_space(4.0);
+
+    // Apply high-performance processing pipeline
+    let (processed_data, pw, ph) = crate::core::usecases::image_processor::process_image_for_ocr(
+        raw_pixels, w, h, img_proc
+    );
+
+    // Render Preview Texture on GUI
+    let color_img = egui::ColorImage::from_rgba_unmultiplied(
+        [pw as usize, ph as usize],
+        &processed_data,
+    );
+    let handle = ctx.load_texture(
+        "img_proc_preview",
+        color_img,
+        egui::TextureOptions::NEAREST, 
+    );
+
+    ui.add(egui::Image::new(&handle).max_width(ui.available_width().min(pw as f32)));
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    // --- CONTROLS SECTION ---
+    egui::Grid::new("img_proc_grid")
+        .num_columns(2)
+        .spacing([20.0, 10.0])
+        .show(ui, |ui| {
+            ui.label("Grayscale:");
+            ui.checkbox(&mut img_proc.grayscale, "Convert to Monochrome");
+            ui.end_row();
+
+            ui.label("Invert Colors:");
+            ui.checkbox(&mut img_proc.invert, "Negative Mapping (White on Black)");
+            ui.end_row();
+
+            ui.label("Binarize Threshold:");
+            ui.horizontal(|ui| {
+                ui.checkbox(&mut img_proc.binarize, "Enable");
+                if img_proc.binarize {
+                    ui.add_space(10.0);
+                    ui.add(egui::Slider::new(&mut img_proc.binary_threshold, 0..=255).text("Level"));
+                }
+            });
+            ui.end_row();
+
+            ui.label("Adaptive Threshold:");
+            ui.checkbox(&mut img_proc.adaptive_threshold, "Local Box-filter Mean (Best for gradients)");
+            ui.end_row();
+
+            ui.label("Contrast Enhancement:");
+            ui.add(egui::Slider::new(&mut img_proc.contrast, 0.0..=3.0));
+            ui.end_row();
+
+            ui.label("Brightness Adjustment:");
+            ui.add(egui::Slider::new(&mut img_proc.brightness, -255..=255));
+            ui.end_row();
+
+            ui.label("Gamma Correction:");
+            ui.add(egui::Slider::new(&mut img_proc.gamma, 0.1..=5.0));
+            ui.end_row();
+
+            ui.label("Sharpen Filter:");
+            ui.checkbox(&mut img_proc.sharpen, "3x3 Spatial Edge Boost");
+            ui.end_row();
+
+            ui.label("Denoise:");
+            ui.checkbox(&mut img_proc.denoise, "Box Smoothing Filter");
+            ui.end_row();
+
+            ui.label("Morphology Operation:");
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut img_proc.morphology, crate::infrastructure::settings::MorphologyOp::None, "None");
+                ui.radio_value(&mut img_proc.morphology, crate::infrastructure::settings::MorphologyOp::Dilation, "Dilation (Thick)");
+                ui.radio_value(&mut img_proc.morphology, crate::infrastructure::settings::MorphologyOp::Erosion, "Erosion (Thin)");
+            });
+            ui.end_row();
+
+            ui.label("Resize Scale:");
+            ui.add(egui::Slider::new(&mut img_proc.resize_scale, 0.5..=4.0).suffix("x"));
+            ui.end_row();
+
+            ui.label("Anti-alias Removal:");
+            ui.checkbox(&mut img_proc.anti_alias_removal, "Quantize Boundary Smoothing");
+            ui.end_row();
+
+            ui.label("Deskew Rotation:");
+            ui.checkbox(&mut img_proc.deskew, "Auto Alignment Correction");
+            ui.end_row();
+        });
 }
