@@ -9,14 +9,28 @@ pub struct SettingsWindowResponse {
     pub close_clicked: bool,
 }
 
+#[derive(Clone)]
+struct SlotDebugInfo {
+    status: String,
+    ocr_text: String,
+    identical_frames: u32,
+    ocr_lines_count: usize,
+    trans_lines_count: usize,
+    busy: bool,
+    processing: bool,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum SettingsTab {
     General,
     AiProvider,
+    TranslationBehavior,
+    Performance,
     Ocr,
     TextProcessing,
     ImageProcessing,
     Overlay,
+    Debugging,
 }
 
 /// Renders the settings viewport with vertical tabs.
@@ -38,6 +52,18 @@ pub fn show_settings_window(
     // Extract the pristine captured frame from the first active slot that has one
     let sample_frame = slots_runtime.iter()
         .find_map(|slot| slot.last_frame.lock().clone());
+        
+    let debug_infos: Vec<SlotDebugInfo> = slots_runtime.iter().map(|slot| {
+        SlotDebugInfo {
+            status: slot.status.clone(),
+            ocr_text: slot.last_stable_ocr_text.clone(),
+            identical_frames: slot.identical_frames_count,
+            ocr_lines_count: slot.persistent_ocr_lines.lock().len(),
+            trans_lines_count: slot.persistent_trans_lines.lock().len(),
+            busy: slot.busy,
+            processing: slot.processing,
+        }
+    }).collect();
     
     let viewport_id = egui::ViewportId::from_hash_of("settings_viewport");
 
@@ -45,7 +71,7 @@ pub fn show_settings_window(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title("KTranslator - Settings")
-            .with_inner_size([640.0, 500.0])
+            .with_inner_size([720.0, 500.0])
             .with_resizable(true)
             .with_always_on_top(),
         move |ctx, _| {
@@ -64,11 +90,11 @@ pub fn show_settings_window(
             // ── Left Sidebar (Vertical Tabs) ──
             egui::SidePanel::left("settings_tabs_panel")
                 .resizable(false)
-                .exact_width(150.0)
+                .exact_width(200.0)
                 .frame(egui::Frame::side_top_panel(ctx.style().as_ref()).inner_margin(8.0))
                 .show(ctx, |ui| {
                     ui.add_space(8.0);
-                    ui.heading(egui::RichText::new(format!("⚙ {}", i18n.settings)).strong());
+                    ui.heading(egui::RichText::new(format!("{}", i18n.settings)).strong());
                     ui.add_space(12.0);
                     ui.separator();
                     ui.add_space(8.0);
@@ -76,10 +102,13 @@ pub fn show_settings_window(
                     let tabs = [
                         (SettingsTab::General,        i18n.tab_general),
                         (SettingsTab::AiProvider,     i18n.tab_ai_provider),
+                        (SettingsTab::TranslationBehavior, i18n.tab_translation_behavior),
+                        (SettingsTab::Performance,    i18n.tab_performance),
                         (SettingsTab::Ocr,            i18n.tab_ocr),
                         (SettingsTab::TextProcessing, i18n.tab_text_processing),
                         (SettingsTab::ImageProcessing, i18n.tab_image_processing),
                         (SettingsTab::Overlay,        i18n.tab_overlay),
+                        (SettingsTab::Debugging,      i18n.tab_debugging),
                     ];
 
                     for (tab, label) in tabs {
@@ -106,10 +135,13 @@ pub fn show_settings_window(
                     match active_tab {
                         SettingsTab::General => render_tab_general(ui, &mut settings, i18n),
                         SettingsTab::AiProvider => render_tab_ai_provider(ui, ctx, &mut settings, i18n, &ctrl_inner),
+                        SettingsTab::TranslationBehavior => render_tab_translation_behavior(ui, &mut settings, i18n),
+                        SettingsTab::Performance => render_tab_performance(ui, &mut settings, i18n),
                         SettingsTab::Ocr => render_tab_ocr(ui, &mut settings, i18n, &download_progress, &download_trigger_tx),
                         SettingsTab::TextProcessing => render_tab_text_processing(ui, &mut settings, i18n),
                         SettingsTab::ImageProcessing => render_tab_image_processing(ui, ctx, &mut settings, i18n, sample_frame.as_ref()),
                         SettingsTab::Overlay => render_tab_overlay(ui, &mut settings, i18n),
+                        SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
                     }
                 });
             });
@@ -128,7 +160,7 @@ fn render_tab_general(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
     ui.heading(i18n.tab_general);
     ui.add_space(8.0);
 
-    section_header(ui, &format!("🌐 {}", i18n.ui_language));
+    section_header(ui, &format!("{}", i18n.ui_language));
     egui::ComboBox::from_id_salt("ui_lang_combo")
         .width(200.0)
         .selected_text(match settings.ui_language {
@@ -144,7 +176,7 @@ fn render_tab_general(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
 
 
     ui.add_space(12.0);
-    section_header(ui, "📸 Capture");
+    section_header(ui, "Capture");
     let mut allow = !settings.hide_from_capture;
     if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
         settings.hide_from_capture = !allow;
@@ -185,27 +217,27 @@ fn render_tab_ai_provider(
     // Show config section for the selected provider
     match settings.provider {
         TranslationProvider::Gemini => {
-            section_header(ui, "⚙ Gemini Configuration");
+            section_header(ui, "Gemini Configuration");
             render_api_key_field(ui, i18n, &mut settings.gemini_api_key, &ctrl.gemini_models, &ctrl.gemini_fetching);
             try_fetch_gemini(ctx, settings, &ctrl.gemini_models, &ctrl.gemini_fetching);
             if !settings.gemini_api_key.trim().is_empty() {
                 render_model_dropdown(ui, i18n, "gemini_mdl", &mut settings.gemini_model, &ctrl.gemini_models, &ctrl.gemini_fetching);
             }
             ui.add_space(4.0);
-            ui.hyperlink_to("🔑 Get Gemini API Key", "https://aistudio.google.com/app/apikey");
+            ui.hyperlink_to("Get Gemini API Key", "https://aistudio.google.com/app/apikey");
         }
         TranslationProvider::Groq => {
-            section_header(ui, "⚙ Groq Configuration");
+            section_header(ui, "Groq Configuration");
             render_api_key_field(ui, i18n, &mut settings.groq_api_key, &ctrl.groq_models, &ctrl.groq_fetching);
             try_fetch_groq(ctx, settings, &ctrl.groq_models, &ctrl.groq_fetching);
             if !settings.groq_api_key.trim().is_empty() {
                 render_model_dropdown(ui, i18n, "groq_mdl", &mut settings.groq_model, &ctrl.groq_models, &ctrl.groq_fetching);
             }
             ui.add_space(4.0);
-            ui.hyperlink_to("🔑 Get Groq API Key", "https://console.groq.com/keys");
+            ui.hyperlink_to("Get Groq API Key", "https://console.groq.com/keys");
         }
         TranslationProvider::Ollama => {
-            section_header(ui, "⚙ Ollama Configuration");
+            section_header(ui, "Ollama Configuration");
             ui.horizontal(|ui| {
                 ui.label("Server URL:");
                 let resp = ui.text_edit_singleline(&mut settings.ollama_url);
@@ -216,10 +248,10 @@ fn render_tab_ai_provider(
                 render_model_dropdown(ui, i18n, "ollama_mdl", &mut settings.ollama_model, &ctrl.ollama_models, &ctrl.ollama_fetching);
             }
             ui.add_space(4.0);
-            ui.hyperlink_to("📦 Browse Ollama Models", "https://ollama.com/library");
+            ui.hyperlink_to("Browse Ollama Models", "https://ollama.com/library");
         }
         TranslationProvider::CustomOpenAI => {
-            section_header(ui, "⚙ Custom OpenAI-Compatible API");
+            section_header(ui, i18n.prov_custom_endpoint);
             ui.horizontal(|ui| {
                 ui.label("Base URL:");
                 let resp = ui.text_edit_singleline(&mut settings.custom_openai_url);
@@ -247,7 +279,7 @@ fn render_tab_ai_provider(
             }
             ui.add_space(4.0);
             ui.horizontal(|ui| {
-                ui.label("API Keys:");
+                ui.label(format!("{}:", i18n.prov_api_verification));
                 ui.hyperlink_to("OpenRouter", "https://openrouter.ai/keys");
                 ui.label("|");
                 ui.hyperlink_to("Together AI", "https://api.together.xyz/settings/api-keys");
@@ -256,7 +288,7 @@ fn render_tab_ai_provider(
             });
         }
         TranslationProvider::Google => {
-            section_header(ui, "ℹ Google Translate");
+            section_header(ui, "Google Translate");
             ui.label("No configuration needed. Uses free Google Translate API.");
         }
     }
@@ -275,7 +307,7 @@ fn render_tab_ocr(
     ui.heading(i18n.tab_ocr);
     ui.add_space(8.0);
 
-    section_header(ui, &format!("📋 {}", i18n.ocr));
+    section_header(ui, i18n.ocr_engine_mode_setup);
     ui.add_space(4.0);
 
     let modes = [
@@ -298,7 +330,7 @@ fn render_tab_ocr(
         crate::infrastructure::settings::OcrMode::Document => (&mut settings.document_ocr_engine, i18n.mode_document),
     };
 
-    section_header(ui, &format!("⚙ {} — {}", i18n.choose_ocr, mode_name));
+    section_header(ui, &format!("{} — {}", i18n.choose_ocr, mode_name));
     ui.add_space(4.0);
     ui.radio_value(engine_ref, crate::infrastructure::settings::OcrEngineType::Windows, i18n.ocr_windows_desc);
     ui.radio_value(engine_ref, crate::infrastructure::settings::OcrEngineType::Paddle,  i18n.ocr_paddle_desc);
@@ -340,7 +372,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.heading(i18n.tab_text_processing);
     ui.add_space(8.0);
 
-    section_header(ui, "📝 Sentence / Block Layout Alignment");
+    section_header(ui, i18n.txt_pre_trans);
     ui.add_space(4.0);
     ui.checkbox(&mut settings.smart_merge, i18n.smart_merge);
     
@@ -348,7 +380,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.separator();
     ui.add_space(8.0);
 
-    section_header(ui, "🧹 Post-OCR Text Cleanup Filters");
+    section_header(ui, i18n.txt_pre_trans);
     ui.label(egui::RichText::new("Advanced filters applied to scrub raw recognized text before entering Translation modules:").italics());
     ui.add_space(6.0);
 
@@ -396,7 +428,71 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.separator();
     ui.add_space(8.0);
 
-    section_header(ui, "🔤 Power User Regex Rule Engine");
+    // ── Language-Specific Processing Section ──
+    section_header(ui, i18n.txt_lang_spec);
+    ui.label(egui::RichText::new("Advanced rules optimized for specific writing systems and linguistic nuances:").italics());
+    ui.add_space(8.0);
+
+    egui::Grid::new("lang_spec_grid").num_columns(2).spacing([20.0, 12.0]).show(ui, |ui| {
+        // Japanese
+        ui.label(egui::RichText::new("Japanese:").strong());
+        ui.vertical(|ui| {
+            ui.checkbox(&mut tp.jp_merge_vertical, "Merge Vertical Text Layouts");
+            ui.checkbox(&mut tp.jp_kana_normalization, "Full-width Kana Normalization");
+            ui.checkbox(&mut tp.jp_remove_furigana, "Strip Furigana / Reading Rubies");
+            ui.checkbox(&mut tp.jp_preserve_honorifics, "Preserve Honorific Suffixes (-san, -kun)");
+        });
+        ui.end_row();
+
+        // Chinese
+        ui.label(egui::RichText::new("Chinese:").strong());
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_id_salt("cn_conv_sel")
+                .selected_text(match tp.cn_conversion {
+                    crate::infrastructure::settings::ChineseConversionMode::None => "No Conversion",
+                    crate::infrastructure::settings::ChineseConversionMode::SimplifiedToTraditional => "Simplified ➜ Traditional",
+                    crate::infrastructure::settings::ChineseConversionMode::TraditionalToSimplified => "Traditional ➜ Simplified",
+                })
+                .show_ui(ui, |ui| {
+                    use crate::infrastructure::settings::ChineseConversionMode::*;
+                    ui.selectable_value(&mut tp.cn_conversion, None, "No Conversion");
+                    ui.selectable_value(&mut tp.cn_conversion, SimplifiedToTraditional, "Simplified ➜ Traditional");
+                    ui.selectable_value(&mut tp.cn_conversion, TraditionalToSimplified, "Traditional ➜ Simplified");
+                });
+        });
+        ui.end_row();
+
+        // Thai
+        ui.label(egui::RichText::new("Thai:").strong());
+        ui.vertical(|ui| {
+            egui::ComboBox::from_id_salt("th_seg_sel")
+                .selected_text(match tp.th_segmentation {
+                    crate::infrastructure::settings::ThaiSegmentationMode::Standard => "Standard Space Split",
+                    crate::infrastructure::settings::ThaiSegmentationMode::DictionaryAssisted => "Dictionary-Assisted Word Break",
+                    crate::infrastructure::settings::ThaiSegmentationMode::SyllableLevel => "Syllable-Level Tokenization",
+                })
+                .show_ui(ui, |ui| {
+                    use crate::infrastructure::settings::ThaiSegmentationMode::*;
+                    ui.selectable_value(&mut tp.th_segmentation, Standard, "Standard Space Split");
+                    ui.selectable_value(&mut tp.th_segmentation, DictionaryAssisted, "Dictionary-Assisted Word Break");
+                    ui.selectable_value(&mut tp.th_segmentation, SyllableLevel, "Syllable-Level Tokenization");
+                });
+            ui.add_space(4.0);
+            ui.checkbox(&mut tp.th_zero_width_cleanup, "Scrub Zero-Width / Floating Tone Marks");
+        });
+        ui.end_row();
+
+        // Arabic
+        ui.label(egui::RichText::new("Arabic:").strong());
+        ui.checkbox(&mut tp.ar_rtl_correction, "Right-to-Left (RTL) Glyph Re-ordering Correction");
+        ui.end_row();
+    });
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, i18n.txt_regex);
     ui.label(egui::RichText::new("Advanced regular expression pipeline applied to OCR blocks or output translated text:").italics());
     ui.add_space(6.0);
 
@@ -448,7 +544,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         settings.regex_rules.remove(idx);
     }
 
-    if ui.button("➕ Add Regex Rule").clicked() {
+    if ui.button("Add Regex Rule").clicked() {
         settings.regex_rules.push(crate::infrastructure::settings::RegexRule {
             enabled: true,
             pattern: String::new(),
@@ -461,7 +557,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.separator();
     ui.add_space(8.0);
 
-    section_header(ui, "📖 Custom Dictionary / Glossary Engine");
+    section_header(ui, "Custom Dictionary / Glossary Engine");
     ui.label(egui::RichText::new("Enforce specific translations for characters, skills, items, slang, or memory overrides:").italics());
     ui.add_space(6.0);
 
@@ -507,7 +603,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         settings.glossary_entries.remove(idx);
     }
 
-    if ui.button("➕ Add Glossary Entry").clicked() {
+    if ui.button("Add Glossary Entry").clicked() {
         settings.glossary_entries.push(crate::infrastructure::settings::GlossaryEntry {
             enabled: true,
             source: String::new(),
@@ -525,7 +621,7 @@ fn render_tab_overlay(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
     ui.heading(i18n.tab_overlay);
     ui.add_space(8.0);
 
-    section_header(ui, &format!("🎨 {}", i18n.appearance));
+    section_header(ui, i18n.overlay_customization);
     ui.add_space(4.0);
 
     egui::Grid::new("overlay_grid")
@@ -702,7 +798,7 @@ fn render_tab_image_processing(
     let img_proc = &mut settings.img_proc;
 
     // --- LIVE PREVIEW SECTION ---
-    section_header(ui, "📺 Live Preview Processed Image");
+    section_header(ui, "Live Preview Processed Image");
     ui.label("Real-time preview of filters applied before OCR engine extraction:");
     ui.add_space(4.0);
 
@@ -717,7 +813,7 @@ fn render_tab_image_processing(
         w = frame.width;
         h = frame.height;
         if frame.width > 0 {
-            ui.label(egui::RichText::new(format!("📌 Using live captured frame ({}x{})", w, h)).color(egui::Color32::LIGHT_GREEN));
+            ui.label(egui::RichText::new(format!("Using live captured frame ({}x{})", w, h)).color(egui::Color32::LIGHT_GREEN));
         }
     } else {
         let fw = 400;
@@ -738,7 +834,7 @@ fn render_tab_image_processing(
         raw_pixels = &dummy_buffer;
         w = fw;
         h = fh;
-        ui.label(egui::RichText::new("📌 Using placeholder sample text (capture screen to view live frame)").color(egui::Color32::LIGHT_YELLOW));
+        ui.label(egui::RichText::new("Using placeholder sample text (capture screen to view live frame)").color(egui::Color32::LIGHT_YELLOW));
     }
     ui.add_space(4.0);
 
@@ -776,7 +872,7 @@ fn render_tab_image_processing(
             ui.checkbox(&mut img_proc.invert, "Negative Mapping (White on Black)");
             ui.end_row();
 
-            ui.label("Binarize Threshold:");
+            ui.label(format!("{}:", i18n.img_binarize));
             ui.horizontal(|ui| {
                 ui.checkbox(&mut img_proc.binarize, "Enable");
                 if img_proc.binarize {
@@ -786,31 +882,31 @@ fn render_tab_image_processing(
             });
             ui.end_row();
 
-            ui.label("Adaptive Threshold:");
+            ui.label(format!("{}:", i18n.img_adaptive));
             ui.checkbox(&mut img_proc.adaptive_threshold, "Local Box-filter Mean (Best for gradients)");
             ui.end_row();
 
-            ui.label("Contrast Enhancement:");
+            ui.label(format!("{}:", i18n.img_contrast));
             ui.add(egui::Slider::new(&mut img_proc.contrast, 0.0..=3.0));
             ui.end_row();
 
-            ui.label("Brightness Adjustment:");
+            ui.label(format!("{}:", i18n.img_brightness));
             ui.add(egui::Slider::new(&mut img_proc.brightness, -255..=255));
             ui.end_row();
 
-            ui.label("Gamma Correction:");
+            ui.label(format!("{}:", i18n.img_gamma));
             ui.add(egui::Slider::new(&mut img_proc.gamma, 0.1..=5.0));
             ui.end_row();
 
-            ui.label("Sharpen Filter:");
+            ui.label(format!("{}:", i18n.img_sharpen));
             ui.checkbox(&mut img_proc.sharpen, "3x3 Spatial Edge Boost");
             ui.end_row();
 
-            ui.label("Denoise:");
+            ui.label(format!("{}:", i18n.img_denoise));
             ui.checkbox(&mut img_proc.denoise, "Box Smoothing Filter");
             ui.end_row();
 
-            ui.label("Morphology Operation:");
+            ui.label(format!("{}:", i18n.img_morphology));
             ui.horizontal(|ui| {
                 ui.radio_value(&mut img_proc.morphology, crate::infrastructure::settings::MorphologyOp::None, "None");
                 ui.radio_value(&mut img_proc.morphology, crate::infrastructure::settings::MorphologyOp::Dilation, "Dilation (Thick)");
@@ -818,16 +914,323 @@ fn render_tab_image_processing(
             });
             ui.end_row();
 
-            ui.label("Resize Scale:");
+            ui.label(format!("{}:", i18n.img_resize));
             ui.add(egui::Slider::new(&mut img_proc.resize_scale, 0.5..=4.0).suffix("x"));
             ui.end_row();
 
-            ui.label("Anti-alias Removal:");
+            ui.label(format!("{}:", i18n.img_antialias));
             ui.checkbox(&mut img_proc.anti_alias_removal, "Quantize Boundary Smoothing");
             ui.end_row();
 
-            ui.label("Deskew Rotation:");
+            ui.label(format!("{}:", i18n.img_deskew));
             ui.checkbox(&mut img_proc.deskew, "Auto Alignment Correction");
             ui.end_row();
         });
+}
+
+// ─────────────────────────────────────────────
+// Tab: Translation Behavior
+// ─────────────────────────────────────────────
+fn render_tab_translation_behavior(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::user_interface::i18n::I18n) {
+    ui.heading(i18n.tab_translation_behavior);
+    ui.add_space(8.0);
+    
+    let beh = &mut settings.trans_behavior;
+
+    section_header(ui, i18n.beh_prompt_cust);
+    ui.checkbox(&mut beh.custom_prompts.enabled, "Enable Custom AI Prompts Overrides");
+    if beh.custom_prompts.enabled {
+        ui.add_space(4.0);
+        egui::CollapsingHeader::new("Edit Prompt Templates")
+            .default_open(true)
+            .show(ui, |ui| {
+                ui.label(egui::RichText::new("Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}").small().color(egui::Color32::GRAY));
+                ui.add_space(6.0);
+                
+                ui.label("System Prompt (Role & Guidelines):");
+                ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.system_prompt).desired_rows(3).desired_width(f32::INFINITY));
+                ui.add_space(6.0);
+                
+                ui.label("Single-line User Prompt Template:");
+                ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.single_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
+                ui.add_space(6.0);
+                
+                ui.label("Multi-line Batch User Prompt Template:");
+                ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.multi_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
+                ui.add_space(4.0);
+                
+                if ui.button("Reset to Default Prompts").clicked() {
+                    beh.custom_prompts = crate::infrastructure::settings::CustomPromptSettings {
+                        enabled: true,
+                        ..Default::default()
+                    };
+                }
+            });
+    }
+
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, i18n.beh_preset_modes);
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut beh.preset, crate::infrastructure::settings::TranslationStylePreset::Standard, "Standard");
+        ui.radio_value(&mut beh.preset, crate::infrastructure::settings::TranslationStylePreset::JrpgMode, "JRPG Mode");
+        ui.radio_value(&mut beh.preset, crate::infrastructure::settings::TranslationStylePreset::AnimeSubtitle, "Anime Subtitle");
+    });
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        ui.radio_value(&mut beh.preset, crate::infrastructure::settings::TranslationStylePreset::VisualNovel, "Visual Novel");
+        ui.radio_value(&mut beh.preset, crate::infrastructure::settings::TranslationStylePreset::StreamerMode, "Streamer Mode");
+    });
+    
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, i18n.beh_sliders);
+    egui::Grid::new("behavior_sliders_grid").num_columns(2).spacing([20.0, 10.0]).show(ui, |ui| {
+        ui.label("Style Balance:");
+        ui.add(egui::Slider::new(&mut beh.literal_natural_slider, 0.0..=1.0)
+            .text("Literal ↔ Natural"));
+        ui.end_row();
+        
+        ui.label("AI Creativity:");
+        ui.add(egui::Slider::new(&mut beh.creativity, 0.0..=1.0)
+            .text("Low (Strict) ↔ High"));
+        ui.end_row();
+    });
+
+    ui.add_space(12.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    section_header(ui, i18n.beh_tone_rules);
+    ui.horizontal(|ui| {
+        ui.label("Voice Tone:");
+        egui::ComboBox::from_id_salt("tone_combobox")
+            .selected_text(format!("{:?}", beh.tone))
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut beh.tone, crate::infrastructure::settings::TranslationTone::Auto, "Auto");
+                ui.selectable_value(&mut beh.tone, crate::infrastructure::settings::TranslationTone::Formal, "Formal / Polite");
+                ui.selectable_value(&mut beh.tone, crate::infrastructure::settings::TranslationTone::Casual, "Casual / Lively");
+                ui.selectable_value(&mut beh.tone, crate::infrastructure::settings::TranslationTone::Polite, "Standard Public Polite");
+            });
+    });
+
+    ui.add_space(10.0);
+    section_header(ui, i18n.beh_strict_pres);
+    egui::Grid::new("preservations_grid").num_columns(2).spacing([15.0, 8.0]).show(ui, |ui| {
+        ui.checkbox(&mut beh.preserve_formatting, "Preserve Formatting");
+        ui.checkbox(&mut beh.preserve_line_breaks, "Preserve Line Breaks");
+        ui.end_row();
+        
+        ui.checkbox(&mut beh.preserve_punctuation, "Preserve Punctuation");
+        ui.checkbox(&mut beh.preserve_honorifics, "Preserve Honorifics (-san)");
+        ui.end_row();
+        
+        ui.checkbox(&mut beh.preserve_emojis, "Preserve Emojis / Kaomojis");
+        ui.checkbox(&mut beh.contextual_translation, "Contextual Adaptation");
+        ui.end_row();
+        
+        ui.checkbox(&mut beh.profanity_filter, "Safe Profanity Filter");
+        ui.end_row();
+    });
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    // ── Realtime Stability Section ──
+    section_header(ui, i18n.beh_stability);
+    ui.label(egui::RichText::new("Prevent screen flickering and stabilize typewriter subtitles in games.").small().color(egui::Color32::GRAY));
+    ui.add_space(6.0);
+
+    let real = &mut settings.realtime;
+    egui::Grid::new("realtime_stability_grid").num_columns(2).spacing([20.0, 12.0]).show(ui, |ui| {
+        ui.label("Debounce Delay (Frames):");
+        ui.horizontal(|ui| {
+            ui.add(egui::Slider::new(&mut real.stability_threshold_frames, 1..=10).text("Frames"));
+            ui.label(egui::RichText::new("Wait for scrolling text to stop").small().color(egui::Color32::GRAY));
+        });
+        ui.end_row();
+
+        ui.label("Subtitle Persistence:");
+        ui.horizontal(|ui| {
+            ui.add(egui::Slider::new(&mut real.subtitle_persistence_ms, 0..=10000).step_by(500.0).text("ms"));
+            ui.label(egui::RichText::new("Hold text after dialogue disappears").small().color(egui::Color32::GRAY));
+        });
+        ui.end_row();
+
+        ui.label("Context Memory:");
+        ui.horizontal(|ui| {
+            ui.add(egui::Slider::new(&mut real.context_window_size, 0..=5).text("Segments"));
+            ui.label(egui::RichText::new("Remember past chat history").small().color(egui::Color32::GRAY));
+        });
+        ui.end_row();
+
+        ui.label("Translation Smoothing:");
+        ui.checkbox(&mut real.fade_smoothing, "Apply visual state persistence");
+        ui.end_row();
+    });
+}
+
+fn render_tab_performance(ui: &mut egui::Ui, settings: &mut crate::infrastructure::settings::Settings, i18n: &crate::user_interface::i18n::I18n) {
+    section_header(ui, i18n.tab_performance);
+    ui.label(egui::RichText::new("Fine-tune thread execution, hardware acceleration, and cache footprints for maximal frame stability.").small().color(egui::Color32::GRAY));
+    ui.add_space(12.0);
+
+    // Enforce default locks immediately
+    settings.perf.enforce_preset_locks();
+
+    // ── Presets Selector ──
+    ui.label(egui::RichText::new("Power & Speed Preset").strong());
+    ui.add_space(4.0);
+    ui.horizontal(|ui| {
+        use crate::infrastructure::settings::PerformancePreset;
+        let mut curr_preset = settings.perf.preset;
+        
+        let presets = [
+            (PerformancePreset::Eco, "Eco", "Minimal CPU & VRAM usage"),
+            (PerformancePreset::Balanced, "Balanced", "Optimal auto-tuned resources"),
+            (PerformancePreset::Performance, "Performance", "High speed thread scheduling"),
+            (PerformancePreset::Ultra, "Ultra", "Maximal cores & memory limits"),
+            (PerformancePreset::Custom, "Custom", "Unlock manual fine-tuning overrides"),
+        ];
+
+        for (p, label, tooltip) in presets {
+            if ui.selectable_value(&mut curr_preset, p, label).on_hover_text(tooltip).clicked() {
+                settings.perf.apply_preset(p);
+            }
+        }
+    });
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    // ── Detailed Controls (Locked unless Custom) ──
+    let is_custom = settings.perf.preset == crate::infrastructure::settings::PerformancePreset::Custom;
+    let perf = &mut settings.perf;
+    
+    egui::Grid::new("performance_tuning_grid").num_columns(2).spacing([20.0, 12.0]).show(ui, |ui| {
+        ui.label(format!("{}:", i18n.perf_threads));
+        ui.horizontal(|ui| {
+            ui.add_enabled(is_custom, egui::Slider::new(&mut perf.worker_threads, 1..=32).text("Threads"));
+            ui.label(egui::RichText::new("Concurrent pipelines").small().color(egui::Color32::GRAY));
+        });
+        ui.end_row();
+
+        ui.label(format!("{}:", i18n.perf_gpu));
+        ui.add_enabled_ui(is_custom, |ui| {
+            egui::ComboBox::from_id_salt("gpu_backend_sel")
+                .selected_text(format!("{:?}", perf.gpu_backend))
+                .show_ui(ui, |ui| {
+                    use crate::infrastructure::settings::GpuBackend;
+                    ui.selectable_value(&mut perf.gpu_backend, GpuBackend::Auto, "Auto-Detect");
+                    ui.selectable_value(&mut perf.gpu_backend, GpuBackend::Cpu, "CPU fallback");
+                    ui.selectable_value(&mut perf.gpu_backend, GpuBackend::Cuda, "Nvidia CUDA");
+                    ui.selectable_value(&mut perf.gpu_backend, GpuBackend::DirectMl, "DirectML (Windows)");
+                    ui.selectable_value(&mut perf.gpu_backend, GpuBackend::TensorRt, "Nvidia TensorRT");
+                });
+        });
+        ui.end_row();
+
+        ui.label(format!("{}:", i18n.perf_parallel));
+        ui.add_enabled_ui(is_custom, |ui| {
+            ui.checkbox(&mut perf.parallel_ocr, "Scan multi-regions concurrently");
+        });
+        ui.end_row();
+
+        ui.label(format!("{}:", i18n.perf_batching));
+        ui.add_enabled_ui(is_custom, |ui| {
+            ui.checkbox(&mut perf.enable_batching, "Batch short strings into single API requests");
+        });
+        ui.end_row();
+
+        ui.label(format!("{}:", i18n.perf_memory));
+        ui.horizontal(|ui| {
+            ui.add_enabled(is_custom, egui::Slider::new(&mut perf.memory_cleanup_interval_secs, 10..=3600).step_by(10.0).text("Seconds"));
+        });
+        ui.end_row();
+
+        ui.label(format!("{}:", i18n.perf_cache));
+        ui.horizontal(|ui| {
+            ui.add_enabled(is_custom, egui::Slider::new(&mut perf.max_cache_entries, 500..=100000).step_by(500.0).text("Entries"));
+        });
+        ui.end_row();
+
+        ui.label(format!("{}:", i18n.perf_vram));
+        ui.horizontal(|ui| {
+            ui.add_enabled(is_custom, egui::Slider::new(&mut perf.vram_limit_mb, 0..=24576).step_by(512.0).text("MB"));
+            let tooltip_str = if perf.vram_limit_mb == 0 { "Unlimited" } else { "Hard cap" };
+            ui.label(egui::RichText::new(tooltip_str).small().color(egui::Color32::GRAY));
+        });
+        ui.end_row();
+    });
+}
+
+// ─────────────────────────────────────────────
+// Tab: Debugging Panel
+// ─────────────────────────────────────────────
+fn render_tab_debugging(ui: &mut egui::Ui, debug_infos: &[SlotDebugInfo], i18n: &crate::user_interface::i18n::I18n) {
+    ui.heading(i18n.tab_debugging);
+    ui.add_space(8.0);
+    
+    section_header(ui, i18n.dbg_telemetry);
+    ui.label(egui::RichText::new("Real-time telemetry and debug state for internal workers.").small().color(egui::Color32::GRAY));
+    ui.add_space(10.0);
+
+    if debug_infos.is_empty() {
+        ui.label(egui::RichText::new("No active translation regions/slots available.").color(egui::Color32::DARK_GRAY));
+        return;
+    }
+
+    for (idx, info) in debug_infos.iter().enumerate() {
+        egui::CollapsingHeader::new(format!("Region Slot #{} [{}]", idx + 1, info.status))
+            .default_open(true)
+            .show(ui, |ui| {
+                egui::Grid::new(format!("debug_grid_{}", idx)).num_columns(2).spacing([20.0, 8.0]).show(ui, |ui| {
+                    ui.label("Worker State:");
+                    ui.horizontal(|ui| {
+                        if info.busy {
+                            ui.label(egui::RichText::new("Capturing/OCR").color(egui::Color32::GOLD));
+                        } else if info.processing {
+                            ui.label(egui::RichText::new("Waiting AI").color(egui::Color32::LIGHT_BLUE));
+                        } else {
+                            ui.label(egui::RichText::new("Idle").color(egui::Color32::GREEN));
+                        }
+                        ui.label(format!("({})", info.status));
+                    });
+                    ui.end_row();
+
+                    ui.label("Debounce Counter:");
+                    ui.label(format!("{} frames identical", info.identical_frames));
+                    ui.end_row();
+
+                    ui.label("Persistent OCR Lines:");
+                    ui.label(format!("{} entries mapped", info.ocr_lines_count));
+                    ui.end_row();
+
+                    ui.label("Persistent Trans Lines:");
+                    ui.label(format!("{} entries mapped", info.trans_lines_count));
+                    ui.end_row();
+
+                    ui.label("Processed OCR Output:");
+                    ui.end_row();
+                });
+
+                ui.add_space(4.0);
+                egui::Frame::default()
+                    .fill(ui.visuals().extreme_bg_color)
+                    .inner_margin(6.0)
+                    .show(ui, |ui| {
+                        let text_to_show = if info.ocr_text.is_empty() { "<Empty>" } else { &info.ocr_text };
+                        ui.label(egui::RichText::new(text_to_show).monospace().size(12.0));
+                    });
+                
+                ui.add_space(8.0);
+            });
+            ui.add_space(6.0);
+    }
 }
