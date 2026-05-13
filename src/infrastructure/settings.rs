@@ -89,6 +89,77 @@ impl Default for ImageProcessingSettings {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct TextProcessingSettings {
+    pub remove_duplicates: bool,
+    pub merge_broken_lines: bool,
+    pub merge_subtitle_fragments: bool,
+    pub remove_garbage: bool,
+    pub recurring_suppression: bool,
+    pub repeated_char_collapse: bool,
+    pub min_text_length: usize,
+    pub special_char_ratio_limit: f32, // 0.0 - 1.0
+    pub consonant_spam_filter: bool,
+    pub kana_spam_filter: bool,
+    pub punctuation_normalization: bool,
+}
+
+impl Default for TextProcessingSettings {
+    fn default() -> Self {
+        Self {
+            remove_duplicates: false, // Keep false by default to ensure 1-to-1 layout bounding box mapping
+            merge_broken_lines: true,
+            merge_subtitle_fragments: true,
+            remove_garbage: true,
+            recurring_suppression: true,
+            repeated_char_collapse: true,
+            min_text_length: 1,
+            special_char_ratio_limit: 0.6,
+            consonant_spam_filter: true,
+            kana_spam_filter: true,
+            punctuation_normalization: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum RegexRuleType {
+    PreTranslation,
+    PostTranslation,
+    Protected,
+    Ignore,
+    Replace,
+    Split,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RegexRule {
+    pub enabled: bool,
+    pub pattern: String,
+    pub replacement: String,
+    pub rule_type: RegexRuleType,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum GlossaryType {
+    CharacterName,
+    GameTerminology,
+    ProtectedWord,
+    PhraseOverride,
+    SlangJargon,
+    TranslationMemory,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GlossaryEntry {
+    pub enabled: bool,
+    pub source: String,
+    pub target: String,
+    pub entry_type: GlossaryType,
+    pub priority: i32, // Higher priority overrides lower ones
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub provider: TranslationProvider,
     pub ocr_mode: OcrMode,
@@ -121,6 +192,9 @@ pub struct Settings {
     pub hide_from_capture: bool,
     
     pub img_proc: ImageProcessingSettings,
+    pub txt_proc: TextProcessingSettings,
+    pub regex_rules: Vec<RegexRule>,
+    pub glossary_entries: Vec<GlossaryEntry>,
 }
 
 impl Default for Settings {
@@ -154,6 +228,9 @@ impl Default for Settings {
             ui_language: UiLanguage::System,
             hide_from_capture: true,
             img_proc: ImageProcessingSettings::default(),
+            txt_proc: TextProcessingSettings::default(),
+            regex_rules: vec![],
+            glossary_entries: vec![],
         }
     }
 }
