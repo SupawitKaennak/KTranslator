@@ -4,8 +4,8 @@ use crate::core::{
     types::{LanguageTag, Rect},
 };
 use crate::core::worker::SlotRuntimeState;
-use crate::infra::settings::UiLanguage;
-use crate::ui::i18n::get_i18n;
+use crate::infrastructure::settings::UiLanguage;
+use crate::user_interface::i18n::get_i18n;
 
 pub struct SlotUiResponse {
     pub do_crop: bool,
@@ -70,7 +70,7 @@ pub fn render_slot_item(
                     }
                 }
                 
-                if ui.button(format!("🗺 {}", i18n.select_area))
+                if ui.button(i18n.select_area)
                     .on_hover_text("Drag to select a new area on the screen")
                     .clicked() 
                 {
@@ -85,7 +85,7 @@ pub fn render_slot_item(
 
         // --- SETTINGS ROW (Screen & Refresh) ---
         ui.horizontal(|ui| {
-            ui.label(format!("🖥 {}:", i18n.screen));
+            ui.label(format!("{}:", i18n.screen));
             let slot = &mut model.slots[slot_idx];
 
             egui::ComboBox::from_id_salt(format!("disp_sel_{}", slot_idx))
@@ -102,7 +102,7 @@ pub fn render_slot_item(
                 });
 
             ui.add_space(20.0);
-            ui.label(format!("⏱ {}:", i18n.refresh));
+            ui.label(format!("{}:", i18n.refresh));
             ui.add(egui::DragValue::new(&mut slot.refresh_ms).speed(10.0).suffix("ms"))
                 .on_hover_text("How often to check for screen changes");
         });
@@ -113,7 +113,7 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.label(format!("🌐 {}:", i18n.from));
+            ui.label(format!("{}:", i18n.from));
             let mut src = slot.source_lang.as_ref().map(|l| l.0.clone()).unwrap_or_default();
             egui::ComboBox::from_id_salt(format!("src_{slot_idx}"))
                 .selected_text(
@@ -130,7 +130,7 @@ pub fn render_slot_item(
             slot.source_lang = if src.is_empty() { None } else { Some(LanguageTag(src)) };
 
             ui.add_space(10.0);
-            ui.label(format!("➡️ {}:", i18n.to));
+            ui.label(format!("{}:", i18n.to));
             let mut tgt = slot.target_lang.0.clone();
             egui::ComboBox::from_id_salt(format!("tgt_{slot_idx}"))
                 .selected_text(
@@ -153,15 +153,15 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.checkbox(&mut slot.show_frame, format!("👁 {}", i18n.show_frame)).on_hover_text("Show a green border around the captured area");
+            ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame)).on_hover_text("Show a green border around the captured area");
             ui.add_space(10.0);
-            ui.checkbox(&mut slot.overlay_mode, format!("📺 {}", i18n.overlay_mode)).on_hover_text("Show translated text directly over the original text on your screen");
+            ui.checkbox(&mut slot.overlay_mode, format!("{}", i18n.overlay_mode)).on_hover_text("Show translated text directly over the original text on your screen");
             ui.add_space(20.0);
             
             let popup_btn_text = if slot.popup_open { 
-                format!("💬 {}", i18n.clear_results.replace("Clear Results", "Close Popup").replace("ล้างหน้าจอ", "ปิดหน้าต่างแยก"))
+                format!("{}", i18n.clear_results.replace("Clear Results", "Close Popup").replace("ล้างหน้าจอ", "ปิดหน้าต่างแยก"))
             } else { 
-                format!("💬 {}", i18n.open_popup) 
+                format!("{}", i18n.open_popup) 
             };
             if ui.button(popup_btn_text).on_hover_text("Toggle the in-game translation result window").clicked() {
                 slot.popup_open = !slot.popup_open;
@@ -171,7 +171,7 @@ pub fn render_slot_item(
         ui.add_space(8.0);
 
         // --- ADVANCED / POSITION ROW ---
-        egui::CollapsingHeader::new(format!("🔍 {}", i18n.manual_pos))
+        egui::CollapsingHeader::new(format!("{}", i18n.manual_pos))
             .id_salt(format!("manual_adj_{slot_idx}"))
             .default_open(false)
             .show(ui, |ui| {

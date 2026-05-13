@@ -19,10 +19,15 @@ pub struct GeminiTranslator {
     client: Client,
     api_key: String,
     model: String,
+    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
 }
 
 impl GeminiTranslator {
-    pub fn new(api_key: String, model: String) -> Result<Self> {
+    pub fn new(
+        api_key: String, 
+        model: String, 
+        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    ) -> Result<Self> {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(30))
             .tcp_keepalive(std::time::Duration::from_secs(60))
@@ -33,6 +38,7 @@ impl GeminiTranslator {
             client,
             api_key,
             model,
+            behavior,
         })
     }
 
@@ -99,17 +105,19 @@ impl Translator for GeminiTranslator {
         }
 
         let lines: Vec<&str> = text.lines().collect();
-        let prompt = prompt_builder::build_translation_prompt(&lines, source, target);
+        let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
 
         // Gemini uses a single text prompt combining system + user instructions
         let combined_prompt = format!("{}\n\n{}", prompt.system, prompt.user);
+        
+        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.1);
 
         let body = RequestBody {
             contents: vec![Content {
                 parts: vec![Part { text: combined_prompt }],
             }],
             generation_config: Some(GenerationConfig {
-                temperature: Some(0.1), // Lower for more deterministic line-by-line output
+                temperature: Some(temp), // Dynamically mapped to Translation Creativity Slider
                 max_output_tokens: Some(4096),
                 ..Default::default()
             }),

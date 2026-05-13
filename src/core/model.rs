@@ -43,7 +43,7 @@ pub struct AppModel {
     pub running: bool,
     pub slots: Vec<RegionSlot>,
     #[serde(skip)]
-    pub download_progress: crate::infra::asset_manager::DownloadProgress,
+    pub download_progress: crate::infrastructure::asset_manager::DownloadProgress,
 }
 
 impl AppModel {
@@ -75,7 +75,7 @@ impl AppModel {
         Self {
             running: false,
             slots,
-            download_progress: crate::infra::asset_manager::DownloadProgress::default(),
+            download_progress: crate::infrastructure::asset_manager::DownloadProgress::default(),
         }
     }
     pub fn add_slot(&mut self) -> usize {

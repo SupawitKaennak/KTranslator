@@ -2,8 +2,8 @@
 
 mod core;
 mod adapters;
-mod infra;
-mod ui;
+mod infrastructure;
+mod user_interface;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
@@ -46,6 +46,6 @@ async fn main() -> eframe::Result<()> {
     eframe::run_native(
         "KTranslator",
         native_options,
-        Box::new(|cc| Ok(Box::new(ui::App::new(cc)))),
+        Box::new(|cc| Ok(Box::new(user_interface::App::new(cc)))),
     )
 }
