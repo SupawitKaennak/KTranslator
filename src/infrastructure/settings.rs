@@ -22,6 +22,18 @@ pub enum OcrEngineType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PpocrVariant {
+    Mobile,
+    Server,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum PpocrDictLanguage {
+    Standard, // Chinese + English (PP-OCR default)
+    Japanese, // PP-OCR specialized Japanese dict
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OcrMode {
     Game,
     Manga,
@@ -400,6 +412,8 @@ pub struct Settings {
     pub manga_ocr_engine: OcrEngineType,
     pub document_ocr_engine: OcrEngineType,
     pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
+    pub ppocr_variant: PpocrVariant,
+    pub ppocr_dict: PpocrDictLanguage,
     pub gemini_api_key: String,
     pub gemini_model: String,
     pub groq_api_key: String,
@@ -441,6 +455,8 @@ impl Default for Settings {
             manga_ocr_engine: OcrEngineType::BuiltinPaddle,
             document_ocr_engine: OcrEngineType::Windows,
             ocr_engine: OcrEngineType::Windows,
+            ppocr_variant: PpocrVariant::Mobile,
+            ppocr_dict: PpocrDictLanguage::Standard,
             gemini_api_key: String::new(),
             gemini_model: "gemini-2.0-flash".to_string(),
             groq_api_key: String::new(),
