@@ -17,8 +17,11 @@
 - **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
 - **แปลมังงะ:** อ่านข้อความจากภาพมังงะหรือคอมมิค (รองรับตัวหนังสือแนวตั้ง/เอียง/โค้ง)
 - **Professional Manga Mode (NEW):** ระบบ AI พิเศษ (Manga-OCR + YOLOv8) เพื่อการอ่านภาษาญี่ปุ่นแนวตั้งที่แม่นยำที่สุด
-- **Auto Bubble Detection (NEW):** ระบบค้นหาลูกโป่งคำพูดอัตโนมัติ ลากกรอบคลุมทั้งหน้าแล้วปล่อยให้ AI จัดการ
+- **Auto Bubble Detection (NEW):** ระบบค้นหาลูกโป่งคำพูดอัตโนมัติ ลากกรอบคลุมทั้งหน้าแล้วปล่อยให้ AI จัดการ พร้อมระบบจัดเรียงหน้าคู่จากขวาไปซ้าย (RTL Column-Major)
+- **Intelligent Word Segmentation (NEW):** ระบบสับคำอัจฉริยะด้วยพจนานุกรม (`wordninja`) ช่วยแยกคำที่สแกนติดกันเป็นแพให้เว้นวรรคถูกต้องตามไวยากรณ์โดยอัตโนมัติ
 - **Smart Thai Word Wrap (NEW):** ระบบตัดคำไทยอัตโนมัติในลูกโป่งแนวตั้ง (Zero Width Space Injection) ช่วยให้ข้อความเรียงตัวสวยงาม
+- **AI Prompt Customization (NEW):** ปรับแต่งคำสั่ง AI (System/User Prompt) ได้อย่างอิสระ พร้อมระบบแทรกตัวแปรอัตโนมัติเพื่อควบคุมบริบทการแปล
+- **Advanced Telemetry (NEW):** แดชบอร์ดติดตามสถานะการทำงานเชิงลึกแบบเรียลไทม์สำหรับนักพัฒนา (Thread states, Debounce counters, Mapped lines)
 - **แปลบทความ:** แปลข้อความจากหน้าเว็บ เอกสาร หรือ PDF ที่ไม่สามารถก๊อปปี้ข้อความได้
 - **Smart Sentence Merge:** ระบบรวมประโยค ช่วยให้ AI เข้าใจบริบทและแปลออกมาได้ลื่นไหลเหมือนมนุษย์แปลเอง
 - **Customizable Overlay:** ปรับแต่งสีพื้นหลัง สีตัวอักษร ขนาดฟอนต์ และความโค้งมนของขอบได้ตามใจชอบ (Appearance Settings)
@@ -45,6 +48,7 @@
 - **Language:** Rust (edition 2024)
 - **UI Framework:** [egui](https://github.com/emilk/egui)
 - **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
+- **NLP Engine:** Dictionary-based Tokenizer (`wordninja`)
 - **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
 - **OCR Engines:** Windows.Media.Ocr & PaddleOCR
 - **Graphics:** Win32 API (สำหรับระบบ Overlay โปร่งใส)
@@ -84,8 +88,11 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 - **Game Translation:** Translate in-game dialogues, menus, and item descriptions.
 - **Manga/Comics:** Read manga with specialized support for vertical, stylized, or curved text.
 - **Pro Manga Mode (NEW):** Integrated **Manga-OCR + YOLOv8** for the highest accuracy in vertical Japanese recognition.
-- **Auto Bubble Detection (NEW):** AI-driven detection of speech bubbles within the selected area.
+- **Auto Bubble Detection (NEW):** AI-driven detection of speech bubbles within the selected area, featuring smart RTL Column-Major double-page sorting.
+- **Intelligent Word Segmentation (NEW):** Dictionary-based token splitting (`wordninja`) to automatically inject grammatically correct spaces into concatenated OCR strings.
 - **Smart Thai Word Wrap (NEW):** Zero Width Space injection for professional-looking text within vertical bubbles.
+- **AI Prompt Customization (NEW):** Fully adjustable System/User translation prompts with real-time variable interpolation.
+- **Advanced Telemetry (NEW):** Built-in real-time developer metrics dashboard monitoring thread states, capture hashes, and mapping layout persistence.
 - **Article/Documents:** Translate text from websites, PDFs, or images that don't allow text copying.
 - **Smart Sentence Merge:** Group multiple lines into logical sentences for human-like translation context.
 - **Customizable Overlay:** Full control over background colors, text colors, font sizes, and corner radius.
@@ -107,6 +114,7 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 ### Tech Stack
 - **Language:** Rust (edition 2024)
 - **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
+- **NLP Engine:** Dictionary-based Tokenizer (`wordninja`)
 - **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
 - **UI Framework:** [egui](https://github.com/emilk/egui)
 - **OCR Engines:** Windows.Media.Ocr & PaddleOCR
