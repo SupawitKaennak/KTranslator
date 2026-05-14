@@ -3,8 +3,7 @@
 [ภาษาไทย (Thai)](#thai) | [English](#english)
 
 ---
-<img width="2991" height="1264" alt="{A2C846C2-7E8F-483B-94F3-2D9ADCBB4C79}" src="https://github.com/user-attachments/assets/5ee0ec99-a719-4850-b45f-357b1fa399b3" />
-<br>
+<img width="1902" height="904" alt="{9B83120B-8BEC-4BE4-9075-F174DE7B11DB}" src="https://github.com/user-attachments/assets/d551b6ac-1a11-46b5-9eb0-f33ce69579be" /><br>
 
 <a name="thai"></a>
 ## ภาษาไทย (Thai)
