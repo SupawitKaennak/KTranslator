@@ -3,10 +3,7 @@
 [ภาษาไทย (Thai)](#thai) | [English](#english)
 
 ---
-<img width="1917" height="1126" alt="{DD417730-D74E-48D7-B8F4-86A07DC7E0A6}" src="https://github.com/user-attachments/assets/b46b82c1-8395-4023-9a4f-83da7191a998" /><br>
-<img width="1770" height="1068" alt="{C3BE31E9-110E-4894-8475-AFF12EEAE2B5}" src="https://github.com/user-attachments/assets/f1f0f849-1008-4acb-8806-6d7137ac9a33" /><br>
-<img width="1423" height="955" alt="{16082F6C-D588-43EA-941E-460ED3B51C34}" src="https://github.com/user-attachments/assets/e90013db-690e-4b46-a489-1640f99e9fcb" /><br>
-<img width="2554" height="1440" alt="{2A531C0F-AEC0-4498-9C81-D541733D3BD8}" src="https://github.com/user-attachments/assets/d278fe67-4039-4216-ad13-4a62af842980" /><br>
+<img width="1902" height="904" alt="{9B83120B-8BEC-4BE4-9075-F174DE7B11DB}" src="https://github.com/user-attachments/assets/d551b6ac-1a11-46b5-9eb0-f33ce69579be" /><br>
 
 <a name="thai"></a>
 ## ภาษาไทย (Thai)
@@ -14,14 +11,17 @@
 โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) เขียนด้วยภาษา Rust
 
 ### ลักษณะการใช้งาน
-- **แปลเกม:** ใช้แปลบทสนทนาหรือเมนูในเกม
-- **แปลมังงะ:** อ่านข้อความจากภาพมังงะหรือคอมมิค (รองรับตัวหนังสือแนวตั้ง/เอียง/โค้ง)
-- **Professional Manga Mode (NEW):** ระบบ AI พิเศษ (Manga-OCR + YOLOv8) เพื่อการอ่านภาษาญี่ปุ่นแนวตั้งที่แม่นยำที่สุด
-- **Auto Bubble Detection (NEW):** ระบบค้นหาลูกโป่งคำพูดอัตโนมัติ ลากกรอบคลุมทั้งหน้าแล้วปล่อยให้ AI จัดการ
-- **Smart Thai Word Wrap (NEW):** ระบบตัดคำไทยอัตโนมัติในลูกโป่งแนวตั้ง (Zero Width Space Injection) ช่วยให้ข้อความเรียงตัวสวยงาม
-- **แปลบทความ:** แปลข้อความจากหน้าเว็บ เอกสาร หรือ PDF ที่ไม่สามารถก๊อปปี้ข้อความได้
-- **Smart Sentence Merge:** ระบบรวมประโยค ช่วยให้ AI เข้าใจบริบทและแปลออกมาได้ลื่นไหลเหมือนมนุษย์แปลเอง
-- **Customizable Overlay:** ปรับแต่งสีพื้นหลัง สีตัวอักษร ขนาดฟอนต์ และความโค้งมนของขอบได้ตามใจชอบ (Appearance Settings)
+- **แปลเกม:** แปลบทสนทนา เมนู และคำอธิบายไอเทมภายในเกม
+- **แปลมังงะและคอมมิค:** ตรวจจับและแปลข้อความแนวตั้ง แนวเอียง หรือข้อความในกรอบคำพูด
+- **Manga-OCR & YOLOv8:** ตรวจจับกรอบข้อความและอ่านตัวอักษรภาษาญี่ปุ่นแนวตั้งโดยใช้โมเดล ONNX
+- **Bubble Detection & Sorting:** ตรวจจับกรอบคำพูดและจัดเรียงลำดับการอ่านจากขวาไปซ้ายและบนลงล่าง รองรับหน้าคู่ (RTL Column-Major)
+- **Word Segmentation:** แยกคำในข้อความภาษาอังกฤษที่ไม่มีการเว้นวรรคด้วยพจนานุกรม (`wordninja`)
+- **Thai Word Wrap:** แทรกอักขระเว้นวรรคความกว้างศูนย์ (Zero Width Space) เพื่อรองรับการตัดบรรทัดภาษาไทย
+- **Prompt Customization:** ปรับแต่ง System Prompt และ User Prompt พร้อมระบบแทนที่ตัวแปรบริบท
+- **Telemetry Dashboard:** แสดงข้อมูลการทำงานภายในระบบ เช่น สถานะเธรด, ตัวนับเวลา, และพิกัดเค้าโครง
+- **แปลเอกสารและหน้าเว็บ:** แปลข้อความจากรูปภาพ, PDF, หรือหน้าเว็บไซต์ที่ไม่สามารถคัดลอกข้อความได้
+- **Sentence Merge:** รวมบรรทัดข้อความที่แยกกันให้เป็นประโยคเดียวเพื่อรักษาบริบทก่อนส่งแปล
+- **Overlay Customization:** ปรับแต่งสีพื้นหลัง, สีตัวอักษร, ขนาดฟอนต์, และความโค้งของหน้าต่างแสดงผลคำแปล
 
 ### ความต้องการของระบบ (Requirements)
 
@@ -45,6 +45,7 @@
 - **Language:** Rust (edition 2024)
 - **UI Framework:** [egui](https://github.com/emilk/egui)
 - **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
+- **NLP Engine:** Dictionary-based Tokenizer (`wordninja`)
 - **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
 - **OCR Engines:** Windows.Media.Ocr & PaddleOCR
 - **Graphics:** Win32 API (สำหรับระบบ Overlay โปร่งใส)
@@ -82,13 +83,16 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 
 ### Key Features
 - **Game Translation:** Translate in-game dialogues, menus, and item descriptions.
-- **Manga/Comics:** Read manga with specialized support for vertical, stylized, or curved text.
-- **Pro Manga Mode (NEW):** Integrated **Manga-OCR + YOLOv8** for the highest accuracy in vertical Japanese recognition.
-- **Auto Bubble Detection (NEW):** AI-driven detection of speech bubbles within the selected area.
-- **Smart Thai Word Wrap (NEW):** Zero Width Space injection for professional-looking text within vertical bubbles.
-- **Article/Documents:** Translate text from websites, PDFs, or images that don't allow text copying.
-- **Smart Sentence Merge:** Group multiple lines into logical sentences for human-like translation context.
-- **Customizable Overlay:** Full control over background colors, text colors, font sizes, and corner radius.
+- **Manga & Comics:** Detect and translate vertical, slanted, or curved text within speech bubbles.
+- **Manga-OCR & YOLOv8:** Extract and recognize vertical Japanese text using specialized ONNX models.
+- **Bubble Detection & Sorting:** Detect speech bubbles and sort reading order from right-to-left and top-to-bottom for double-page spreads (RTL Column-Major).
+- **Word Segmentation:** Split unspaced English text into distinct words using a dictionary (`wordninja`).
+- **Thai Word Wrap:** Inject Zero Width Spaces into text strings to enable line-breaking for Thai script.
+- **Prompt Customization:** Modify System and User translation prompts with context variable interpolation.
+- **Telemetry Dashboard:** Display internal pipeline metrics including thread status, timing counters, and layout coordinates.
+- **Documents & Web Pages:** Translate text from uncopyable images, PDF files, or browser windows.
+- **Sentence Merge:** Concatenate separate text lines into a single string to maintain translation context.
+- **Overlay Customization:** Adjust background color, text color, font size, and window corner radius.
 
 ### System Requirements
 
@@ -107,6 +111,7 @@ A powerful Screen Translator written in Rust for seamless real-time translation.
 ### Tech Stack
 - **Language:** Rust (edition 2024)
 - **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
+- **NLP Engine:** Dictionary-based Tokenizer (`wordninja`)
 - **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
 - **UI Framework:** [egui](https://github.com/emilk/egui)
 - **OCR Engines:** Windows.Media.Ocr & PaddleOCR
