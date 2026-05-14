@@ -109,6 +109,7 @@ pub struct I18n {
     pub txt_pre_trans: &'static str,
     pub txt_lang_spec: &'static str,
     pub txt_regex: &'static str,
+    pub txt_wordninja: &'static str,
 
     // Image Processing headers
     pub img_binarize: &'static str,
@@ -217,6 +218,7 @@ const EN: I18n = I18n {
     txt_pre_trans: "Pre-Translation String Sanitization",
     txt_lang_spec: "Language-Specific Processing Protocols",
     txt_regex: "Regex Replacement Engine",
+    txt_wordninja: "Dictionary-Based Tokenizer (Wordninja)",
     img_binarize: "Binarize Threshold",
     img_adaptive: "Adaptive Threshold",
     img_contrast: "Contrast Enhancement",
@@ -319,6 +321,7 @@ const TH: I18n = I18n {
     txt_pre_trans: "การทำความสะอาดข้อความก่อนแปล",
     txt_lang_spec: "กระบวนการเฉพาะของแต่ละภาษา",
     txt_regex: "กฎการแทนที่ด้วย Regex",
+    txt_wordninja: "ระบบสับคำอัจฉริยะด้วยพจนานุกรม (Wordninja)",
     img_binarize: "ระดับการแปลงภาพขาวดำ (Binarize)",
     img_adaptive: "การปรับเกณฑ์แสงเฉพาะจุด (Adaptive Threshold)",
     img_contrast: "เพิ่มความเปรียบต่าง (Contrast)",
