@@ -10,6 +10,7 @@ use crate::core::ports::{OcrEngine, FrameRgba, OcrTextLine};
 use crate::core::types::LanguageTag;
 use std::cmp::Ordering;
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 struct BoundingBox {
     x1: f32,
@@ -142,6 +143,12 @@ impl OnnxMangaRecognizer {
         let shape = view.shape();
         let num_anchors = shape[2];
         let num_classes = shape[1] - 4;
+        tracing::debug!("YOLO model: {} anchors, {} classes", num_anchors, num_classes);
+        
+        // Determine which class_id represents "text" based on number of classes in the model
+        // Manga109 4-class: 0=body, 1=face, 2=frame, 3=text → text is class 3
+        // Single-class text detector: text is class 0
+        let text_class_id: usize = if num_classes >= 4 { 3 } else { 0 };
         
         let mut boxes = Vec::new();
         
@@ -178,8 +185,20 @@ impl OnnxMangaRecognizer {
             }
         }
         
+        tracing::debug!("YOLO raw boxes before NMS: {}, text_class_id: {}", boxes.len(), text_class_id);
+        
         let mut nms_boxes = nms(boxes, 0.45);
-        nms_boxes.retain(|b| b.class_id == 3);
+        // Only keep text class boxes with plausible manga text bubble dimensions
+        nms_boxes.retain(|b| {
+            let box_w = b.x2 - b.x1;
+            let box_h = b.y2 - b.y1;
+            // Text bubbles in manga are relatively small. Filter out oversized detections.
+            let is_bubble_size = box_w > 15.0 && box_h > 15.0
+                && box_w < (orig_w * 0.40)
+                && box_h < (orig_h * 0.50);
+            b.class_id == text_class_id && is_bubble_size
+        });
+        tracing::debug!("YOLO final text boxes: {}", nms_boxes.len());
         
         Ok(nms_boxes)
     }
@@ -268,38 +287,26 @@ impl OcrEngine for OnnxMangaRecognizer {
         let boxes = match self.detect_text_boxes(&dynamic_img) {
             Ok(b) => b,
             Err(e) => {
-                eprintln!("YOLO Detection failed: {}", e);
-                let text = self.recognize_internal(&dynamic_img)?;
-                return Ok(vec![OcrTextLine {
-                    text,
-                    x: 0.0,
-                    y: 0.0,
-                    w: frame.width as f32,
-                    h: frame.height as f32,
-                }]);
+                tracing::error!("YOLO Detection failed: {}", e);
+                return Ok(vec![]);
             }
         };
 
         if boxes.is_empty() {
-            let text = self.recognize_internal(&dynamic_img)?;
-            if text.trim().is_empty() { return Ok(vec![]); }
-            return Ok(vec![OcrTextLine {
-                text,
-                x: 0.0,
-                y: 0.0,
-                w: frame.width as f32,
-                h: frame.height as f32,
-            }]);
+            return Ok(vec![]);
         }
 
         let mut result = Vec::new();
         let mut sorted_boxes = boxes;
+        // Professional Column-Major Right-to-Left sorting tailored for Double-Page Manga spreads
         sorted_boxes.sort_by(|a, b| {
-            let row_diff = (a.y1 - b.y1).abs();
-            if row_diff > 40.0 {
-                a.y1.partial_cmp(&b.y1).unwrap_or(Ordering::Equal)
-            } else {
+            let col_diff = (a.x1 - b.x1).abs();
+            if col_diff > 120.0 {
+                // Read rightmost column first
                 b.x1.partial_cmp(&a.x1).unwrap_or(Ordering::Equal)
+            } else {
+                // Read top-to-bottom within the same vertical column
+                a.y1.partial_cmp(&b.y1).unwrap_or(Ordering::Equal)
             }
         });
 
@@ -320,29 +327,17 @@ impl OcrEngine for OnnxMangaRecognizer {
             
             let mut cleaned = text.trim().to_string();
             while cleaned.contains("....") { cleaned = cleaned.replace("....", ".."); }
-            if cleaned.is_empty() { continue; }
+            // Drop dust or single punctuation artifacts recognized from screentones to prevent downstream block-mapping misalignment
+            let valid_chars = cleaned.chars().filter(|c| c.is_alphanumeric() || (*c as u32) > 0x3000).count();
+            if cleaned.len() < 2 || valid_chars == 0 { continue; }
             
-            let mut word_wrap_friendly = String::new();
-            for c in cleaned.chars() {
-                word_wrap_friendly.push(c);
-                if !c.is_whitespace() {
-                    word_wrap_friendly.push('\u{200B}');
-                }
-            }
-
-            let mut final_w = (bbox.x2 - bbox.x1) * 0.9; 
-            let mut final_h = bbox.y2 - bbox.y1;
-            
-            if final_w < 60.0 { final_w = 60.0; }
-            if final_h < 30.0 { final_h = 30.0; }
-            
-            let cx = (bbox.x1 + bbox.x2) / 2.0;
-            let cy = (bbox.y1 + bbox.y2) / 2.0;
-            let final_x = cx - final_w / 2.0;
-            let final_y = cy - final_h / 2.0;
+            let final_w = bbox.x2 - bbox.x1;
+            let final_h = bbox.y2 - bbox.y1;
+            let final_x = bbox.x1;
+            let final_y = bbox.y1;
 
             result.push(OcrTextLine {
-                text: word_wrap_friendly,
+                text: cleaned,
                 x: final_x,
                 y: final_y,
                 w: final_w,
