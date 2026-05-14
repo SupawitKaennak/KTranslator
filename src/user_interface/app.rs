@@ -85,6 +85,9 @@ pub struct App {
     download_trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
     download_progress_rx: tokio::sync::mpsc::Receiver<crate::infrastructure::asset_manager::DownloadProgress>,
     download_progress_tx: tokio::sync::mpsc::Sender<crate::infrastructure::asset_manager::DownloadProgress>,
+
+    /// Timestamp of last cache cleanup for periodic memory management
+    last_cleanup_time: Arc<Mutex<u64>>,
 }
 
 impl App {
@@ -174,6 +177,7 @@ impl App {
             download_trigger_rx: dt_rx,
             download_progress_tx: dp_tx,
             download_progress_rx: dp_rx,
+            last_cleanup_time: Arc::new(Mutex::new(BackgroundCoordinator::now_ms())),
         }
     }
 
@@ -215,6 +219,16 @@ impl App {
         // 1. Process pending signals from popups/error window
         while let Ok(_) = self.error_dismiss_rx.try_recv() {
             self.err_handler.clear_all();
+        }
+
+        // 1a. Periodic cache cleanup based on memory_cleanup_interval_secs
+        let now = BackgroundCoordinator::now_ms();
+        let last_cleanup = *self.last_cleanup_time.lock();
+        let cleanup_interval_ms = self.settings.perf.memory_cleanup_interval_secs * 1000;
+        if now.saturating_sub(last_cleanup) >= cleanup_interval_ms {
+            self.enforce_cache_limits();
+            *self.last_cleanup_time.lock() = now;
+            tracing::info!("Periodic cache cleanup completed");
         }
 
         // 1b. Handle Download Trigger
@@ -346,11 +360,11 @@ impl App {
 
     fn ui_error_popup(&mut self, ctx: &egui::Context) {
         if !self.err_handler.has_errors() { return; }
-        
+
         let viewport_id = egui::ViewportId::from_hash_of("error_popup");
         let tx = self.error_dismiss_tx.clone();
         let errors: Vec<String> = self.err_handler.get_all_errors().into_iter().map(|e| e.message).collect();
-        
+
         ctx.show_viewport_immediate(
             viewport_id,
             egui::ViewportBuilder::default()
@@ -369,14 +383,14 @@ impl App {
                                 .strong()
                         );
                         ui.add_space(10.0);
-                        
+
                         egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
                             for err in &errors {
                                 ui.label(egui::RichText::new(err).size(14.0));
                                 ui.add_space(4.0);
                             }
                         });
-                        
+
                         ui.add_space(15.0);
                         if ui.button(egui::RichText::new(" Dismiss All Errors ").size(16.0)).clicked() {
                             let _ = tx.send(());
@@ -385,6 +399,41 @@ impl App {
                 });
             }
         );
+    }
+
+    /// Enforces cache size limits by removing oldest entries if cache exceeds max_cache_entries
+    fn enforce_cache_limits(&self) {
+        let max_entries = self.settings.perf.max_cache_entries;
+
+        // Trim translation cache
+        {
+            let cache = self.translation_cache.lock();
+            if cache.len() > max_entries {
+                drop(cache);
+                let mut cache = self.translation_cache.lock();
+                let to_remove = cache.len() - max_entries;
+                let keys: Vec<_> = cache.keys().take(to_remove).cloned().collect();
+                for key in keys {
+                    cache.remove(&key);
+                }
+                tracing::info!("Trimmed translation cache: removed {} entries", to_remove);
+            }
+        }
+
+        // Trim text translation cache
+        {
+            let cache = self.text_translation_cache.lock();
+            if cache.len() > max_entries {
+                drop(cache);
+                let mut cache = self.text_translation_cache.lock();
+                let to_remove = cache.len() - max_entries;
+                let keys: Vec<_> = cache.keys().take(to_remove).cloned().collect();
+                for key in keys {
+                    cache.remove(&key);
+                }
+                tracing::info!("Trimmed text cache: removed {} entries", to_remove);
+            }
+        }
     }
 }
 

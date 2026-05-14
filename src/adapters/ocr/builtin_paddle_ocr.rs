@@ -99,11 +99,20 @@ impl OcrEngine for BuiltinPaddleOcr {
 
         let start_time = std::time::Instant::now();
 
-        // Convert RGBA frame to RGB ImageBuffer (oar-ocr expects Rgb<u8>)
-        let img_buf = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
-            frame.width, frame.height, frame.data,
-        ).context("Failed to create image buffer from frame")?;
-        let rgb_img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> = image::DynamicImage::ImageRgba8(img_buf).to_rgb8();
+        // Convert RGBA frame directly to RGB drop alpha channel blazingly fast in a single linear vector pass
+        let src_data = &frame.data;
+        let pixel_count = (frame.width * frame.height) as usize;
+        let mut rgb_data = Vec::with_capacity(pixel_count * 3);
+        
+        for i in (0..src_data.len()).step_by(4) {
+            rgb_data.push(src_data[i]);
+            rgb_data.push(src_data[i+1]);
+            rgb_data.push(src_data[i+2]);
+        }
+        
+        let rgb_img = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(
+            frame.width, frame.height, rgb_data,
+        ).context("Failed to construct high-speed RGB buffer")?;
 
         let prep_duration = start_time.elapsed();
         let infer_start = std::time::Instant::now();
