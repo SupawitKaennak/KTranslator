@@ -39,7 +39,7 @@ impl OcrAdapterFactory {
                 }
             }
             OcrEngineType::MangaOCR => {
-                match OnnxMangaRecognizer::new("models/manga-ocr") {
+                match OnnxMangaRecognizer::new("models/manga-ocr", settings.perf.gpu_backend) {
                     Ok(engine) => (Arc::new(engine), None),
                     Err(e) => {
                         let err_msg = format!("Manga-OCR Engine Error: {e:#}");
