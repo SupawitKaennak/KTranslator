@@ -24,10 +24,11 @@ threadpool = "1.8.1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sys-locale = "0.3"
-ort = { version = "2.0.0-rc.12", features = ["copy-dylibs", "directml", "ndarray"] }
+ort = { version = "2.0.0-rc.12", features = ["copy-dylibs", "directml", "cuda", "tensorrt", "ndarray"] }
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 wordninja = "0.1"
+oar-ocr = "0.6"
 
 
 
