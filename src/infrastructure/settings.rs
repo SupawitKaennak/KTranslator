@@ -15,7 +15,9 @@ pub enum TranslationProvider {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OcrEngineType {
     Windows,
-    Paddle,
+    /// Legacy alias — old configs with "Paddle" will deserialize to BuiltinPaddle
+    #[serde(alias = "Paddle")]
+    BuiltinPaddle,
     MangaOCR,
 }
 
@@ -398,7 +400,6 @@ pub struct Settings {
     pub manga_ocr_engine: OcrEngineType,
     pub document_ocr_engine: OcrEngineType,
     pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
-    pub paddle_ocr_path: String,
     pub gemini_api_key: String,
     pub gemini_model: String,
     pub groq_api_key: String,
@@ -437,10 +438,9 @@ impl Default for Settings {
             provider: TranslationProvider::Gemini,
             ocr_mode: OcrMode::Game,
             game_ocr_engine: OcrEngineType::Windows,
-            manga_ocr_engine: OcrEngineType::Paddle,
+            manga_ocr_engine: OcrEngineType::BuiltinPaddle,
             document_ocr_engine: OcrEngineType::Windows,
             ocr_engine: OcrEngineType::Windows,
-            paddle_ocr_path: String::new(),
             gemini_api_key: String::new(),
             gemini_model: "gemini-2.0-flash".to_string(),
             groq_api_key: String::new(),

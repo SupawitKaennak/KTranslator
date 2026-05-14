@@ -333,7 +333,7 @@ fn render_tab_ocr(
     section_header(ui, &format!("{} — {}", i18n.choose_ocr, mode_name));
     ui.add_space(4.0);
     ui.radio_value(engine_ref, crate::infrastructure::settings::OcrEngineType::Windows, i18n.ocr_windows_desc);
-    ui.radio_value(engine_ref, crate::infrastructure::settings::OcrEngineType::Paddle,  i18n.ocr_paddle_desc);
+    ui.radio_value(engine_ref, crate::infrastructure::settings::OcrEngineType::BuiltinPaddle, i18n.ocr_builtin_paddle_desc);
     ui.radio_value(engine_ref, crate::infrastructure::settings::OcrEngineType::MangaOCR, i18n.ocr_manga_desc);
 
     // MangaOCR: download section
@@ -357,11 +357,18 @@ fn render_tab_ocr(
         }
     }
 
-    // PaddleOCR: path
-    if *engine_ref == crate::infrastructure::settings::OcrEngineType::Paddle {
+    // Built-in PaddleOCR: model status
+    if *engine_ref == crate::infrastructure::settings::OcrEngineType::BuiltinPaddle {
         ui.add_space(8.0);
-        ui.label("PaddleOCR-json path:");
-        ui.add(egui::TextEdit::singleline(&mut settings.paddle_ocr_path).hint_text("C:\\path\\to\\PaddleOCR-json.exe"));
+        let det_exists = std::path::Path::new("models/ppocr/det.onnx").exists();
+        let rec_exists = std::path::Path::new("models/ppocr/rec.onnx").exists();
+        let dict_exists = std::path::Path::new("models/ppocr/dict.txt").exists();
+        if det_exists && rec_exists && dict_exists {
+            ui.colored_label(egui::Color32::from_rgb(100, 255, 100), i18n.ppocr_models_found);
+        } else {
+            ui.colored_label(egui::Color32::from_rgb(255, 100, 100), i18n.ppocr_models_missing);
+            ui.label(i18n.ppocr_download_hint);
+        }
     }
 }
 
