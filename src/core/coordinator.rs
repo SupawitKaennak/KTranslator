@@ -358,7 +358,8 @@ impl BackgroundCoordinator {
             let regex_rules = settings.regex_rules.clone();
             let glossary_entries = settings.glossary_entries.clone();
             let last_frame_arc = slots_runtime[i].last_frame.clone();
-            
+            let max_cache_entries = settings.perf.max_cache_entries;
+
             let ctx_worker = ctx.clone();
             self.pool.lock().execute(move || {
                 ctx_worker.request_repaint();
@@ -371,6 +372,7 @@ impl BackgroundCoordinator {
                         capture, ocr_engine, translator, prev_hash, stable_hash,
                         stable_since_ms, language_version, cache_arc, text_cache_arc,
                         first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
+                        max_cache_entries,
                     );
 
                     match result {

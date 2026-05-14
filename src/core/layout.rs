@@ -12,9 +12,9 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine) -> bool {
     let char_size_b = get_char_size(b);
     let char_size = char_size_a.max(char_size_b);
     
-    // Expansion margin. Be more conservative to prevent merging separate bubbles.
-    let expand_y = char_size * 1.3; // Allow some vertical gap for multi-line text
-    let expand_x = char_size * 1.1; // Be strict with horizontal distance
+    // Expansion margin. Be conservative to prevent merging separate speech bubbles.
+    let expand_y = char_size * 0.8; // Tight vertical gap — avoid merging different bubbles
+    let expand_x = char_size * 0.6; // Strict horizontal distance
     
     // Sanity check: Don't merge if font sizes are wildly different (e.g. title vs subtitle)
     let size_ratio = char_size_a / char_size_b;
@@ -97,15 +97,15 @@ pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool) -> Vec<OcrTextBl
 
     // Build the merged text for each block
     for block in &mut blocks {
-        // Sort lines top-to-bottom, left-to-right to ensure logical reading order before merging
-        block.lines.sort_by(|_a, _b| {
-            // Give Y a higher weight to sort vertically first, then horizontally
-            // Note: For vertical manga text, reading order is Right-to-Left, Top-to-Bottom.
-            // But let's assume the OCR engine already returned them in a decent order.
-            // Actually, sorting might mess up PaddleOCR's natural order.
-            // Let's just trust the OCR engine's output order within the group.
-            // No sorting here to avoid breaking PaddleOCR's smart ordering.
-            std::cmp::Ordering::Equal
+        // Sort lines top-to-bottom within each block to ensure correct positional overlay alignment.
+        // This guarantees that trans_lines[i] maps to the correct bounding box.
+        block.lines.sort_by(|a, b| {
+            let y_cmp = a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal);
+            if y_cmp != std::cmp::Ordering::Equal {
+                y_cmp
+            } else {
+                a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal)
+            }
         });
         
         block.source_text = merge_text(&block.lines);
