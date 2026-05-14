@@ -8,6 +8,7 @@ use tokenizers::Tokenizer;
 
 use crate::core::ports::{OcrEngine, FrameRgba, OcrTextLine};
 use crate::core::types::LanguageTag;
+use crate::infrastructure::settings::GpuBackend;
 use std::cmp::Ordering;
 
 #[allow(dead_code)]
@@ -66,7 +67,7 @@ pub struct OnnxMangaRecognizer {
 }
 
 impl OnnxMangaRecognizer {
-    pub fn new<P: AsRef<Path>>(models_dir: P) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(models_dir: P, gpu_backend: GpuBackend) -> Result<Self> {
         let models_dir_input = models_dir.as_ref();
         let mut resolved_path = models_dir_input.to_path_buf();
         
@@ -92,9 +93,9 @@ impl OnnxMangaRecognizer {
             anyhow::bail!("Manga-OCR models not found. Please ensure the 'models' folder is present at {:?} or next to the .exe", resolved_path);
         }
 
-        let encoder = super::onnx_engine::OnnxEngine::create_session(&encoder_path)?;
-        let decoder = super::onnx_engine::OnnxEngine::create_session(&decoder_path)?;
-        let yolo = super::onnx_engine::OnnxEngine::create_session(&yolo_path)?;
+        let encoder = super::onnx_engine::OnnxEngine::create_session(&encoder_path, gpu_backend)?;
+        let decoder = super::onnx_engine::OnnxEngine::create_session(&decoder_path, gpu_backend)?;
+        let yolo = super::onnx_engine::OnnxEngine::create_session(&yolo_path, gpu_backend)?;
 
         let tokenizer = Tokenizer::from_file(tokenizer_path)
             .map_err(|e| anyhow::anyhow!("Tokenizer Error: {}", e))?;
