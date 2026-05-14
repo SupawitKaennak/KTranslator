@@ -115,6 +115,7 @@ pub struct TextProcessingSettings {
     pub consonant_spam_filter: bool,
     pub kana_spam_filter: bool,
     pub punctuation_normalization: bool,
+    pub enable_wordninja: bool,
     
     // ── Language-Specific Processing ──
     pub jp_merge_vertical: bool,
@@ -144,6 +145,7 @@ impl Default for TextProcessingSettings {
             consonant_spam_filter: true,
             kana_spam_filter: true,
             punctuation_normalization: true,
+            enable_wordninja: false,
             
             jp_merge_vertical: true,
             jp_kana_normalization: true,
