@@ -82,6 +82,10 @@ impl Translator for OpenAiTranslator {
         
         let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.3);
 
+        // Dynamically calculate budget for output tokens based on actual input length.
+        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
+        let max_tokens = estimated_tokens.clamp(128, 2048);
+
         let req_body = OpenAiRequest {
             model: self.model.clone(),
             messages: vec![
@@ -95,6 +99,7 @@ impl Translator for OpenAiTranslator {
                 },
             ],
             temperature: temp,
+            max_tokens,
         };
 
         let endpoint = format!("{}/chat/completions", self.base_url);
@@ -135,6 +140,7 @@ struct OpenAiRequest {
     model: String,
     messages: Vec<OpenAiMessage>,
     temperature: f32,
+    max_tokens: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
