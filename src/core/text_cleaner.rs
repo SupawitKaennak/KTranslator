@@ -89,14 +89,61 @@ impl TextCleaner {
         // Stuttering Filter
         s = Self::filter_stuttering(&s);
 
+        // --- OCR Fragment Merger ---
+        // Windows OCR on manga fonts often splits words into isolated characters.
+        // e.g., "ARTHURIA" → "ARTHUR I A", "TOUYA" → "TO U YA", "MILDA" → "MILD A"
+        // Merge single uppercase letters back into the previous word when both are uppercase.
+        if config.enable_wordninja {
+            let tokens: Vec<&str> = s.split_whitespace().collect();
+            if tokens.len() > 1 {
+                let mut merged: Vec<String> = Vec::new();
+                for token in &tokens {
+                    let is_short_upper = token.len() <= 2
+                        && token.chars().all(|c| c.is_ascii_uppercase());
+
+                    if is_short_upper {
+                        if let Some(prev) = merged.last_mut() {
+                            // Merge into previous if previous is also uppercase
+                            let prev_is_upper = prev.len() >= 2
+                                && prev.chars().all(|c| c.is_ascii_uppercase() || !c.is_alphabetic());
+                            if prev_is_upper {
+                                prev.push_str(token);
+                                continue;
+                            }
+                        }
+                    }
+                    merged.push(token.to_string());
+                }
+                s = merged.join(" ");
+            }
+        }
+
+        // --- Wordninja Dictionary Splitting ---
         if config.enable_wordninja {
             let mut segmented_words = Vec::new();
             for token in s.split_whitespace() {
-                // If a continuous chunk of characters is longer than 8 chars and mostly English letters, split it
+                // Split any token ≥7 chars that is mostly English letters using dictionary lookup.
+                // Wordninja's dictionary is lowercase-only, so we normalize before splitting.
                 let alpha_count = token.chars().filter(|c| c.is_ascii_alphabetic()).count();
-                if token.len() > 8 && alpha_count > 6 {
-                    let parts = wordninja::DEFAULT_MODEL.split(token);
-                    for p in parts { segmented_words.push(p.to_string()); }
+                if token.len() >= 7 && alpha_count >= 5 {
+                    let is_all_upper = token.chars().filter(|c| c.is_ascii_alphabetic()).all(|c| c.is_ascii_uppercase());
+                    let lower = token.to_lowercase();
+                    let parts = wordninja::DEFAULT_MODEL.split(&lower);
+                    // Only accept if the dictionary split it AND all parts are ≥2 chars
+                    // (reject splits that produce single-letter fragments like "a", "i")
+                    let all_parts_valid = parts.len() > 1
+                        && parts.iter().all(|p| p.len() >= 2);
+                    if all_parts_valid {
+                        for p in parts {
+                            if is_all_upper {
+                                segmented_words.push(p.to_uppercase());
+                            } else {
+                                segmented_words.push(p.to_string());
+                            }
+                        }
+                    } else {
+                        segmented_words.push(token.to_string());
+                    }
                 } else {
                     segmented_words.push(token.to_string());
                 }
@@ -207,6 +254,31 @@ mod tests {
         let cfg = TextProcessingSettings::default();
         assert_eq!(TextCleaner::clean("ABCABCABC", &cfg), "ABC");
         assert_eq!(TextCleaner::clean("ในที่สุดในที่สุด", &cfg), "ในที่สุด");
+    }
+
+    #[test]
+    fn test_wordninja_uppercase_split() {
+        let mut cfg = TextProcessingSettings::default();
+        cfg.enable_wordninja = true;
+        cfg.repeated_char_collapse = false;
+        cfg.recurring_suppression = false;
+        // These are real OCR outputs from manga pages (≥7 chars)
+        let result = TextCleaner::process_single_line("IFTHATIS", &cfg);
+        assert!(result.contains(" "), "Expected 'IFTHATIS' to be split, got: {}", result);
+        let result2 = TextCleaner::process_single_line("THATYOUWOULD", &cfg);
+        assert!(result2.contains(" "), "Expected 'THATYOUWOULD' to be split, got: {}", result2);
+    }
+
+    #[test]
+    fn test_fragment_merger() {
+        let mut cfg = TextProcessingSettings::default();
+        cfg.enable_wordninja = true;
+        cfg.repeated_char_collapse = false;
+        cfg.recurring_suppression = false;
+        // OCR often splits manga words: "ARTHURIA" → "ARTHUR I A", "MILDA" → "MILD A"
+        let result = TextCleaner::process_single_line("ARTHUR I AVON MILD A", &cfg);
+        assert!(result.contains("ARTHURI"), "Expected 'ARTHUR I' to merge, got: {}", result);
+        assert!(result.contains("MILDA"), "Expected 'MILD A' to merge, got: {}", result);
     }
 
 }
