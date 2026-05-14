@@ -68,22 +68,14 @@ pub fn build_translation_prompt(
 
     if lines.len() <= 1 {
         // ── Single-line mode ─────────────────────────────────────────────
+        // Use extremely compact instructions to save maximum input tokens per request.
         let extra_rules = if target.0 == "th" {
-            " IMPORTANT: Add spaces between words to ensure correct word wrapping (e.g. วันนี้ จะ ไป)."
+            " Space Thai words."
         } else {
             ""
         };
-        let system = format!(
-            "You are a professional manga/game translator. \
-             Translate the text to {target_name}. \
-             Maintain professional grammar, correct capitalization, and proper punctuation. \
-             Output ONLY the translated text, no explanations, no quotes.{extra_rules}"
-        );
-        let user = if source.is_some() {
-            format!("Translate from {source_name} to {target_name}:\n\n{}", lines.first().unwrap_or(&""))
-        } else {
-            format!("Translate to {target_name}:\n\n{}", lines.first().unwrap_or(&""))
-        };
+        let system = format!("Translate to {target_name}. Output translation ONLY.{extra_rules}");
+        let user = lines.first().unwrap_or(&"").to_string();
         TranslationPrompt { system, user, line_count: lines.len() }
     } else {
         // ── Multi-line batch mode (Numbered List protocol) ───────────────

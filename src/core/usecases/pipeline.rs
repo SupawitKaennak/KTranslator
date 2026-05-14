@@ -220,6 +220,18 @@ impl TranslationPipeline {
             });
         }
 
+        // --- Pre-Translation Validation Heuristics ---
+        // Bypass costly AI translation calls for trivial raw outputs (pure numbers, whitespace, simple icons)
+        let is_trivial = ocr_text.chars().all(|c| c.is_ascii_digit() || c.is_ascii_punctuation() || c.is_whitespace() || c == '…');
+        if is_trivial {
+            let mut cache = cache_arc.lock();
+            cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
+            let trans_lines = build_trans_lines(&ocr_text);
+            return Ok(BgResult::Done {
+                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
+            });
+        }
+
         let _ = status_tx.send(BgResult::StatusUpdate { slot_idx, status: "AI Translating...".to_string() });
         ctx.request_repaint();
 
