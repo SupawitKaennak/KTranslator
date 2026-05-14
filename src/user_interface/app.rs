@@ -81,8 +81,8 @@ pub struct App {
     error_dismiss_rx: mpsc::Receiver<()>,
 
     /// Model download channels
-    download_trigger_tx: std::sync::mpsc::Sender<()>,
-    download_trigger_rx: std::sync::mpsc::Receiver<()>,
+    download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
+    download_trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
     download_progress_rx: tokio::sync::mpsc::Receiver<crate::infrastructure::asset_manager::DownloadProgress>,
     download_progress_tx: tokio::sync::mpsc::Sender<crate::infrastructure::asset_manager::DownloadProgress>,
 }
@@ -218,10 +218,18 @@ impl App {
         }
 
         // 1b. Handle Download Trigger
-        while let Ok(_) = self.download_trigger_rx.try_recv() {
+        while let Ok(engine_type) = self.download_trigger_rx.try_recv() {
             let tx = self.download_progress_tx.clone();
             tokio::spawn(async move {
-                let _ = crate::infrastructure::asset_manager::download_models(tx).await;
+                match engine_type {
+                    crate::infrastructure::settings::OcrEngineType::MangaOCR => {
+                        let _ = crate::infrastructure::asset_manager::download_models(tx).await;
+                    }
+                    crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
+                        let _ = crate::infrastructure::asset_manager::download_ppocr_models(tx).await;
+                    }
+                    _ => {}
+                }
             });
         }
 
@@ -233,13 +241,13 @@ impl App {
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
                 let factory_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
-                if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR {
+                if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR || factory_type == crate::infrastructure::settings::OcrEngineType::BuiltinPaddle {
                     let (new_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&self.settings);
                     self.ocr_engine = new_engine;
                     if let Some(err) = err_opt {
                         self.err_handler.report_simple(err);
                     } else {
-                        println!("Manga-OCR reloaded successfully after download.");
+                        tracing::info!("{:?} reloaded successfully after download.", factory_type);
                     }
                 }
             }

@@ -1,5 +1,5 @@
 use anyhow::{Context, Result, anyhow};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use parking_lot::Mutex;
 
@@ -30,27 +30,38 @@ impl BuiltinPaddleOcr {
             return Ok(());
         }
 
-        let dir = Path::new(&self.models_dir);
-
-        // Try relative to CWD first, then relative to EXE
-        let resolved = if dir.exists() {
-            dir.to_path_buf()
-        } else if let Ok(exe) = std::env::current_exe() {
-            let exe_rel = exe.parent().unwrap_or(Path::new(".")).join(dir);
-            if exe_rel.exists() { exe_rel } else { dir.to_path_buf() }
-        } else {
-            dir.to_path_buf()
+        let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
+        
+        let folder_name = match (settings.ppocr_variant, settings.ppocr_dict) {
+            (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_mobile",
+            (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "mobile_japanese",
+            (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_server",
+            (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "server_japanese",
         };
 
-        let det_path = resolved.join("det.onnx");
-        let rec_path = resolved.join("rec.onnx");
-        let dict_path = resolved.join("dict.txt");
+        let target_suite_dir = Path::new(&self.models_dir).join(folder_name);
+        
+        // Robust per-file resolver targeting the specific combination subfolder
+        let resolve_file = |file_name: &str| -> PathBuf {
+            let p = target_suite_dir.join(file_name);
+            if p.exists() { return p; }
+            if let Ok(exe) = std::env::current_exe() {
+                if let Some(dir) = exe.parent() {
+                    let target_p = dir.join(&target_suite_dir).join(file_name);
+                    if target_p.exists() { return target_p; }
+                }
+            }
+            target_suite_dir.join(file_name)
+        };
+
+        let det_path = resolve_file("det.onnx");
+        let rec_path = resolve_file("rec.onnx");
+        let dict_path = resolve_file("dict.txt");
 
         if !det_path.exists() {
             return Err(anyhow!(
                 "PP-OCR detection model not found at {:?}\n\
-                 Please place det.onnx, rec.onnx, and dict.txt in the '{}' folder.\n\
-                 Download from: https://github.com/PaddlePaddle/PaddleOCR",
+                 Please place the required models in '{}' or use the Download button in settings.",
                 det_path, self.models_dir
             ));
         }
@@ -61,7 +72,7 @@ impl BuiltinPaddleOcr {
             return Err(anyhow!("PP-OCR dictionary file not found at {:?}", dict_path));
         }
 
-        tracing::info!("Initializing Built-in PaddleOCR pipeline from {:?}", resolved);
+        tracing::info!("Initializing Built-in PaddleOCR pipeline from {:?}", det_path.parent());
 
         let det_str = det_path.to_string_lossy().to_string();
         let rec_str = rec_path.to_string_lossy().to_string();
@@ -86,17 +97,24 @@ impl OcrEngine for BuiltinPaddleOcr {
     fn recognize_lines(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
         self.ensure_pipeline()?;
 
+        let start_time = std::time::Instant::now();
+
         // Convert RGBA frame to RGB ImageBuffer (oar-ocr expects Rgb<u8>)
         let img_buf = image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
             frame.width, frame.height, frame.data,
         ).context("Failed to create image buffer from frame")?;
         let rgb_img: image::ImageBuffer<image::Rgb<u8>, Vec<u8>> = image::DynamicImage::ImageRgba8(img_buf).to_rgb8();
 
+        let prep_duration = start_time.elapsed();
+        let infer_start = std::time::Instant::now();
+
         // Run OCR pipeline — predict() takes Vec<ImageBuffer<Rgb<u8>>>
         let guard = self.pipeline.lock();
         let pipeline = guard.as_ref().unwrap();
         let results = pipeline.predict(vec![rgb_img])
             .map_err(|e| anyhow!("Built-in PaddleOCR inference failed: {}", e))?;
+
+        let infer_duration = infer_start.elapsed();
 
         let mut out = Vec::new();
 
@@ -124,6 +142,15 @@ impl OcrEngine for BuiltinPaddleOcr {
                 });
             }
         }
+
+        let total_duration = start_time.elapsed();
+        tracing::info!(
+            "Built-in PaddleOCR processed frame: {} lines found. [Prep: {:.1}ms, Inference: {:.1}ms, Total: {:.1}ms]",
+            out.len(),
+            prep_duration.as_secs_f64() * 1000.0,
+            infer_duration.as_secs_f64() * 1000.0,
+            total_duration.as_secs_f64() * 1000.0
+        );
 
         Ok(out)
     }
