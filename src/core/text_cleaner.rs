@@ -89,6 +89,21 @@ impl TextCleaner {
         // Stuttering Filter
         s = Self::filter_stuttering(&s);
 
+        if config.enable_wordninja {
+            let mut segmented_words = Vec::new();
+            for token in s.split_whitespace() {
+                // If a continuous chunk of characters is longer than 8 chars and mostly English letters, split it
+                let alpha_count = token.chars().filter(|c| c.is_ascii_alphabetic()).count();
+                if token.len() > 8 && alpha_count > 6 {
+                    let parts = wordninja::DEFAULT_MODEL.split(token);
+                    for p in parts { segmented_words.push(p.to_string()); }
+                } else {
+                    segmented_words.push(token.to_string());
+                }
+            }
+            s = segmented_words.join(" ");
+        }
+
         s
     } 
 
