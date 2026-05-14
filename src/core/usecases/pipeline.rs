@@ -18,6 +18,22 @@ fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
+/// Enforces cache size limit by removing oldest entries if cache is full
+fn enforce_cache_limit<K, V>(cache: &mut parking_lot::MutexGuard<std::collections::HashMap<K, V>>, max_entries: usize)
+where
+    K: Clone + std::hash::Hash + std::cmp::Eq,
+{
+    if cache.len() >= max_entries {
+        // Remove oldest entries (simple FIFO by removing first few)
+        let to_remove = cache.len() - max_entries + 1; // +1 to make room for new entry
+        let keys: Vec<K> = cache.keys().take(to_remove).cloned().collect();
+        for key in keys {
+            cache.remove(&key);
+        }
+        tracing::warn!("Cache limit reached, removed {} oldest entries", to_remove);
+    }
+}
+
 /// Orchestrates the end-to-end screen translation flow for a single frame.
 /// Decouples raw infrastructure access and hashing from task concurrency.
 pub struct TranslationPipeline;
@@ -47,8 +63,10 @@ impl TranslationPipeline {
         last_frame_arc: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
         status_tx: mpsc::Sender<BgResult>,
         ctx: egui::Context,
+        max_cache_entries: usize,
     ) -> anyhow::Result<BgResult> {
         let mut frame = capture.capture_rect(rect, display_id)?;
+        
         *last_frame_arc.lock() = Some(frame.clone());
         ctx.request_repaint();
         let hash = smart_hash(&frame.data);
@@ -199,11 +217,12 @@ impl TranslationPipeline {
             };
             let tc_key = (text_hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
             let cached = { let tc = text_cache_arc.lock(); tc.get(&tc_key).cloned() };
-            
+
             if let Some(cached_trans) = cached {
                 let mut fc = cache_arc.lock();
+                enforce_cache_limit(&mut fc, max_cache_entries);
                 fc.insert(cache_key, (ocr_text.clone(), cached_trans.clone()));
-                
+
                 let trans_lines = build_trans_lines(&cached_trans);
                 return Ok(BgResult::Done {
                     slot_idx, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines
@@ -213,6 +232,7 @@ impl TranslationPipeline {
 
         if source_lang.as_ref().map(|s| s.0 == target_lang.0).unwrap_or(false) {
             let mut cache = cache_arc.lock();
+            enforce_cache_limit(&mut cache, max_cache_entries);
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
@@ -225,6 +245,7 @@ impl TranslationPipeline {
         let is_trivial = ocr_text.chars().all(|c| c.is_ascii_digit() || c.is_ascii_punctuation() || c.is_whitespace() || c == '…');
         if is_trivial {
             let mut cache = cache_arc.lock();
+            enforce_cache_limit(&mut cache, max_cache_entries);
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
@@ -256,9 +277,11 @@ impl TranslationPipeline {
             };
             let text_cache_key = (text_hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
             let mut frame_cache = cache_arc.lock();
+            enforce_cache_limit(&mut frame_cache, max_cache_entries);
             frame_cache.insert(cache_key, (ocr_text.clone(), translated.clone()));
             drop(frame_cache);
             let mut text_cache = text_cache_arc.lock();
+            enforce_cache_limit(&mut text_cache, max_cache_entries);
             text_cache.insert(text_cache_key, translated.clone());
         }
         Ok(BgResult::Done { slot_idx, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines })
