@@ -106,19 +106,24 @@ impl Translator for GeminiTranslator {
 
         let lines: Vec<&str> = text.lines().collect();
         let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
-
-        // Gemini uses a single text prompt combining system + user instructions
-        let combined_prompt = format!("{}\n\n{}", prompt.system, prompt.user);
         
         let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.1);
 
+        // Dynamically calculate budget for output tokens based on actual input length.
+        // Prevent wasting massive output token quotas for short manga dialogs.
+        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
+        let max_tokens = estimated_tokens.clamp(128, 2048);
+
         let body = RequestBody {
+            system_instruction: Some(Content {
+                parts: vec![Part { text: prompt.system }],
+            }),
             contents: vec![Content {
-                parts: vec![Part { text: combined_prompt }],
+                parts: vec![Part { text: prompt.user }],
             }],
             generation_config: Some(GenerationConfig {
                 temperature: Some(temp), // Dynamically mapped to Translation Creativity Slider
-                max_output_tokens: Some(4096),
+                max_output_tokens: Some(max_tokens),
                 ..Default::default()
             }),
         };
@@ -150,6 +155,8 @@ impl Translator for GeminiTranslator {
 
 #[derive(Serialize)]
 struct RequestBody {
+    #[serde(rename = "systemInstruction", skip_serializing_if = "Option::is_none")]
+    system_instruction: Option<Content>,
     contents: Vec<Content>,
     #[serde(rename = "generationConfig")]
     generation_config: Option<GenerationConfig>,

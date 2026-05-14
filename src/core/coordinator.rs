@@ -244,17 +244,28 @@ impl BackgroundCoordinator {
                         runtime.processing = false;
                         runtime.status = "Error".to_string();
 
-                        let friendly = if err.contains("quota") || err.contains("429") {
+                        let is_rate_limit = err.contains("quota") || err.contains("429") || err.contains("Too Many Requests");
+                        let is_bad_request = err.contains("400") || err.contains("parse") || err.contains("invalid");
+                        let is_server_err = err.contains("500") || err.contains("502") || err.contains("503") || err.contains("timeout");
+
+                        let (retry_delay_ms, friendly) = if is_rate_limit {
                             let secs = 30;
-                            format!("Region {}: API quota exceeded — retrying in {secs}s", slot_idx + 1)
+                            (30_000, format!("Region {}: API rate limit hit — retrying in {secs}s", slot_idx + 1))
+                        } else if is_bad_request {
+                            let secs = 10;
+                            (10_000, format!("Region {}: Data format error — retrying in {secs}s", slot_idx + 1))
+                        } else if is_server_err {
+                            let secs = 5;
+                            (5_000, format!("Region {}: Server/Network error — retrying in {secs}s", slot_idx + 1))
                         } else {
                             let first_line = err.lines().next().unwrap_or(&err).trim().to_string();
-                            format!("Region {}: {first_line}", slot_idx + 1)
+                            (3_000, format!("Region {}: {first_line}", slot_idx + 1))
                         };
+                        
                         err_handler.report_simple(friendly);
                         
                         if language_version == slot.language_version {
-                            slot.next_tick_at_ms = Self::now_ms() + 2000;
+                            slot.next_tick_at_ms = Self::now_ms() + retry_delay_ms;
                         }
                     }
                 }

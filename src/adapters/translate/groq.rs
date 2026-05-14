@@ -87,6 +87,10 @@ impl Translator for GroqTranslator {
         
         let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.2);
 
+        // Dynamically calculate budget for output tokens based on actual input length.
+        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
+        let max_tokens = estimated_tokens.clamp(128, 2048);
+
         let req = GroqChatRequest {
             model: self.model.clone(),
             messages: vec![
@@ -100,7 +104,7 @@ impl Translator for GroqTranslator {
                 },
             ],
             temperature: temp,
-            max_tokens: 4096,
+            max_tokens,
         };
 
         let resp = self.client
