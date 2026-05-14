@@ -290,7 +290,6 @@ impl App {
             let current_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&updated);
             let old_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
             let rebuild_ocr = current_engine_type != old_engine_type 
-                || updated.paddle_ocr_path != self.settings.paddle_ocr_path
                 || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
             
             let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;

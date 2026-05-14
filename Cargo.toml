@@ -28,6 +28,7 @@ ort = { version = "2.0.0-rc.12", features = ["copy-dylibs", "directml", "ndarray
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 wordninja = "0.1"
+oar-ocr = "0.6"
 
 
 
