@@ -375,6 +375,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     section_header(ui, i18n.txt_pre_trans);
     ui.add_space(4.0);
     ui.checkbox(&mut settings.smart_merge, i18n.smart_merge);
+    ui.checkbox(&mut settings.txt_proc.enable_wordninja, i18n.txt_wordninja);
     
     ui.add_space(12.0);
     ui.separator();
