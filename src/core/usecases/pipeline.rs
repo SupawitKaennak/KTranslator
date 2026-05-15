@@ -80,7 +80,7 @@ impl TranslationPipeline {
         
         // If we've been unstable for a long time (e.g. 1.5s), FORCE proceed.
         let unstable_since_start = if first_unstable_at == 0 { 0 } else { now.saturating_sub(first_unstable_at) };
-        let force_proceed = unstable_since_start > 1500; 
+        let force_proceed = unstable_since_start > 800; 
 
         // Let's keep logic exactly flow matching:
         let cache_key = (hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
@@ -95,8 +95,8 @@ impl TranslationPipeline {
             return Ok(BgResult::HashChanged { slot_idx, new_hash: hash });
         }
 
-        // 3. Stable Debounce check
-        if unstable_dur < 400 && !force_proceed {
+        // 3. Stable Debounce check: Reduced from 400ms to 150ms for hyper-reactive response
+        if unstable_dur < 150 && !force_proceed {
             return Ok(BgResult::WaitingDebounce { slot_idx });
         }
 
