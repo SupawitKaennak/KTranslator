@@ -6,6 +6,11 @@ use crate::infrastructure::settings::Settings;
 use crate::infrastructure::platform::PlatformServices;
 use crate::core::worker::SlotRuntimeState;
 
+/// Convert physical screen pixels to logical viewport coordinates (rounded).
+fn snap_logical(px: f32, ppp: f32) -> f32 {
+    (px / ppp).round()
+}
+
 /// Renders the transparent overlay window for a specific translation region.
 pub fn render_overlay_viewport(
     ctx: &egui::Context,
@@ -45,8 +50,14 @@ pub fn render_overlay_viewport(
             .with_always_on_top()
             .with_mouse_passthrough(true)
             .with_active(false)
-            .with_inner_size(egui::vec2(r.w / ppp, r.h / ppp))
-            .with_position(egui::pos2(r.x / ppp, r.y / ppp)),
+            .with_inner_size(egui::vec2(
+                snap_logical(r.w, ppp),
+                snap_logical(r.h, ppp),
+            ))
+            .with_position(egui::pos2(
+                snap_logical(r.x, ppp),
+                snap_logical(r.y, ppp),
+            )),
         move |ctx, class| {
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -334,44 +345,34 @@ pub fn render_overlay_viewport(
                         let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
                         painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
 
-                        // --- Premium Custom Title Bar ---
-                        let title_bar_height = 22.0;
-                        let title_bar_rect = egui::Rect::from_min_max(
-                            full_rect.min,
-                            egui::pos2(full_rect.max.x, full_rect.min.y + title_bar_height)
-                        );
-
-                        // Draw title bar background (Greenish to match border)
-                        painter.rect_filled(title_bar_rect, 0.0, egui::Color32::from_rgba_unmultiplied(0, 200, 100, 220));
-
-                        // Draw title text
-                        let title_text = format!("Region {}", slot_idx + 1);
-                        let galley = ctx.fonts(|f| f.layout_no_wrap(
-                            title_text, 
-                            egui::FontId::proportional(13.0), 
-                            egui::Color32::WHITE
-                        ));
-                        let text_pos = title_bar_rect.center() - galley.size() / 2.0;
-                        painter.galley(text_pos, galley, egui::Color32::WHITE);
-                    }
-                }
-            }
-
-            // Drag reposition
-            ctx.input(|i| {
-                if i.pointer.primary_down() {
-                    let delta = i.pointer.delta();
-                    if delta != egui::Vec2::ZERO {
-                        let mut m = model_arc_inner.lock();
+                        // Size label (Luna-style) at bottom center
+                        let m = model_arc_inner.lock();
                         if slot_idx < m.slots.len() {
-                            if let Some(rect) = m.slots[slot_idx].rect.as_mut() {
-                                rect.x += delta.x * ppp;
-                                rect.y += delta.y * ppp;
+                            if let Some(r) = m.slots[slot_idx].rect {
+                                let label = format!("{} × {}", r.w.round() as i32, r.h.round() as i32);
+                                let galley = ctx.fonts(|f| {
+                                    f.layout_no_wrap(
+                                        label,
+                                        egui::FontId::monospace(12.0),
+                                        egui::Color32::WHITE,
+                                    )
+                                });
+                                let pad = egui::vec2(6.0, 3.0);
+                                let label_pos = egui::pos2(
+                                    full_rect.center().x - galley.size().x / 2.0,
+                                    full_rect.max.y - galley.size().y - 6.0,
+                                );
+                                let bg = egui::Rect::from_min_size(
+                                    label_pos - pad,
+                                    galley.size() + pad * 2.0,
+                                );
+                                painter.rect_filled(bg, 4.0, egui::Color32::from_black_alpha(180));
+                                painter.galley(label_pos, galley, egui::Color32::WHITE);
                             }
                         }
                     }
                 }
-            });
+            }
 
             // Platform attributes (transparency/color key/capture exclusion)
             let title_inner = format!("Frame Overlay {}", slot_idx + 1);

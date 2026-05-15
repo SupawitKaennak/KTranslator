@@ -70,9 +70,12 @@ pub fn render_slot_item(
                     }
                 }
                 
-                if ui.button(i18n.select_area)
-                    .on_hover_text("Drag to select a new area on the screen")
-                    .clicked() 
+                if ui
+                    .button(i18n.select_area)
+                    .on_hover_text(
+                        "Pick a new area on screen (release to save). With Show Frame on, drag the frame directly.",
+                    )
+                    .clicked()
                 {
                     do_crop = true;
                 }
@@ -153,7 +156,10 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame)).on_hover_text("Show a green border around the captured area");
+            ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame))
+                .on_hover_text(
+                    "Green frame on screen — drag title bar or corners to move/resize in real time (Luna-style)",
+                );
             ui.add_space(10.0);
             ui.checkbox(&mut slot.overlay_mode, format!("{}", i18n.overlay_mode)).on_hover_text("Show translated text directly over the original text on your screen");
             ui.add_space(20.0);

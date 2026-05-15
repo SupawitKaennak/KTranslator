@@ -14,6 +14,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::Win32::System::Threading::{
     GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS,
 };
+#[cfg(target_os = "windows")]
+use windows::Win32::Graphics::Gdi::{
+    CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_XOR,
+};
 
 /// Finds a window by its title.
 pub fn find_window(window_title: &str) -> Option<isize> {
@@ -34,6 +38,21 @@ pub fn find_window(window_title: &str) -> Option<isize> {
     None
 }
 
+/// Excludes or includes a window from screen capture (no transparency attributes).
+pub fn set_hide_from_capture(hwnd_raw: isize, hide: bool) {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let hwnd = HWND(hwnd_raw as *mut _);
+        if hide {
+            let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+        } else {
+            let _ = SetWindowDisplayAffinity(hwnd, WDA_NONE);
+        }
+    }
+    let _ = hwnd_raw;
+    let _ = hide;
+}
+
 /// Applies transparency color-key and capture exclusion to a window.
 pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
     #[cfg(target_os = "windows")]
@@ -52,6 +71,34 @@ pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
     }
     let _ = hwnd_raw;
     let _ = hide_from_capture;
+}
+
+/// Hollow window region: only the border ring receives mouse hits; center is click-through.
+pub fn set_hollow_window_region(hwnd_raw: isize, width: i32, height: i32, border: i32) {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        if width < border * 3 || height < border * 3 {
+            return;
+        }
+        let hwnd = HWND(hwnd_raw as *mut _);
+        let outer = CreateRectRgn(0, 0, width, height);
+        let inner = CreateRectRgn(border, border, width - border, height - border);
+        let frame = CreateRectRgn(0, 0, 0, 0);
+        if outer.0.is_null() || inner.0.is_null() || frame.0.is_null() {
+            if !outer.0.is_null() {
+                let _ = DeleteObject(outer.into());
+            }
+            if !inner.0.is_null() {
+                let _ = DeleteObject(inner.into());
+            }
+            return;
+        }
+        let _ = CombineRgn(Some(frame), Some(outer), Some(inner), RGN_XOR);
+        let _ = SetWindowRgn(hwnd, Some(frame), true);
+        let _ = DeleteObject(outer.into());
+        let _ = DeleteObject(inner.into());
+    }
+    let _ = (hwnd_raw, width, height, border);
 }
 
 /// Boosts the current process priority to Above Normal to ensure 
