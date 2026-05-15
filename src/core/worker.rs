@@ -68,6 +68,8 @@ pub struct SlotRuntimeState {
     pub last_hash: u64,
     /// Native HWND of the overlay window for Win32 transparency
     pub overlay_hwnd: Arc<AtomicIsize>,
+    /// Native HWND of the live frame border window
+    pub frame_live_hwnd: Arc<AtomicIsize>,
     /// Track language changes to invalidate caches
     pub last_langs: (Option<String>, String),
     /// Time when the screen first became unstable. 
@@ -95,6 +97,7 @@ impl SlotRuntimeState {
             status: "Idle".to_string(),
             last_hash: 0,
             overlay_hwnd: Arc::new(AtomicIsize::new(0)),
+            frame_live_hwnd: Arc::new(AtomicIsize::new(0)),
             last_langs: (None, String::new()),
             first_unstable_at: 0,
             last_capture_hide: Arc::new(Mutex::new(None)),
