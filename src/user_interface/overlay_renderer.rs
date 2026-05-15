@@ -5,11 +5,8 @@ use crate::core::model::AppModel;
 use crate::infrastructure::settings::Settings;
 use crate::infrastructure::platform::PlatformServices;
 use crate::core::worker::SlotRuntimeState;
-#[cfg(target_os = "windows")]
-use crate::infrastructure::win32;
 
 /// Renders the transparent overlay window for a specific translation region.
-#[cfg(target_os = "windows")]
 pub fn render_overlay_viewport(
     ctx: &egui::Context,
     slot_idx: usize,
@@ -20,14 +17,16 @@ pub fn render_overlay_viewport(
 ) {
     let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
     
-    // Get the rect for this slot
-    let rect = {
+    // Get the rect and visibility state for this slot
+    let (rect, should_show) = {
         let m = model_arc.lock();
         if slot_idx >= m.slots.len() { return; }
-        m.slots[slot_idx].rect
+        let slot = &m.slots[slot_idx];
+        (slot.rect, slot.show_frame || slot.overlay_mode)
     };
     
     let Some(r) = rect else { return; };
+    if !should_show { return; }
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
     let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
@@ -37,70 +36,6 @@ pub fn render_overlay_viewport(
     let overlay_settings = settings.clone();
     let platform_svc = platform.clone();
 
-    // Check if native window already exists
-    let current_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
-    
-    if current_hwnd == 0 {
-        // Create native window as drag handle (small height at top)
-        let drag_handle_height = 20i32;
-        if let Ok(hwnd) = win32::create_draggable_overlay_window(
-            r.x as i32,
-            r.y as i32,
-            r.w as i32,
-            drag_handle_height,
-            &title,
-        ) {
-            hwnd_cache.store(hwnd.0 as isize, std::sync::atomic::Ordering::Relaxed);
-            // Show the window
-            unsafe {
-                let _ = windows::Win32::UI::WindowsAndMessaging::ShowWindow(hwnd, windows::Win32::UI::WindowsAndMessaging::SW_SHOW);
-                // Set window to be semi-opaque (not transparent) for drag handle
-                let _ = windows::Win32::UI::WindowsAndMessaging::SetLayeredWindowAttributes(
-                    hwnd,
-                    windows::Win32::Foundation::COLORREF(0),
-                    200, // Semi-opaque
-                    windows::Win32::UI::WindowsAndMessaging::LWA_ALPHA,
-                );
-            }
-        }
-    } else {
-        // Sync native window position with egui viewport
-        unsafe {
-            let hwnd = windows::Win32::Foundation::HWND(current_hwnd as *mut std::ffi::c_void);
-            let mut rect = windows::Win32::Foundation::RECT::default();
-            if windows::Win32::UI::WindowsAndMessaging::GetWindowRect(hwnd, &mut rect).is_ok() {
-                let current_x = rect.left;
-                let current_y = rect.top;
-                let target_x = r.x as i32;
-                let target_y = r.y as i32;
-                
-                // If native window was dragged (position differs), update egui viewport
-                if current_x != target_x || current_y != target_y {
-                    let mut m = model_arc.lock();
-                    if slot_idx < m.slots.len() {
-                        if let Some(slot_rect) = m.slots[slot_idx].rect.as_mut() {
-                            slot_rect.x = current_x as f32;
-                            slot_rect.y = current_y as f32;
-                        }
-                    }
-                    drop(m);
-                    
-                    // Also update native window size if needed
-                    let _ = windows::Win32::UI::WindowsAndMessaging::SetWindowPos(
-                        hwnd,
-                        Some(windows::Win32::UI::WindowsAndMessaging::HWND_TOPMOST),
-                        current_x,
-                        current_y,
-                        r.w as i32,
-                        20,
-                        windows::Win32::UI::WindowsAndMessaging::SWP_NOZORDER | windows::Win32::UI::WindowsAndMessaging::SWP_NOACTIVATE,
-                    );
-                }
-            }
-        }
-    }
-
-    // Keep egui viewport for rendering (native window is just drag handle)
     ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
@@ -398,348 +333,31 @@ pub fn render_overlay_viewport(
                     if show_border {
                         let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
                         painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
-                    }
-                }
-            }
 
-            // Drag reposition is handled by native window, not egui viewport
-
-            // Platform attributes (transparency/color key/capture exclusion)
-            let title_inner = format!("Frame Overlay {}", slot_idx + 1);
-            if let Some(raw) = platform_svc.find_window_by_title(&title_inner) {
-                let cached_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
-                let current_hide = overlay_settings.hide_from_capture;
-                let mut last_hide = runtime.last_capture_hide.lock();
-                
-                if raw != cached_hwnd || *last_hide != Some(current_hide) {
-                    crate::infrastructure::win32::apply_overlay_attributes(raw, current_hide);
-                    hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
-                    *last_hide = Some(current_hide);
-                }
-            }
-        },
-    );
-}
-
-/// Renders the transparent overlay window for a specific translation region.
-#[cfg(not(target_os = "windows"))]
-pub fn render_overlay_viewport(
-    ctx: &egui::Context,
-    slot_idx: usize,
-    model_arc: &Arc<Mutex<AppModel>>,
-    runtime: &SlotRuntimeState,
-    settings: &Settings,
-    platform: &Arc<dyn PlatformServices>,
-) {
-    let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
-    
-    // Get the rect for this slot
-    let rect = {
-        let m = model_arc.lock();
-        if slot_idx >= m.slots.len() { return; }
-        m.slots[slot_idx].rect
-    };
-    
-    let Some(r) = rect else { return; };
-
-    let title = format!("Frame Overlay {}", slot_idx + 1);
-    let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
-    
-    let model_arc_inner = model_arc.clone();
-    let overlay_settings = settings.clone();
-    let platform_svc = platform.clone();
-
-    // Non-Windows: use egui viewport only
-    ctx.show_viewport_immediate(
-        viewport_id,
-        egui::ViewportBuilder::default()
-            .with_title(&title)
-            .with_decorations(false)
-            .with_transparent(true)
-            .with_always_on_top()
-            .with_mouse_passthrough(true)
-            .with_active(false)
-            .with_inner_size(egui::vec2(r.w / ppp, r.h / ppp))
-            .with_position(egui::pos2(r.x / ppp, r.y / ppp)),
-        move |ctx, class| {
-            if matches!(class, egui::ViewportClass::Embedded) {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label("Frame Viewer (Embedded)");
-                });
-                return;
-            }
-
-            let painter = ctx.layer_painter(egui::LayerId::background());
-            let full_rect = ctx.screen_rect();
-
-            {
-                let m = model_arc_inner.lock();
-                if slot_idx < m.slots.len() {
-                    let slot = &m.slots[slot_idx];
-                    let show_overlay = slot.overlay_mode && !slot.last_translation.is_empty();
-                    let show_border  = slot.show_frame;
-                    let ocr_lines    = slot.last_ocr_lines.clone();
-                    let trans_lines  = slot.last_trans_lines.clone();
-                    let fallback_text = slot.last_translation.clone();
-                    drop(m);
-
-                    if show_overlay {
-                        let mut bg_r = overlay_settings.overlay_bg_color[0];
-                        let mut bg_g = overlay_settings.overlay_bg_color[1];
-                        let mut bg_b = overlay_settings.overlay_bg_color[2];
-                        if bg_r <= 8 && bg_g <= 8 && bg_b <= 8 {
-                            bg_r = 12; bg_g = 12; bg_b = 12;
-                        }
-
-                        let mut txt_r = overlay_settings.overlay_text_color[0];
-                        let mut txt_g = overlay_settings.overlay_text_color[1];
-                        let mut txt_b = overlay_settings.overlay_text_color[2];
-                        if txt_r <= 8 && txt_g <= 8 && txt_b <= 8 {
-                            txt_r = 12; txt_g = 12; txt_b = 12;
-                        }
-
-                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
-                        let overlay_bg_color = egui::Color32::from_rgba_premultiplied(
-                            (bg_r as f32 * bg_a) as u8,
-                            (bg_g as f32 * bg_a) as u8,
-                            (bg_b as f32 * bg_a) as u8,
-                            overlay_settings.overlay_bg_color[3],
+                        // --- Premium Custom Title Bar ---
+                        let title_bar_height = 22.0;
+                        let title_bar_rect = egui::Rect::from_min_max(
+                            full_rect.min,
+                            egui::pos2(full_rect.max.x, full_rect.min.y + title_bar_height)
                         );
 
-                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
-                        let overlay_text_color = egui::Color32::from_rgba_premultiplied(
-                            (txt_r as f32 * txt_a) as u8,
-                            (txt_g as f32 * txt_a) as u8,
-                            (txt_b as f32 * txt_a) as u8,
-                            overlay_settings.overlay_text_color[3],
-                        );
-                        let overlay_padding = overlay_settings.overlay_padding;
-                        let overlay_corner_radius = overlay_settings.overlay_corner_radius;
+                        // Draw title bar background (Greenish to match border)
+                        painter.rect_filled(title_bar_rect, 0.0, egui::Color32::from_rgba_unmultiplied(0, 200, 100, 220));
 
-                        let has_positions = !ocr_lines.is_empty();
-
-                        if has_positions {
-                            let max_text_w = full_rect.width() - 8.0;
-                            let mut last_bottom_y = full_rect.top();
-
-                            let mut idx = 0;
-                            while idx < ocr_lines.len() {
-                                let mut block_lines = vec![ocr_lines[idx].clone()];
-                                let trans = trans_lines.get(idx).map(|s| s.as_str()).unwrap_or("").trim().to_string();
-                                
-                                let mut j = idx + 1;
-                                while j < ocr_lines.len() {
-                                    let next_trans = trans_lines.get(j).map(|s| s.as_str()).unwrap_or("").trim();
-                                    if !next_trans.is_empty() {
-                                        break;
-                                    }
-                                    block_lines.push(ocr_lines[j].clone());
-                                    j += 1;
-                                }
-
-                                if trans.is_empty() {
-                                    idx = j;
-                                    continue;
-                                }
-
-                                let chunks = crate::core::usecases::text_formatter::TextFormatter::create_chunks(&trans, block_lines.len());
-
-                                if block_lines.len() > 1 {
-                                    let mut union_rect: Option<egui::Rect> = None;
-                                    for line in &block_lines {
-                                        let r = egui::Rect::from_min_size(
-                                            egui::pos2(line.x / ppp, line.y / ppp),
-                                            egui::vec2(line.w / ppp, line.h / ppp)
-                                        );
-                                        union_rect = Some(union_rect.map_or(r, |acc| acc.union(r)));
-                                    }
-
-                                    if let Some(bg_rect) = union_rect {
-                                        let padded_bg = bg_rect.expand(overlay_padding);
-                                        painter.rect_filled(padded_bg, overlay_corner_radius, overlay_bg_color);
-                                        last_bottom_y = last_bottom_y.max(padded_bg.max.y);
-
-                                        let raw_text = chunks.join("\n");
-                                        let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&raw_text);
-                                        let font_size = overlay_settings.overlay_font_size;
-                                        let wrap_width = bg_rect.width().max(50.0);
-
-                                        let galley = ctx.fonts(|f| {
-                                            let mut job = egui::text::LayoutJob::simple(
-                                                full_text,
-                                                egui::FontId::proportional(font_size),
-                                                overlay_text_color,
-                                                wrap_width
-                                            );
-                                            job.wrap.break_anywhere = false;
-                                            job.halign = match overlay_settings.overlay_text_align {
-                                                crate::infrastructure::settings::TextAlign::Left => egui::Align::Min,
-                                                crate::infrastructure::settings::TextAlign::Center => egui::Align::Center,
-                                                crate::infrastructure::settings::TextAlign::Right => egui::Align::Max,
-                                            };
-                                            f.layout_job(job)
-                                        });
-
-                                        let text_x = match overlay_settings.overlay_text_align {
-                                            crate::infrastructure::settings::TextAlign::Left => bg_rect.left() + overlay_padding,
-                                            crate::infrastructure::settings::TextAlign::Center => bg_rect.center().x,
-                                            crate::infrastructure::settings::TextAlign::Right => bg_rect.right() - overlay_padding,
-                                        };
-
-                                        let text_pos = egui::pos2(text_x, bg_rect.top() + overlay_padding);
-                                        painter.galley(text_pos, galley, overlay_text_color);
-                                    }
-                                } else {
-                                    for (i, line) in block_lines.iter().enumerate() {
-                                        let line_h_points = line.h / ppp;
-                                        let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-                                        let wrap_width = (line.w / ppp).max(30.0); 
-
-                                        let chunk_text = chunks.get(i).cloned().unwrap_or_default();
-                                        let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&chunk_text);
-                                        
-                                        let galley = ctx.fonts(|f| {
-                                            let mut job = egui::text::LayoutJob::simple(
-                                                full_text,
-                                                egui::FontId::proportional(font_size),
-                                                overlay_text_color,
-                                                wrap_width
-                                            );
-                                            job.wrap.break_anywhere = false;
-                                            job.halign = match overlay_settings.overlay_text_align {
-                                                crate::infrastructure::settings::TextAlign::Left => egui::Align::Min,
-                                                crate::infrastructure::settings::TextAlign::Center => egui::Align::Center,
-                                                crate::infrastructure::settings::TextAlign::Right => egui::Align::Max,
-                                            };
-                                            f.layout_job(job)
-                                        });
-
-                                        let start_y = line.y / ppp;
-                                        let bg_w = (line.w / ppp).max(galley.size().x + (overlay_padding * 2.0)).min(wrap_width + (overlay_padding * 2.0));
-                                        let bg_h = (line.h / ppp).max(galley.size().y + overlay_padding);
-                                        let bg = egui::Rect::from_min_size(
-                                            egui::pos2((line.x / ppp) - overlay_padding/2.0, start_y - overlay_padding/4.0),
-                                            egui::vec2(bg_w + overlay_padding, bg_h + overlay_padding/2.0),
-                                        );
-                                        
-                                        last_bottom_y = last_bottom_y.max(bg.max.y);
-                                        painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                        
-                                        if !galley.rows.is_empty() {
-                                            let text_y = start_y + (bg_h - galley.size().y) / 2.0;
-                                            
-                                            let text_x = match overlay_settings.overlay_text_align {
-                                                crate::infrastructure::settings::TextAlign::Left => bg.left() + overlay_padding/2.0,
-                                                crate::infrastructure::settings::TextAlign::Center => bg.center().x,
-                                                crate::infrastructure::settings::TextAlign::Right => bg.right() - overlay_padding/2.0,
-                                            };
-
-                                            let text_pos = egui::pos2(text_x, text_y);
-                                            painter.galley(text_pos, galley, overlay_text_color);
-                                        }
-                                    }
-                                }
-
-                                if chunks.len() > block_lines.len() {
-                                    let last_line = block_lines.last().unwrap();
-                                    let mut extra_y = last_bottom_y + 4.0;
-                                    for extra_chunk in &chunks[block_lines.len()..] {
-                                        let line_h_points = last_line.h / ppp;
-                                        let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-                                        let wrap_width = (max_text_w - (last_line.x / ppp) + full_rect.left()).max(100.0);
-                                        let galley = ctx.fonts(|f| {
-                                            f.layout(
-                                                extra_chunk.clone(),
-                                                egui::FontId::proportional(font_size),
-                                                overlay_text_color,
-                                                wrap_width,
-                                            )
-                                        });
-
-                                        let bg_w = (last_line.w / ppp).max(galley.size().x + (overlay_padding * 2.0)).min(wrap_width + (overlay_padding * 2.0));
-                                        let bg_h = galley.size().y + overlay_padding;
-                                        let bg = egui::Rect::from_min_size(
-                                            egui::pos2((last_line.x / ppp) - overlay_padding/2.0, extra_y),
-                                            egui::vec2(bg_w + overlay_padding, bg_h),
-                                        );
-                                        painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                        
-                                        let text_pos = egui::pos2(last_line.x / ppp, extra_y + overlay_padding/2.0);
-                                        painter.galley(text_pos, galley, overlay_text_color);
-                                        extra_y += bg_h + 4.0;
-                                        last_bottom_y = last_bottom_y.max(extra_y);
-                                    }
-                                }
-
-                                idx = j;
-                            }
-
-                            if trans_lines.len() > ocr_lines.len() {
-                                let last = ocr_lines.last().unwrap();
-                                let mut y = last_bottom_y + 4.0;
-                                for extra in &trans_lines[ocr_lines.len()..] {
-                                    if extra.trim().is_empty() { continue; }
-                                    let wrap_width = (full_rect.width() - (last.x as f32 / ppp) + full_rect.left() - 8.0).max(100.0);
-                                    let galley = ctx.fonts(|f| {
-                                        f.layout(
-                                            extra.clone(),
-                                            egui::FontId::proportional(overlay_settings.overlay_font_size),
-                                            overlay_text_color,
-                                            wrap_width,
-                                        )
-                                    });
-                                    let pos = egui::pos2(last.x as f32 / ppp, y);
-                                    let bg = egui::Rect::from_min_size(
-                                        pos - egui::vec2(overlay_padding, overlay_padding/2.0),
-                                        galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),
-                                    );
-                                    painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                    let line_h = galley.size().y;
-                                    painter.galley(pos, galley, overlay_text_color);
-                                    y += line_h + 4.0;
-                                }
-                            }
-                        } else {
-                            let font_size = overlay_settings.overlay_font_size;
-                            let mut y = full_rect.top() + 8.0;
-                            for line in fallback_text.lines() {
-                                if line.trim().is_empty() { continue; }
-                                let wrap_width = full_rect.width() - 16.0;
-                                let galley = ctx.fonts(|f| {
-                                    let mut job = egui::text::LayoutJob::simple(
-                                        line.to_string(),
-                                        egui::FontId::proportional(font_size),
-                                        overlay_text_color,
-                                        wrap_width
-                                    );
-                                    job.halign = match overlay_settings.overlay_text_align {
-                                        crate::infrastructure::settings::TextAlign::Left => egui::Align::Min,
-                                        crate::infrastructure::settings::TextAlign::Center => egui::Align::Center,
-                                        crate::infrastructure::settings::TextAlign::Right => egui::Align::Max,
-                                    };
-                                    f.layout_job(job)
-                                });
-                                let x = full_rect.left() + 8.0;
-                                let pos = egui::pos2(x, y);
-                                let bg = egui::Rect::from_min_size(
-                                    pos - egui::vec2(overlay_padding, overlay_padding/2.0),
-                                    galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),
-                                );
-                                painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                let line_h = galley.size().y;
-                                painter.galley(pos, galley, overlay_text_color);
-                                y += line_h + 4.0;
-                            }
-                        }
-                    }
-
-                    if show_border {
-                        let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
-                        painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
+                        // Draw title text
+                        let title_text = format!("Region {}", slot_idx + 1);
+                        let galley = ctx.fonts(|f| f.layout_no_wrap(
+                            title_text, 
+                            egui::FontId::proportional(13.0), 
+                            egui::Color32::WHITE
+                        ));
+                        let text_pos = title_bar_rect.center() - galley.size() / 2.0;
+                        painter.galley(text_pos, galley, egui::Color32::WHITE);
                     }
                 }
             }
 
+            // Drag reposition
             ctx.input(|i| {
                 if i.pointer.primary_down() {
                     let delta = i.pointer.delta();
@@ -754,6 +372,20 @@ pub fn render_overlay_viewport(
                     }
                 }
             });
+
+            // Platform attributes (transparency/color key/capture exclusion)
+            let title_inner = format!("Frame Overlay {}", slot_idx + 1);
+            if let Some(raw) = platform_svc.find_window_by_title(&title_inner) {
+                let cached_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
+                let current_hide = overlay_settings.hide_from_capture;
+                let mut last_hide = runtime.last_capture_hide.lock();
+                
+                if raw != cached_hwnd || *last_hide != Some(current_hide) {
+                    crate::infrastructure::win32::apply_overlay_attributes(raw, current_hide);
+                    hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
+                    *last_hide = Some(current_hide);
+                }
+            }
         },
     );
 }
