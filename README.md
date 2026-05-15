@@ -3,143 +3,99 @@
 [ภาษาไทย (Thai)](#thai) | [English](#english)
 
 ---
-<img width="1902" height="904" alt="{9B83120B-8BEC-4BE4-9075-F174DE7B11DB}" src="https://github.com/user-attachments/assets/d551b6ac-1a11-46b5-9eb0-f33ce69579be" /><br>
 
 <a name="thai"></a>
 ## ภาษาไทย (Thai)
 
-โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) เขียนด้วยภาษา Rust
+โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) ประสิทธิภาพสูง เขียนด้วยภาษา Rust เน้นการประมวลผลออฟไลน์ที่รวดเร็ว แม่นยำ และรองรับการปรับแต่งที่ยืดหยุ่น
 
-### ลักษณะการใช้งาน
-- **แปลเกม:** แปลบทสนทนา เมนู และคำอธิบายไอเทมภายในเกม
-- **แปลมังงะและคอมมิค:** ตรวจจับและแปลข้อความแนวตั้ง แนวเอียง หรือข้อความในกรอบคำพูด
-- **Manga-OCR & YOLOv8:** ตรวจจับกรอบข้อความและอ่านตัวอักษรภาษาญี่ปุ่นแนวตั้งโดยใช้โมเดล ONNX
-- **Bubble Detection & Sorting:** ตรวจจับกรอบคำพูดและจัดเรียงลำดับการอ่านจากขวาไปซ้ายและบนลงล่าง รองรับหน้าคู่ (RTL Column-Major)
-- **Word Segmentation:** แยกคำในข้อความภาษาอังกฤษที่ไม่มีการเว้นวรรคด้วยพจนานุกรม (`wordninja`)
-- **Thai Word Wrap:** แทรกอักขระเว้นวรรคความกว้างศูนย์ (Zero Width Space) เพื่อรองรับการตัดบรรทัดภาษาไทย
-- **Prompt Customization:** ปรับแต่ง System Prompt และ User Prompt พร้อมระบบแทนที่ตัวแปรบริบท
-- **Telemetry Dashboard:** แสดงข้อมูลการทำงานภายในระบบ เช่น สถานะเธรด, ตัวนับเวลา, และพิกัดเค้าโครง
-- **แปลเอกสารและหน้าเว็บ:** แปลข้อความจากรูปภาพ, PDF, หรือหน้าเว็บไซต์ที่ไม่สามารถคัดลอกข้อความได้
-- **Sentence Merge:** รวมบรรทัดข้อความที่แยกกันให้เป็นประโยคเดียวเพื่อรักษาบริบทก่อนส่งแปล
-- **Overlay Customization:** ปรับแต่งสีพื้นหลัง, สีตัวอักษร, ขนาดฟอนต์, และความโค้งของหน้าต่างแสดงผลคำแปล
+### สิ่งที่โปรแกรมทำได้
+- **Advanced OCR Engines (Native ONNX):**
+  - **Manga-OCR:** ใช้ AI ตรวจจับและอ่านภาษาญี่ปุ่นแนวตั้งในมังงะโดยเฉพาะ (อ้างอิงฐานข้อมูล Manga109)
+  - **PaddleOCR v4 (Mobile):** เน้นความเร็วสูงสุด กินทรัพยากรต่ำ เหมาะสำหรับคอมพิวเตอร์สเปคทั่วไป
+  - **PaddleOCR v4 (Server):** เน้นความแม่นยำสูงสุดสำหรับฟอนต์ในเกมหรือเอกสารที่ซับซ้อน
+- **Hardware Acceleration:** ปลดล็อคพลังการ์ดจอผ่าน **NVIDIA CUDA, TensorRT** และ **DirectML** ลดโหลด CPU ลงสูงสุดถึง 90%
+- **Intelligent Layout Analysis:**
+  - **Bubble Detection:** ตรวจจับกรอบคำพูดมังงะอัตโนมัติ
+  - **Smart Sorting:** จัดเรียงลำดับการอ่านแบบ Column-Major (ขวาไปซ้าย) รองรับมังงะหน้าคู่
+- **Text Processing:** 
+  - **Thai Zero Width Space:** ระบบช่วยตัดบรรทัดภาษาไทยให้สวยงาม
+  - **English Word Segmentation:** แยกคำภาษาอังกฤษที่ติดกันด้วย `wordninja`
+- **Dynamic Overlay:** แสดงผลคำแปลทับตำแหน่งเดิม พร้อมปรับสี พื้นหลัง ขนาดฟอนต์ และความโปร่งใสได้แบบ Real-time
 
-### ความต้องการของระบบ (Requirements)
+### การเตรียมความพร้อมก่อนใช้งาน
+1. **ติดตั้งโมเดล (Model Installation):**
+   - ไปที่หน้า **Settings > Model Installation Center**
+   - กดปุ่มดาวน์โหลดโมเดลที่ต้องการ (Manga-OCR หรือ PaddleOCR) โปรแกรมจะจัดการโฟลเดอร์ให้โดยอัตโนมัติ
+2. **การเร่งความเร็วด้วย GPU (สำหรับ NVIDIA):**
+   - ติดตั้งไดรเวอร์การ์ดจอเวอร์ชันล่าสุด
+   - (แนะนำ) ติดตั้ง [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) เพื่อประสิทธิภาพสูงสุด
+3. **สมัครใช้งาน API สำหรับการแปล:**
+   - **Google Translate:** ใช้งานได้ฟรีทันที (ไม่ต้องมีคีย์)
+   - **Gemini:** [Google AI Studio](https://aistudio.google.com/) (แนะนำ: ฟรีและเร็ว)
+   - **Groq:** [Groq Console](https://console.groq.com/) (ความเร็วสูงพิเศษ)
+   - **Ollama:** [Ollama.com](https://ollama.com/) (สำหรับการแปลแบบออฟไลน์ 100%)
+   - **OpenAI / Custom:** สมัครที่ [OpenAI Platform](https://platform.openai.com/) หรือใช้งานผ่าน [OpenRouter](https://openrouter.ai/)
 
-**1. ระบบ OCR (ตัวอ่านข้อความ)**
-- **Manga-OCR (NEW):** ระบบ AI (ONNX) รันผ่าน GPU แม่นยำที่สุดสำหรับภาษาญี่ปุ่นแนวตั้ง (มีระบบ **Model Installation Center** ในตัวโปรแกรมเพื่อโหลดไฟล์โมเดลอัตโนมัติ)
-- **Windows OCR:** (ติดมากับ Windows) ต้องติดตั้ง Language Pack ของภาษาต้นทางที่จะแปลให้เรียบร้อย (เช่น ญี่ปุ่น, จีน)
-- **PaddleOCR:** (แนะนำสำหรับมังงะ) ต้องดาวน์โหลดตัวโปรแกรม [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) และระบุที่อยู่ไฟล์ `.exe` ในหน้า Settings ของโปรแกรม
-
-**2. ระบบการแปล (Translator)**
-- **Google Translate (FREE):** แปลภาษาได้ทันทีโดยไม่ต้องใช้ API Key
-- **Gemini:** ต้องใช้ API Key สมัครฟรีได้ที่ [Google AI Studio](https://aistudio.google.com/) 
-- **Groq:** ต้องใช้ API Key สมัครฟรีได้ที่ [Groq Console](https://console.groq.com/) 
-- **Ollama:** สำหรับการแปลแบบ Offline ดาวน์โหลดได้ที่ [Ollama.com](https://ollama.com/) 
-- **Custom OpenAI:** รองรับ API ทุกเจ้าที่ใช้มาตรฐาน OpenAI (เช่น OpenRouter, DeepSeek, LM Studio) 
-
-### แหล่งที่มาของโมเดล (Model Resources)
-- **Manga-OCR 2025 (ONNX):** [l0wgear/manga-ocr-2025-onnx](https://huggingface.co/l0wgear/manga-ocr-2025-onnx) - โมเดล OCR คุณภาพสูงที่ปรับปรุงมาเพื่อมังงะญี่ปุ่นโดยเฉพาะ (เวอร์ชัน 2025)
-- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - ใช้โมเดลเวอร์ชัน **manga109_yolo/v2023.12.07_s** (YOLOv8-Small) ซึ่งถูกปรับจูนมาเพื่อการตรวจจับตำแหน่งลูกโป่งคำพูดและข้อความในมังงะโดยเฉพาะ มีความสมดุลระหว่างความเร็วและความแม่นยำ
-
-### เทคโนโลยีที่ใช้ (Tech Stack)
-- **Language:** Rust (edition 2024)
-- **UI Framework:** [egui](https://github.com/emilk/egui)
-- **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
-- **NLP Engine:** Dictionary-based Tokenizer (`wordninja`)
-- **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
-- **OCR Engines:** Windows.Media.Ocr & PaddleOCR
-- **Graphics:** Win32 API (สำหรับระบบ Overlay โปร่งใส)
-- **Capture:** Screenshots crate พร้อมระบบ stabilization
-
-### การติดตั้งและใช้งาน
-
-**วิธีติดตั้ง (สำหรับนักพัฒนา):**
-1. ติดตั้ง [Rust Toolchain](https://rustup.rs/)
-2. Clone โปรเจกต์:
-   ```bash
-   git clone https://github.com/SupawitKaennak/KTranslatorV2.git
-   cd KTranslatorV2
-   ```
-3. ดาวน์โหลดโมเดลมาวางไว้ที่ `models/manga-ocr/` (encoder, decoder, tokenizer, yolo)
-4. รันโปรแกรม:
-   ```bash
-   cargo run --release
-   ```
-
-**ขั้นตอนการใช้งาน:**
-1. เข้าไปที่ **Settings** (ไอคอนฟันเฟือง) เพื่อเลือก OCR และใส่ API Key
-2. กด **Add Region** และเลือกพื้นที่บนหน้าจอที่ต้องการแปล
-3. เลือกภาษาต้นทาง (From) และภาษาปลายทาง (To)
-4. กดปุ่ม **Start** เพื่อเริ่มการแปล
-5. เปิดโหมด **Overlay Mode** หากต้องการให้คำแปลแสดงทับตำแหน่งเดิมบนหน้าจอ
-6. ปรับแต่งรูปลักษณ์ของ Overlay ได้ที่ **Appearance Settings** เช่น สีพื้นหลัง ความโปร่งใส และขนาดฟอนต์
+### วิธีใช้งาน
+1. เปิดโปรแกรมและเข้าไปที่หน้า **Settings** (ไอคอนฟันเฟือง)
+2. เลือก **OCR Engine** และ **Translation Provider** ที่ต้องการ (พร้อมกรอก API Key)
+3. กดปุ่ม **Add Region** บนหน้าหลัก เพื่อลากพื้นที่บนหน้าจอที่ต้องการแปล
+4. เลือกภาษาต้นทาง (From) และปลายทาง (To)
+5. กดปุ่ม **Start Translate**
+6. เปิด **Overlay Mode** เพื่อให้คำแปลแสดงทับข้อความเดิมในตำแหน่งที่ถูกต้อง
 
 ---
 
 <a name="english"></a>
 ## English
 
-A powerful Screen Translator written in Rust for seamless real-time translation.
+A high-performance Screen Translator written in Rust, optimized for fast, accurate, and flexible offline/online processing.
 
 ### Key Features
-- **Game Translation:** Translate in-game dialogues, menus, and item descriptions.
-- **Manga & Comics:** Detect and translate vertical, slanted, or curved text within speech bubbles.
-- **Manga-OCR & YOLOv8:** Extract and recognize vertical Japanese text using specialized ONNX models.
-- **Bubble Detection & Sorting:** Detect speech bubbles and sort reading order from right-to-left and top-to-bottom for double-page spreads (RTL Column-Major).
-- **Word Segmentation:** Split unspaced English text into distinct words using a dictionary (`wordninja`).
-- **Thai Word Wrap:** Inject Zero Width Spaces into text strings to enable line-breaking for Thai script.
-- **Prompt Customization:** Modify System and User translation prompts with context variable interpolation.
-- **Telemetry Dashboard:** Display internal pipeline metrics including thread status, timing counters, and layout coordinates.
-- **Documents & Web Pages:** Translate text from uncopyable images, PDF files, or browser windows.
-- **Sentence Merge:** Concatenate separate text lines into a single string to maintain translation context.
-- **Overlay Customization:** Adjust background color, text color, font size, and window corner radius.
+- **Advanced OCR Engines (Native ONNX):**
+  - **Manga-OCR:** Specialized AI for vertical Japanese text recognition in manga (Manga109 based).
+  - **PaddleOCR v4 (Mobile):** Ultra-fast and lightweight, ideal for standard hardware.
+  - **PaddleOCR v4 (Server):** High-precision recognition for complex game fonts and documents.
+- **Hardware Acceleration:** Native support for **NVIDIA CUDA, TensorRT**, and **DirectML**, reducing CPU usage by up to 90%.
+- **Intelligent Layout Analysis:**
+  - **Bubble Detection:** Automated detection of manga speech bubbles.
+  - **Smart Sorting:** RTL Column-Major sorting support for double-page manga spreads.
+- **Advanced Text Processing:** 
+  - **Thai Word Wrap:** Automated Zero Width Space injection for beautiful Thai rendering.
+  - **English Segmentation:** Splits unspaced English text using `wordninja`.
+- **Dynamic Overlay:** Real-time translation overlay with customizable colors, opacity, and font styles.
 
-### System Requirements
+### Preparation
+1. **Model Installation:**
+   - Open **Settings > Model Installation Center**.
+   - Download the required suites (Manga-OCR or PaddleOCR). The app handles all path configurations.
+2. **GPU Acceleration (NVIDIA Users):**
+   - Install the latest NVIDIA drivers.
+   - (Recommended) Install [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) for peak performance.
+3. **Translation API Setup:**
+   - **Google Translate:** Free to use (No key required).
+   - **Gemini:** [Google AI Studio](https://aistudio.google.com/) (Recommended: Fast & Free tier).
+   - **Groq:** [Groq Console](https://console.groq.com/) (Extreme inference speed).
+   - **Ollama:** [Ollama.com](https://ollama.com/) (For 100% offline local LLM translation).
+   - **OpenAI / Custom:** [OpenAI Platform](https://platform.openai.com/) or [OpenRouter](https://openrouter.ai/).
 
-**1. OCR Engines (Text Recognition)**
-- **Manga-OCR (NEW):** High-precision AI recognition (ONNX) with GPU support.
-- **Windows OCR:** Built-in. Requires language packs for source languages (e.g., Japanese, Chinese).
-- **PaddleOCR:** Recommended for manga. Download [PaddleOCR-json](https://github.com/hiroi-sora/PaddleOCR-json/releases) and specify the `.exe` path in the app settings.
-
-**2. Translation Providers**
-- **Google Translate (FREE):** Instant translation without an API Key.
-- **Gemini:** API Key required. Get it at [Google AI Studio](https://aistudio.google.com/) (Supports **Auto-Fetch**).
-- **Groq:** High-speed API. Get your key at [Groq Console](https://console.groq.com/) (Supports **Auto-Fetch**).
-- **Ollama:** For local/offline translation. Download at [Ollama.com](https://ollama.com/) (Supports **Auto-Fetch**).
-- **Custom OpenAI:** Supports any OpenAI-compatible API (OpenRouter, DeepSeek, LM Studio) with **Auto-Fetch** model selection support.
-
-### Tech Stack
-- **Language:** Rust (edition 2024)
-- **AI Models:** Vision Encoder-Decoder (Manga-OCR) & YOLOv8 (Text Detection)
-- **NLP Engine:** Dictionary-based Tokenizer (`wordninja`)
-- **Runtime:** ONNX Runtime with DirectML (GPU Acceleration)
-- **UI Framework:** [egui](https://github.com/emilk/egui)
-- **OCR Engines:** Windows.Media.Ocr & PaddleOCR
-- **Graphics:** Win32 API (for transparent overlay system)
-- **Capture:** Screenshots crate with stabilization logic
-
-### Getting Started
-
-**Installation (Developers):**
-1. Install [Rust Toolchain](https://rustup.rs/).
-2. Clone the repository and place the ONNX models in `models/manga-ocr/`.
-3. Run the application:
-   ```bash
-   cargo run --release
-   ```
-
-**Basic Usage:**
-1. Open **Settings** (gear icon) to select your OCR engine and enter API keys.
-2. Click **Add Region** to select the area of the screen you want to translate.
-3. Select Source (From) and Target (To) languages.
-4. Click **Start** to begin the real-time translation loop.
-5. Enable **Overlay Mode** to display translations directly over the original text.
-
-### AI Models & Credits
-- **Manga-OCR 2025 (ONNX):** [l0wgear/manga-ocr-2025-onnx](https://huggingface.co/l0wgear/manga-ocr-2025-onnx) - High-quality OCR model optimized for Japanese manga.
-- **YOLOv8 Text Detection:** [deepghs/manga109_yolo](https://huggingface.co/deepghs/manga109_yolo) - Utilizing the **manga109_yolo/v2023.12.07_s** (Small) variant for real-time bubble and text detection with high precision and performance.
+### Usage Instructions
+1. Launch the app and go to **Settings** (gear icon).
+2. Configure your **OCR Engine** and **Translation Provider** (enter API keys where required).
+3. Click **Add Region** and drag to select the capture area on your screen.
+4. Set the Source (From) and Target (To) languages.
+5. Click **Start Translate**.
+6. Toggle **Overlay Mode** to display translations over the original text accurately.
 
 ---
 
+### Tech Stack
+- **Language:** Rust (edition 2024)
+- **UI Framework:** egui
+- **ML Runtime:** ONNX Runtime (ort) with CUDA/TensorRT/DirectML support
+- **OCR:** Manga-OCR (Vision Encoder-Decoder) & PaddleOCR v4
+- **NLP:** wordninja, Thai word segmentation logic
+
 ### License
-Copyright (c) 2024 Supawit Kaennak [GPL v3.0](LICENSE). All rights reserved.
+Copyright (c) 2026 Supawit Kaennak [GPL v3.0](LICENSE). All rights reserved.
