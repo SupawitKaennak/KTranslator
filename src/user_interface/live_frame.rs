@@ -20,10 +20,6 @@ const HANDLE: f32 = 14.0;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Zone {
     Move,
-    N,
-    S,
-    E,
-    W,
     Nw,
     Ne,
     Sw,
@@ -62,8 +58,6 @@ fn hit_zone(full: egui::Rect, p: egui::Pos2) -> Option<Zone> {
 fn cursor_for(zone: Zone) -> egui::CursorIcon {
     match zone {
         Zone::Move => egui::CursorIcon::Grab,
-        Zone::N | Zone::S => egui::CursorIcon::ResizeVertical,
-        Zone::E | Zone::W => egui::CursorIcon::ResizeHorizontal,
         Zone::Nw | Zone::Se => egui::CursorIcon::ResizeNwSe,
         Zone::Ne | Zone::Sw => egui::CursorIcon::ResizeNeSw,
     }
@@ -194,10 +188,6 @@ pub fn render_live_frame_viewport(
                     if let Some(z) = hit_zone(full, p) {
                         match z {
                             Zone::Move => ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag),
-                            Zone::N => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::North)),
-                            Zone::S => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::South)),
-                            Zone::E => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::East)),
-                            Zone::W => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::West)),
                             Zone::Nw => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::NorthWest)),
                             Zone::Ne => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::NorthEast)),
                             Zone::Sw => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::SouthWest)),
