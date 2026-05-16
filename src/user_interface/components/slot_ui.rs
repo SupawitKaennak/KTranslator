@@ -13,7 +13,6 @@ pub struct SlotUiResponse {
 }
 
 pub const LANGUAGE_OPTIONS: &[(&str, &str)] = &[
-    ("Auto Detection",                ""),
     ("Thai (th)",                     "th"),
     ("English (en)",                  "en"),
     ("Japanese (ja)",                 "ja"),
@@ -128,7 +127,11 @@ pub fn render_slot_item(
                         ui.selectable_value(&mut src, code.to_string(), label);
                     }
                 });
-            slot.source_lang = if src.is_empty() { None } else { Some(LanguageTag(src)) };
+            let old_src = slot.source_lang.as_ref().map(|l| l.0.clone());
+            slot.source_lang = if src.is_empty() { None } else { Some(LanguageTag(src.clone())) };
+            if old_src.as_ref() != slot.source_lang.as_ref().map(|l| &l.0) {
+                tracing::info!("Slot {} source language changed: {:?} -> {:?}", slot_idx, old_src, slot.source_lang);
+            }
 
             ui.add_space(10.0);
             ui.label(format!("{}:", i18n.to));

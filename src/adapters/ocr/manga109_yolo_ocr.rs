@@ -58,25 +58,48 @@ fn nms(mut boxes: Vec<BoundingBox>, iou_threshold: f32) -> Vec<BoundingBox> {
 }
 
 pub struct OnnxMangaRecognizer {
-    encoder: Arc<Mutex<Session>>,
-    decoder: Arc<Mutex<Session>>,
-    yolo: Arc<Mutex<Session>>,
-    tokenizer: Tokenizer,
+    encoder: Arc<Mutex<Option<Session>>>,
+    decoder: Arc<Mutex<Option<Session>>>,
+    yolo: Arc<Mutex<Option<Session>>>,
+    tokenizer: Arc<Mutex<Option<Tokenizer>>>,
+    models_dir: std::path::PathBuf,
+    gpu_backend: GpuBackend,
     decoder_start_token_id: i64,
     eos_token_id: i64,
 }
 
 impl OnnxMangaRecognizer {
-    pub fn new<P: AsRef<Path>>(models_dir: P, gpu_backend: GpuBackend) -> Result<Self> {
-        let models_dir_input = models_dir.as_ref();
-        let mut resolved_path = models_dir_input.to_path_buf();
+    pub fn new<P: AsRef<Path>>(models_dir: P, gpu_backend: GpuBackend) -> Self {
+        Self {
+            encoder: Arc::new(Mutex::new(None)),
+            decoder: Arc::new(Mutex::new(None)),
+            yolo: Arc::new(Mutex::new(None)),
+            tokenizer: Arc::new(Mutex::new(None)),
+            models_dir: models_dir.as_ref().to_path_buf(),
+            gpu_backend,
+            decoder_start_token_id: 2, 
+            eos_token_id: 3, 
+        }
+    }
+
+    fn ensure_sessions(&self) -> Result<()> {
+        let mut enc_guard = self.encoder.lock();
+        let mut dec_guard = self.decoder.lock();
+        let mut yolo_guard = self.yolo.lock();
+        let mut tok_guard = self.tokenizer.lock();
+
+        if enc_guard.is_some() && dec_guard.is_some() && yolo_guard.is_some() && tok_guard.is_some() {
+            return Ok(());
+        }
+
+        let mut resolved_path = self.models_dir.clone();
         
         // 1. Try relative to CWD
         if !resolved_path.exists() {
             // 2. Try relative to EXE
             if let Ok(exe_path) = std::env::current_exe() {
                 if let Some(exe_dir) = exe_path.parent() {
-                    let exe_relative = exe_dir.join(models_dir_input);
+                    let exe_relative = exe_dir.join(&self.models_dir);
                     if exe_relative.exists() {
                         resolved_path = exe_relative;
                     }
@@ -93,21 +116,19 @@ impl OnnxMangaRecognizer {
             anyhow::bail!("Manga-OCR models not found. Please ensure the 'models' folder is present at {:?} or next to the .exe", resolved_path);
         }
 
-        let encoder = super::onnx_engine::OnnxEngine::create_session(&encoder_path, gpu_backend)?;
-        let decoder = super::onnx_engine::OnnxEngine::create_session(&decoder_path, gpu_backend)?;
-        let yolo = super::onnx_engine::OnnxEngine::create_session(&yolo_path, gpu_backend)?;
+        let encoder = super::onnx_engine::OnnxEngine::create_session(&encoder_path, self.gpu_backend)?;
+        let decoder = super::onnx_engine::OnnxEngine::create_session(&decoder_path, self.gpu_backend)?;
+        let yolo = super::onnx_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
 
         let tokenizer = Tokenizer::from_file(tokenizer_path)
             .map_err(|e| anyhow::anyhow!("Tokenizer Error: {}", e))?;
 
-        Ok(Self {
-            encoder: Arc::new(Mutex::new(encoder)),
-            decoder: Arc::new(Mutex::new(decoder)),
-            yolo: Arc::new(Mutex::new(yolo)),
-            tokenizer,
-            decoder_start_token_id: 2, 
-            eos_token_id: 3, 
-        })
+        *enc_guard = Some(encoder);
+        *dec_guard = Some(decoder);
+        *yolo_guard = Some(yolo);
+        *tok_guard = Some(tokenizer);
+
+        Ok(())
     }
 
     fn detect_text_boxes(&self, img: &image::DynamicImage) -> Result<Vec<BoundingBox>> {
@@ -130,10 +151,13 @@ impl OnnxMangaRecognizer {
             }
         }
 
+        self.ensure_sessions()?;
+
         let input_tensor = ort::value::Value::from_array(input)
             .map_err(|e| anyhow::anyhow!("YOLO input error: {}", e))?;
             
-        let mut yolo = self.yolo.lock();
+        let mut yolo_guard = self.yolo.lock();
+        let yolo = yolo_guard.as_mut().unwrap();
         let outputs = yolo.run(ort::inputs![input_tensor])
             .map_err(|e| anyhow::anyhow!("YOLO run error: {}", e))?;
             
@@ -205,6 +229,8 @@ impl OnnxMangaRecognizer {
     }
 
     fn recognize_internal(&self, img: &image::DynamicImage) -> Result<String> {
+        self.ensure_sessions()?;
+
         let img = img.resize_exact(224, 224, image::imageops::FilterType::Triangle);
         let rgb = img.to_rgb8();
         
@@ -219,7 +245,8 @@ impl OnnxMangaRecognizer {
         let input_tensor = ort::value::Value::from_array(input)
             .map_err(|e| anyhow::anyhow!("Value creation error: {}", e))?;
             
-        let mut encoder = self.encoder.lock();
+        let mut encoder_guard = self.encoder.lock();
+        let encoder = encoder_guard.as_mut().unwrap();
         let encoder_outputs = encoder.run(ort::inputs![input_tensor])
             .map_err(|e| anyhow::anyhow!("Encoder run error: {}", e))?;
             
@@ -238,7 +265,8 @@ impl OnnxMangaRecognizer {
             let encoder_hidden_tensor = ort::value::Value::from_array(last_hidden_state.to_owned())
                 .map_err(|e| anyhow::anyhow!("Value creation error: {}", e))?;
 
-            let mut decoder = self.decoder.lock();
+            let mut decoder_guard = self.decoder.lock();
+            let decoder = decoder_guard.as_mut().unwrap();
             let decoder_outputs = decoder.run(ort::inputs![
                 input_ids_tensor,
                 encoder_hidden_tensor
@@ -265,7 +293,9 @@ impl OnnxMangaRecognizer {
         }
 
         let u32_tokens: Vec<u32> = tokens.iter().map(|&t| t as u32).collect();
-        let decoded = self.tokenizer.decode(&u32_tokens, true)
+        let tok_guard = self.tokenizer.lock();
+        let tokenizer = tok_guard.as_ref().unwrap();
+        let decoded = tokenizer.decode(&u32_tokens, true)
             .map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
             
         Ok(decoded)
@@ -285,13 +315,7 @@ impl OcrEngine for OnnxMangaRecognizer {
             .ok_or_else(|| anyhow::anyhow!("Failed to create image from frame"))?;
         let dynamic_img = image::DynamicImage::ImageRgba8(img);
 
-        let boxes = match self.detect_text_boxes(&dynamic_img) {
-            Ok(b) => b,
-            Err(e) => {
-                tracing::error!("YOLO Detection failed: {}", e);
-                return Ok(vec![]);
-            }
-        };
+        let boxes = self.detect_text_boxes(&dynamic_img)?;
 
         if boxes.is_empty() {
             return Ok(vec![]);
@@ -321,10 +345,7 @@ impl OcrEngine for OnnxMangaRecognizer {
             if x2 <= x1 || y2 <= y1 { continue; }
             
             let cropped = dynamic_img.crop_imm(x1, y1, x2 - x1, y2 - y1);
-            let text = match self.recognize_internal(&cropped) {
-                Ok(t) => t,
-                Err(_) => continue,
-            };
+            let text = self.recognize_internal(&cropped)?;
             
             let mut cleaned = text.trim().to_string();
             while cleaned.contains("....") { cleaned = cleaned.replace("....", ".."); }
