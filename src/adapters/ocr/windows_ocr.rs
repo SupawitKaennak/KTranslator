@@ -12,15 +12,119 @@ use crate::core::{
     types::LanguageTag,
 };
 
+use parking_lot::Mutex;
+use std::collections::HashMap;
+
 pub struct WindowsOcr {
-    engine: Arc<OcrEngine>,
+    engines: Mutex<HashMap<String, Arc<OcrEngine>>>,
 }
 
 impl WindowsOcr {
     pub fn new() -> Self {
-        let lang = Language::CreateLanguage(&windows::core::HSTRING::from("en-US")).unwrap();
-        let engine = OcrEngine::TryCreateFromLanguage(&lang).unwrap();
-        Self { engine: Arc::new(engine) }
+        Self { 
+            engines: Mutex::new(HashMap::new()) 
+        }
+    }
+
+    fn get_engine(&self, lang_tag: Option<&LanguageTag>) -> Result<Arc<OcrEngine>> {
+        let is_auto = lang_tag.is_none();
+        let requested_tag = if let Some(t) = lang_tag {
+            t.0.as_str().to_lowercase()
+        } else {
+            Language::CurrentInputMethodLanguageTag()
+                .map(|h| h.to_string().to_lowercase())
+                .unwrap_or_else(|_| "en-us".to_string())
+        };
+        
+        tracing::info!("WindowsOCR requested language: {} (auto={})", requested_tag, is_auto);
+        
+        let available_langs = OcrEngine::AvailableRecognizerLanguages()?;
+        
+        // Log all available languages for debugging
+        let mut all_tags = Vec::new();
+        for lang in &available_langs {
+            if let Ok(tag) = lang.LanguageTag() {
+                all_tags.push(tag.to_string().to_lowercase());
+            }
+        }
+        tracing::info!("WindowsOCR available languages in system: {:?}", all_tags);
+        
+        let mut best_match = None;
+        
+        // 1. Exact match check
+        for lang in &available_langs {
+            if let Ok(tag) = lang.LanguageTag() {
+                let tag_str = tag.to_string().to_lowercase();
+                if tag_str == requested_tag {
+                    best_match = Some(lang.clone());
+                    break;
+                }
+            }
+        }
+        
+        // 2. Prefix match check (e.g. "ru" matches "ru-RU")
+        if best_match.is_none() {
+            for lang in &available_langs {
+                if let Ok(tag) = lang.LanguageTag() {
+                    let tag_str = tag.to_string().to_lowercase();
+                    if tag_str.starts_with(&requested_tag) || requested_tag.starts_with(&tag_str) {
+                        best_match = Some(lang.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback logic
+        let final_lang = match best_match {
+            Some(l) => l,
+            None => {
+                if is_auto {
+                    // If Auto Detect failed to find the input language, try English or first available
+                    tracing::warn!("Auto detect could not find {}, trying English or first available", requested_tag);
+                    let mut fallback = None;
+                    for lang in &available_langs {
+                        if let Ok(tag) = lang.LanguageTag() {
+                            let tag_str = tag.to_string().to_lowercase();
+                            if tag_str.starts_with("en") {
+                                fallback = Some(lang.clone());
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if let Some(f) = fallback {
+                        f
+                    } else if let Some(first) = available_langs.First().ok().and_then(|i| i.into_iter().next()) {
+                        first
+                    } else {
+                        anyhow::bail!("No Windows OCR languages installed. Please install a Language Pack in Windows Settings.");
+                    }
+                } else {
+                    // Manual selection failed - this is a hard error
+                    let available = all_tags.join(", ");
+                    anyhow::bail!(
+                        "Windows OCR does not have the language pack for '{}' installed.\n\nAvailable languages: {}\n\nPlease go to Windows Settings -> Time & Language -> Language & Region and add the language pack for '{}' (ensure OCR/Optical Character Recognition is checked).",
+                        requested_tag, available, requested_tag
+                    );
+                }
+            }
+        };
+
+        let final_tag = final_lang.LanguageTag()?.to_string();
+        tracing::info!("WindowsOCR selected engine language: {}", final_tag);
+
+        let mut cache = self.engines.lock();
+        if let Some(engine) = cache.get(&final_tag) {
+            return Ok(engine.clone());
+        }
+
+        let engine = OcrEngine::TryCreateFromLanguage(&final_lang)
+            .map_err(|e| anyhow::anyhow!("Failed to create Windows OCR engine for {}: {}", final_tag, e))?;
+        
+        let engine_arc = Arc::new(engine);
+        cache.insert(final_tag.clone(), engine_arc.clone());
+        Ok(engine_arc)
     }
 
     fn preprocess(frame: FrameRgba) -> (FrameRgba, f32) {
@@ -91,7 +195,8 @@ fn wait_for<F: std::future::Future>(f: F) -> F::Output {
 }
 
 impl OcrEngineTrait for WindowsOcr {
-    fn recognize(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<String> {
+    fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
+        let engine = self.get_engine(lang_hint)?;
         let (processed, _) = Self::preprocess(frame);
         
         // Encode raw pixels to PNG in memory
@@ -113,11 +218,12 @@ impl OcrEngineTrait for WindowsOcr {
         let decoder = wait_for(BitmapDecoder::CreateWithIdAsync(windows::Graphics::Imaging::BitmapDecoder::PngDecoderId()?, &stream)?.into_future())?;
         let bitmap = wait_for(decoder.GetSoftwareBitmapAsync()?.into_future())?;
 
-        let result = wait_for(self.engine.RecognizeAsync(&bitmap)?.into_future())?;
+        let result = wait_for(engine.RecognizeAsync(&bitmap)?.into_future())?;
         Ok(result.Text()?.to_string())
     }
 
-    fn recognize_lines(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+    fn recognize_lines(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+        let engine = self.get_engine(lang_hint)?;
         let (processed, scale) = Self::preprocess(frame);
         
         // Encode raw pixels to PNG in memory
@@ -139,7 +245,7 @@ impl OcrEngineTrait for WindowsOcr {
         let decoder = wait_for(BitmapDecoder::CreateWithIdAsync(windows::Graphics::Imaging::BitmapDecoder::PngDecoderId()?, &stream)?.into_future())?;
         let bitmap = wait_for(decoder.GetSoftwareBitmapAsync()?.into_future())?;
 
-        let result = wait_for(self.engine.RecognizeAsync(&bitmap)?.into_future())?;
+        let result = wait_for(engine.RecognizeAsync(&bitmap)?.into_future())?;
         let lines_api = result.Lines()?;
 
         let mut out_lines = Vec::new();
