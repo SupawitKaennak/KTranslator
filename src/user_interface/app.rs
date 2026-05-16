@@ -25,8 +25,9 @@ use crate::{
             settings_ui::show_settings_window,
             slot_ui::render_slot_item,
         },
-        crop_overlay::{run_crop_viewport, CropOutcome, CropOverlayState},
         font_loader,
+        live_frame,
+        region_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
         i18n::get_i18n,
         overlay_renderer,
     },
@@ -46,9 +47,9 @@ pub struct App {
     err_handler: crate::core::usecases::error_handler::ErrorHandler,
     settings_ctrl: crate::core::usecases::settings_controller::SettingsController,
 
-    /// Fullscreen drag-to-select overlay (one at a time).
-    crop_session: Option<Arc<Mutex<CropOverlayState>>>,
-    crop_finish: Arc<Mutex<Option<CropOutcome>>>,
+    /// Fullscreen region pick / adjust overlay (one at a time).
+    region_session: Option<Arc<Mutex<RegionOverlayState>>>,
+    region_finish: Arc<Mutex<Option<RegionOutcome>>>,
 
     capture: Arc<dyn FrameSource>,
 
@@ -147,8 +148,8 @@ impl App {
             settings_fetch_models_pending: false,
             err_handler,
             settings_ctrl: crate::core::usecases::settings_controller::SettingsController::new(),
-            crop_session: None,
-            crop_finish: Arc::new(Mutex::new(None)),
+            region_session: None,
+            region_finish: Arc::new(Mutex::new(None)),
             capture: Arc::new(ScreenshotsCapture::new()),
             platform: platform.clone(),
             ocr_engine,
@@ -198,6 +199,15 @@ impl App {
             }
             
             overlay_renderer::render_overlay_viewport(
+                ctx,
+                i,
+                &self.model,
+                &self.slots_runtime[i],
+                &self.settings,
+                &self.platform,
+            );
+
+            live_frame::render_live_frame_viewport(
                 ctx,
                 i,
                 &self.model,
@@ -449,19 +459,19 @@ impl eframe::App for App {
         self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
-        if let Some(sess) = &self.crop_session {
-            run_crop_viewport(ctx, sess.clone(), self.crop_finish.clone());
+        if let Some(sess) = &self.region_session {
+            run_region_viewport(ctx, sess.clone(), self.region_finish.clone());
         }
-        if let Some(out) = self.crop_finish.lock().take() {
+        if let Some(out) = self.region_finish.lock().take() {
             match out {
-                CropOutcome::Done { slot, rect } => {
+                RegionOutcome::Done { slot, rect } => {
                     if let Some(s) = self.model.lock().slots.get_mut(slot) {
                         s.rect = Some(rect);
                     }
                 }
-                CropOutcome::Cancelled => {}
+                RegionOutcome::Cancelled => {}
             }
-            self.crop_session = None;
+            self.region_session = None;
         }
 
         let mut required_height: f32 = 0.0;
@@ -564,11 +574,12 @@ impl eframe::App for App {
                     }
                     if resp.do_crop {
                         let display_id = model.slots[i].display_id;
-                        drop(model); // Release lock before calling start
-                        match CropOverlayState::start(i, display_id, ui.ctx()) {
+                        let existing_rect = model.slots[i].rect;
+                        drop(model);
+                        match RegionOverlayState::start(i, display_id, ui.ctx(), existing_rect) {
                             Ok(st) => {
-                                *self.crop_finish.lock() = None;
-                                self.crop_session = Some(Arc::new(Mutex::new(st)));
+                                *self.region_finish.lock() = None;
+                                self.region_session = Some(Arc::new(Mutex::new(st)));
                                 self.err_handler.clear_all();
                             }
                             Err(e) => {
