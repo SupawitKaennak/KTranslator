@@ -167,7 +167,7 @@ impl BackgroundCoordinator {
                     let now = Self::now_ms();
                     let mut model = model_arc.lock();
                     if let Some(slot) = model.slots.get_mut(slot_idx) {
-                        slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(200));
+                        slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(100)); // Reduced from 200ms
                     }
                 }
                 BgResult::HashChanged { slot_idx, new_hash } => {
@@ -176,7 +176,7 @@ impl BackgroundCoordinator {
                     if let Some(slot) = model.slots.get_mut(slot_idx) {
                         slot.stable_hash = new_hash;
                         slot.stable_since_ms = now;
-                        slot.next_tick_at_ms = now.saturating_add(150);
+                        slot.next_tick_at_ms = now.saturating_add(30); // Reduced from 150ms to 30ms for instant follow-up
                     }
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         runtime.busy = false;
@@ -192,7 +192,7 @@ impl BackgroundCoordinator {
                     }
                     let mut model = model_arc.lock();
                     if let Some(slot) = model.slots.get_mut(slot_idx) {
-                        slot.next_tick_at_ms = Self::now_ms() + 50;
+                        slot.next_tick_at_ms = Self::now_ms() + 16; // 60fps responsive polling (16ms)
                     }
                 }
                 BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines } => {
