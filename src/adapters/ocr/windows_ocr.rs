@@ -27,54 +27,93 @@ impl WindowsOcr {
     }
 
     fn get_engine(&self, lang_tag: Option<&LanguageTag>) -> Result<Arc<OcrEngine>> {
+        let is_auto = lang_tag.is_none();
         let requested_tag = if let Some(t) = lang_tag {
             t.0.as_str().to_lowercase()
         } else {
-            // Default to system primary input language for Auto Detect
             Language::CurrentInputMethodLanguageTag()
                 .map(|h| h.to_string().to_lowercase())
                 .unwrap_or_else(|_| "en-us".to_string())
         };
         
-        // 1. Get all available OCR languages from Windows
+        tracing::info!("WindowsOCR requested language: {} (auto={})", requested_tag, is_auto);
+        
         let available_langs = OcrEngine::AvailableRecognizerLanguages()?;
         
-        // 2. Find the best match
-        let mut best_match = None;
-        
-        // Exact match check
+        // Log all available languages for debugging
+        let mut all_tags = Vec::new();
         for lang in &available_langs {
-            let tag = lang.LanguageTag()?.to_string().to_lowercase();
-            if tag == requested_tag {
-                best_match = Some(lang.clone());
-                break;
+            if let Ok(tag) = lang.LanguageTag() {
+                all_tags.push(tag.to_string().to_lowercase());
             }
         }
+        tracing::info!("WindowsOCR available languages in system: {:?}", all_tags);
         
-        // Prefix match check (e.g. "ru" matches "ru-RU")
-        if best_match.is_none() {
-            for lang in &available_langs {
-                let tag = lang.LanguageTag()?.to_string().to_lowercase();
-                if tag.starts_with(&requested_tag) || requested_tag.starts_with(&tag) {
+        let mut best_match = None;
+        
+        // 1. Exact match check
+        for lang in &available_langs {
+            if let Ok(tag) = lang.LanguageTag() {
+                let tag_str = tag.to_string().to_lowercase();
+                if tag_str == requested_tag {
                     best_match = Some(lang.clone());
                     break;
                 }
             }
         }
+        
+        // 2. Prefix match check (e.g. "ru" matches "ru-RU")
+        if best_match.is_none() {
+            for lang in &available_langs {
+                if let Ok(tag) = lang.LanguageTag() {
+                    let tag_str = tag.to_string().to_lowercase();
+                    if tag_str.starts_with(&requested_tag) || requested_tag.starts_with(&tag_str) {
+                        best_match = Some(lang.clone());
+                        break;
+                    }
+                }
+            }
+        }
 
-        // If still no match and it was Auto Detect, just pick the first available one or en-US
+        // 3. Fallback logic
         let final_lang = match best_match {
             Some(l) => l,
             None => {
-                if let Some(first) = available_langs.First()?.into_iter().next() {
-                    first
+                if is_auto {
+                    // If Auto Detect failed to find the input language, try English or first available
+                    tracing::warn!("Auto detect could not find {}, trying English or first available", requested_tag);
+                    let mut fallback = None;
+                    for lang in &available_langs {
+                        if let Ok(tag) = lang.LanguageTag() {
+                            let tag_str = tag.to_string().to_lowercase();
+                            if tag_str.starts_with("en") {
+                                fallback = Some(lang.clone());
+                                break;
+                            }
+                        }
+                    }
+                    
+                    if let Some(f) = fallback {
+                        f
+                    } else if let Some(first) = available_langs.First().ok().and_then(|i| i.into_iter().next()) {
+                        first
+                    } else {
+                        anyhow::bail!("No Windows OCR languages installed. Please install a Language Pack in Windows Settings.");
+                    }
                 } else {
-                    anyhow::bail!("No Windows OCR languages installed. Please install a Language Pack in Windows Settings.");
+                    // Manual selection failed - this is a hard error
+                    let available = all_tags.join(", ");
+                    anyhow::bail!(
+                        "Windows OCR does not have the language pack for '{}' installed.\n\nAvailable languages: {}\n\nPlease go to Windows Settings -> Time & Language -> Language & Region and add the language pack for '{}' (ensure OCR/Optical Character Recognition is checked).",
+                        requested_tag, available, requested_tag
+                    );
                 }
             }
         };
 
         let final_tag = final_lang.LanguageTag()?.to_string();
+        tracing::info!("WindowsOCR selected engine language: {}", final_tag);
+
         let mut cache = self.engines.lock();
         if let Some(engine) = cache.get(&final_tag) {
             return Ok(engine.clone());
