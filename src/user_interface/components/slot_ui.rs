@@ -13,7 +13,6 @@ pub struct SlotUiResponse {
 }
 
 pub const LANGUAGE_OPTIONS: &[(&str, &str)] = &[
-    ("Auto Detection",                ""),
     ("Thai (th)",                     "th"),
     ("English (en)",                  "en"),
     ("Japanese (ja)",                 "ja"),
