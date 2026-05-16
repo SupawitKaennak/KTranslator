@@ -125,6 +125,7 @@ impl TranslationPipeline {
         frame.width = proc_w;
         frame.height = proc_h;
 
+        tracing::info!("Executing OCR for slot {} with tag: {:?}", slot_idx, source_lang);
         let mut raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
 
         // Line-level Garbage Filtering
