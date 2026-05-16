@@ -156,7 +156,10 @@ impl BackgroundCoordinator {
                             }
                         }
                     }
-                    err_handler.dismiss(slot_idx);
+                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+                        runtime.error_streak = 0; // Reset error streak on success
+                        err_handler.dismiss(slot_idx);
+                    }
                 }
                 BgResult::Unchanged { slot_idx } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
@@ -210,7 +213,9 @@ impl BackgroundCoordinator {
                         }
 
                         runtime.busy = false;
+                        runtime.processing = false;
                         runtime.status = "Ready (Cached)".to_string();
+                        runtime.error_streak = 0; // Success case
                         runtime.first_unstable_at = 0; // Reset
                         runtime.last_hash = frame_hash;
 
@@ -243,14 +248,17 @@ impl BackgroundCoordinator {
                         runtime.busy = false;
                         runtime.processing = false;
                         runtime.status = "Error".to_string();
+                        runtime.error_streak = runtime.error_streak.saturating_add(1);
 
                         let is_rate_limit = err.contains("quota") || err.contains("429") || err.contains("Too Many Requests");
                         let is_bad_request = err.contains("400") || err.contains("parse") || err.contains("invalid");
                         let is_server_err = err.contains("500") || err.contains("502") || err.contains("503") || err.contains("timeout");
 
                         let (retry_delay_ms, friendly) = if is_rate_limit {
-                            let secs = 30;
-                            (30_000, format!("Region {}: API rate limit hit — retrying in {secs}s", slot_idx + 1))
+                            // Exponential backoff for rate limits: 30s, 60s, 120s, 240s... max 10 mins
+                            let multiplier = 2u64.pow(runtime.error_streak.saturating_sub(1).min(5));
+                            let secs = 30 * multiplier;
+                            (secs * 1000, format!("Region {}: API rate limit hit — retrying in {secs}s", slot_idx + 1))
                         } else if is_bad_request {
                             let secs = 10;
                             (10_000, format!("Region {}: Data format error — retrying in {secs}s", slot_idx + 1))
@@ -283,6 +291,7 @@ impl BackgroundCoordinator {
         translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
         text_translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
         settings: &crate::infrastructure::settings::Settings,
+        platform: &Arc<dyn crate::infrastructure::platform::PlatformServices>,
         ctx: egui::Context,
     ) {
         // Dynamically apply user-configured worker thread counts
@@ -352,6 +361,7 @@ impl BackgroundCoordinator {
             let cache_arc = translation_cache.clone();
             let text_cache_arc = text_translation_cache.clone();
             let first_unstable_at = slots_runtime[i].first_unstable_at;
+            let platform = platform.clone();
             let smart_merge = settings.smart_merge;
             let img_proc_cfg = settings.img_proc.clone();
             let txt_proc_cfg = settings.txt_proc.clone();
@@ -372,7 +382,7 @@ impl BackgroundCoordinator {
                         capture, ocr_engine, translator, prev_hash, stable_hash,
                         stable_since_ms, language_version, cache_arc, text_cache_arc,
                         first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
-                        max_cache_entries,
+                        max_cache_entries, platform.clone(),
                     );
 
                     match result {
