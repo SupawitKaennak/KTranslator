@@ -185,6 +185,8 @@ impl TranslationPipeline {
         let regex_rules_inner = regex_rules.clone();
         let gloss_protected_map_inner = Arc::new(gloss_protected_map);
         let regex_protected_map_inner = Arc::new(regex_protected_map);
+        let platform_inner = platform.clone();
+        let target_lang_inner = target_lang.clone();
         
         let build_trans_lines = move |translated: &str| -> Vec<String> {
             // Decode Glossary protected masks first
@@ -192,7 +194,15 @@ impl TranslationPipeline {
             // Apply Regex Post rules and decode masks
             let post_trans = crate::core::usecases::regex_engine::RegexEngine::apply_post_rules(&decoded_gloss, &regex_rules_inner, &regex_protected_map_inner);
             
-            let block_translations = Self::parse_numbered_lines(&post_trans, blocks.len(), &txt_proc_cfg_inner);
+            let mut block_translations = Self::parse_numbered_lines(&post_trans, blocks.len(), &txt_proc_cfg_inner);
+            
+            // --- Thai Word Segmentation ---
+            // Apply segmentation to each individual block only if target is Thai
+            if target_lang_inner.0 == "th" || target_lang_inner.0 == "Thai" {
+                for text in block_translations.iter_mut() {
+                    *text = platform_inner.segment_thai(text);
+                }
+            }
             let mut trans_lines = Vec::new();
             for (block_idx, size) in block_sizes.iter().enumerate() {
                 trans_lines.push(block_translations.get(block_idx).cloned().unwrap_or_default());
@@ -268,11 +278,7 @@ impl TranslationPipeline {
 
         // --- Thai Word Segmentation ---
         // If target is Thai, use platform segmenter to insert spaces for proper wrapping.
-        let raw_translated = if target_lang.0 == "th" || target_lang.0 == "Thai" {
-            platform.segment_thai(&translator_output)
-        } else {
-            translator_output
-        };
+        let raw_translated = translator_output;
 
         let trans_lines = build_trans_lines(&raw_translated);
         let translated = trans_lines.iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join("\n");
