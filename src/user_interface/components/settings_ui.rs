@@ -1289,8 +1289,6 @@ fn render_tab_debugging(ui: &mut egui::Ui, debug_infos: &[SlotDebugInfo], i18n: 
                         ui.label(format!("({})", info.status));
                     });
                     ui.end_row();
-
-                    ui.end_row();
  
                     ui.label(format!("{}:", i18n.dbg_debounce));
                     ui.label(format!("{} {}", info.identical_frames, i18n.dbg_frames_ident));
