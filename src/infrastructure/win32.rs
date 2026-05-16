@@ -1,6 +1,10 @@
 #[cfg(target_os = "windows")]
 use std::ptr;
 #[cfg(target_os = "windows")]
+use windows::core::HSTRING;
+#[cfg(target_os = "windows")]
+use windows::Data::Text::WordsSegmenter;
+#[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{COLORREF, HWND};
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -114,4 +118,33 @@ pub fn boost_process_priority() {
         let handle = GetCurrentProcess();
         let _ = SetPriorityClass(handle, ABOVE_NORMAL_PRIORITY_CLASS);
     }
+}
+
+/// Uses Windows.Globalization.WordsSegmenter to break Thai text into words.
+/// This ensures proper wrapping in the UI for Thai language which doesn't use spaces.
+pub fn segment_thai(text: &str) -> String {
+    #[cfg(target_os = "windows")]
+    {
+        // Only attempt if the text contains Thai characters to avoid overhead
+        if !text.chars().any(|c| (c as u32) >= 0x0E01 && (c as u32) <= 0x0E5B) {
+            return text.to_string();
+        }
+
+        let segmenter = WordsSegmenter::CreateWithLanguage(&HSTRING::from("th-TH"));
+        if let Ok(segmenter) = segmenter {
+            let tokens = segmenter.GetTokens(&HSTRING::from(text));
+            if let Ok(tokens) = tokens {
+                let mut result = String::with_capacity(text.len() + 10);
+                for token in tokens {
+                    if let Ok(word_text) = token.Text() {
+                        result.push_str(&word_text.to_string());
+                        // Insert a space or zero-width space after each word to allow wrapping
+                        result.push(' ');
+                    }
+                }
+                return result.trim().to_string();
+            }
+        }
+    }
+    text.to_string()
 }

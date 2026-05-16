@@ -14,7 +14,7 @@ use crate::core::worker::SlotRuntimeState;
 use crate::infrastructure::platform::PlatformServices;
 use crate::infrastructure::settings::Settings;
 
-const BORDER: f32 = 2.0;
+const BORDER: f32 = 4.0;
 const HANDLE: f32 = 14.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -132,9 +132,9 @@ pub fn render_live_frame_viewport(
             let accent = egui::Color32::from_rgb(0, 255, 128);
             
             // Draw a subtle "glow" border (Inside only to avoid Win32 clipping)
-            for i in 1..3 {
-                let alpha = (40 / i) as u8;
-                let stroke_w = (i as f32) * 2.0;
+            for i in 1..5 {
+                let alpha = (100 / i) as u8; // Increased alpha from 60
+                let stroke_w = (i as f32) * 4.0; // Increased step to 4.0 to cover 16px total glow
                 painter.rect_stroke(
                     full,
                     0.0,
@@ -142,12 +142,12 @@ pub fn render_live_frame_viewport(
                     egui::StrokeKind::Inside,
                 );
             }
-            // Main solid border
-            painter.rect_stroke(full, 0.0, egui::Stroke::new(2.0, accent), egui::StrokeKind::Inside);
+            // Main solid border - matched to BORDER width for perfect visual feedback
+            painter.rect_stroke(full, 0.0, egui::Stroke::new(BORDER, accent), egui::StrokeKind::Inside);
 
             // Use an almost-invisible but solid color for draggable areas (Alpha 1)
-            // We use (2,2,2) to avoid matching the (0,0,0) ColorKey perfectly.
-            let invisible_drag_color = egui::Color32::from_rgba_unmultiplied(2, 2, 2, 1);
+            // We use a faint version of the accent color to blend in perfectly.
+            let invisible_drag_color = accent.gamma_multiply(1.0 / 255.0);
             
             // Fill draggable areas with invisible-solid color
             let top_border = egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.min.y + BORDER));
@@ -160,26 +160,7 @@ pub fn render_live_frame_viewport(
             painter.rect_filled(bottom_border, 0.0, invisible_drag_color);
 
 
-            // Size label (Luna-style) at bottom center
-            let label = format!("R{} ({} × {})", slot_idx + 1, r.w.round() as i32, r.h.round() as i32);
-            let size_galley = ctx.fonts(|f| {
-                f.layout_no_wrap(
-                    label,
-                    egui::FontId::monospace(12.0),
-                    egui::Color32::WHITE,
-                )
-            });
-            let pad = egui::vec2(6.0, 3.0);
-            let label_pos = egui::pos2(
-                full.center().x - size_galley.size().x / 2.0,
-                full.max.y - size_galley.size().y - 6.0,
-            );
-            let bg = egui::Rect::from_min_size(
-                label_pos - pad,
-                size_galley.size() + pad * 2.0,
-            );
-            painter.rect_filled(bg, 4.0, egui::Color32::from_black_alpha(180));
-            painter.galley(label_pos, size_galley, egui::Color32::WHITE);
+
 
 
             let pointer = ctx.input(|i| i.pointer.latest_pos());

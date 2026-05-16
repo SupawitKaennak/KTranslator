@@ -87,6 +87,8 @@ pub struct SlotRuntimeState {
     pub persistent_translation: Arc<Mutex<Option<String>>>,
     pub persistent_ocr_lines: Arc<Mutex<Vec<OcrTextLine>>>,
     pub persistent_trans_lines: Arc<Mutex<Vec<String>>>,
+    /// Number of consecutive errors for exponential backoff calculation
+    pub error_streak: u32,
 }
 
 impl SlotRuntimeState {
@@ -108,6 +110,7 @@ impl SlotRuntimeState {
             persistent_translation: Arc::new(Mutex::new(None)),
             persistent_ocr_lines: Arc::new(Mutex::new(Vec::new())),
             persistent_trans_lines: Arc::new(Mutex::new(Vec::new())),
+            error_streak: 0,
         }
     }
 }
