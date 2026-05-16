@@ -461,7 +461,7 @@ impl eframe::App for App {
         self.ui_error_popup(ctx);
 
         if let Some(sess) = &self.region_session {
-            run_region_viewport(ctx, sess.clone(), self.region_finish.clone());
+            run_region_viewport(ctx, sess.clone(), self.region_finish.clone(), self.settings.ui_language);
         }
         if let Some(out) = self.region_finish.lock().take() {
             match out {
@@ -514,7 +514,7 @@ impl eframe::App for App {
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let theme_icon = if self.settings.dark_mode { "🌙" } else { "🔆" };
-                        if ui.button(theme_icon).on_hover_text("Toggle Dark/Light mode").clicked() {
+                        if ui.button(theme_icon).on_hover_text(i18n.toggle_dark_mode).clicked() {
                             self.settings.dark_mode = !self.settings.dark_mode;
                             if let Some(edit_arc) = &self.settings_ctrl.settings_edit {
                                 edit_arc.lock().dark_mode = self.settings.dark_mode;
@@ -535,13 +535,13 @@ impl eframe::App for App {
                             let _ = save_settings(&self.settings);
                         }
 
-                        if ui.button("⚙").on_hover_text("Open Settings").clicked() {
+                        if ui.button("⚙").on_hover_text(i18n.open_settings_desc).clicked() {
                             self.show_settings = true;
                             self.settings_fetch_models_pending = true;
                             let _ = self.settings_ctrl.begin_edit(&self.settings);
                         }
 
-                        if ui.button("🔄").on_hover_text("Clear Cache & Force Retranslate").clicked() {
+                        if ui.button("🔄").on_hover_text(i18n.clear_cache_desc).clicked() {
                             for slot in &mut model.slots {
                                 slot.last_ocr_text.clear();
                                 slot.last_translation.clear();
@@ -592,7 +592,7 @@ impl eframe::App for App {
                 }
 
                 ui.add_space(8.0);
-                if ui.button(format!("➕ {}", i18n.clear_results.replace("Clear Results", "Add Region").replace("ล้างหน้าจอ", "เพิ่มพื้นที่"))).clicked() {
+                if ui.button(format!("➕ {}", i18n.add_region)).clicked() {
                     let mut model = self.model.lock();
                     model.add_slot();
                     self.slots_runtime.push(SlotRuntimeState::new());
@@ -601,7 +601,7 @@ impl eframe::App for App {
                 ui.add_space(8.0);
                 ui.separator();
                 ui.vertical_centered(|ui| {
-                    ui.label(egui::RichText::new("💡 Tip: If games don't translate, use 'Borderless Windowed' mode.").small().weak());
+                    ui.label(egui::RichText::new(i18n.tip_borderless).small().weak());
                 });
             });
 

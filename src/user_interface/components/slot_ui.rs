@@ -61,20 +61,18 @@ pub fn render_slot_item(
             
             let slot = &mut model.slots[slot_idx];
             
-            ui.checkbox(&mut slot.enabled, i18n.active).on_hover_text("Enable or disable this translation region");
+            ui.checkbox(&mut slot.enabled, i18n.active).on_hover_text(i18n.active_hover);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if slot_idx > 0 {
-                    if ui.button("🗑").on_hover_text("Delete this region").clicked() {
+                    if ui.button("🗑").on_hover_text(i18n.delete_hover).clicked() {
                         should_remove = true;
                     }
                 }
                 
                 if ui
                     .button(i18n.select_area)
-                    .on_hover_text(
-                        "Pick a new area on screen (release to save). With Show Frame on, drag the frame directly.",
-                    )
+                    .on_hover_text(i18n.select_area_hover)
                     .clicked()
                 {
                     do_crop = true;
@@ -107,7 +105,7 @@ pub fn render_slot_item(
             ui.add_space(20.0);
             ui.label(format!("{}:", i18n.refresh));
             ui.add(egui::DragValue::new(&mut slot.refresh_ms).speed(10.0).suffix("ms"))
-                .on_hover_text("How often to check for screen changes");
+                .on_hover_text(i18n.refresh_hover);
         });
 
         ui.add_space(8.0);
@@ -157,19 +155,17 @@ pub fn render_slot_item(
             let slot = &mut model.slots[slot_idx];
 
             ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame))
-                .on_hover_text(
-                    "Green frame on screen — drag title bar or corners to move/resize in real time (Luna-style)",
-                );
+                .on_hover_text(i18n.show_frame_hover);
             ui.add_space(10.0);
-            ui.checkbox(&mut slot.overlay_mode, format!("{}", i18n.overlay_mode)).on_hover_text("Show translated text directly over the original text on your screen");
+            ui.checkbox(&mut slot.overlay_mode, format!("{}", i18n.overlay_mode)).on_hover_text(i18n.overlay_mode_hover);
             ui.add_space(20.0);
             
             let popup_btn_text = if slot.popup_open { 
-                format!("{}", i18n.clear_results.replace("Clear Results", "Close Popup").replace("ล้างหน้าจอ", "ปิดหน้าต่างแยก"))
+                i18n.close_popup
             } else { 
-                format!("{}", i18n.open_popup) 
+                i18n.open_popup 
             };
-            if ui.button(popup_btn_text).on_hover_text("Toggle the in-game translation result window").clicked() {
+            if ui.button(popup_btn_text).on_hover_text(i18n.open_popup_hover).clicked() {
                 slot.popup_open = !slot.popup_open;
             }
         });
