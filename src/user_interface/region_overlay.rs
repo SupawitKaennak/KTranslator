@@ -259,8 +259,10 @@ pub fn run_region_viewport(
     ctx: &egui::Context,
     state: Arc<Mutex<RegionOverlayState>>,
     outcome: Arc<Mutex<Option<RegionOutcome>>>,
+    lang: crate::infrastructure::settings::UiLanguage,
 ) {
-    let title = "Select area — drag to draw or adjust, release to save, Esc cancel";
+    let i18n = crate::user_interface::i18n::get_i18n(lang);
+    let title = i18n.region_title;
 
     ctx.show_viewport_immediate(
         egui::ViewportId::from_hash_of("screen_translator_region_overlay"),
@@ -272,12 +274,12 @@ pub fn run_region_viewport(
             .with_window_level(egui::WindowLevel::AlwaysOnTop),
         |ctx, class| {
             if matches!(class, egui::ViewportClass::Embedded) {
-                egui::Window::new("Region").show(ctx, |ui| {
-                    region_content(ui, &state, &outcome);
+                egui::Window::new(i18n.region).show(ctx, |ui| {
+                    region_content(ui, &state, &outcome, i18n);
                 });
             } else {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    region_content(ui, &state, &outcome);
+                    region_content(ui, &state, &outcome, i18n);
                 });
             }
         },
@@ -288,6 +290,7 @@ fn region_content(
     ui: &mut egui::Ui,
     state: &Arc<Mutex<RegionOverlayState>>,
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     if outcome.lock().is_some() {
         return;
@@ -317,8 +320,8 @@ fn region_content(
     painter.rect_filled(full_rect, 0.0, Color32::from_black_alpha(140));
 
     match mode {
-        RegionMode::Create => run_create_mode(ui, &mut st, &full_rect, pointer, outcome),
-        RegionMode::Edit => run_edit_mode(ui, &mut st, &full_rect, pointer, outcome),
+        RegionMode::Create => run_create_mode(ui, &mut st, &full_rect, pointer, outcome, i18n),
+        RegionMode::Edit => run_edit_mode(ui, &mut st, &full_rect, pointer, outcome, i18n),
     }
 }
 
@@ -328,6 +331,7 @@ fn run_create_mode(
     full_rect: &egui::Rect,
     pointer: Option<Pos2>,
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     let painter = ui.painter();
     let response = ui.interact(*full_rect, ui.id().with("create"), Sense::click_and_drag());
@@ -361,7 +365,7 @@ fn run_create_mode(
             ),
             Color32::WHITE,
         );
-        draw_selection_chrome(painter, r, st, full_rect, start, curr);
+        draw_selection_chrome(painter, r, st, full_rect, start, curr, i18n);
     }
 
     if let Some(p) = pointer {
@@ -389,6 +393,7 @@ fn run_edit_mode(
     full_rect: &egui::Rect,
     pointer: Option<Pos2>,
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     let screen_rect = match st.rect {
         Some(r) => r,
@@ -417,9 +422,10 @@ fn run_edit_mode(
         let stroke = Stroke::new(2.5, Color32::from_rgb(0, 255, 128));
         painter.rect_stroke(egui_r, 0.0, stroke, egui::StrokeKind::Outside);
         let label = format!(
-            "{} × {} — release to save",
+            "{} × {} — {}",
             screen_rect.w.round() as i32,
-            screen_rect.h.round() as i32
+            screen_rect.h.round() as i32,
+            i18n.release_to_save
         );
         let galley =
             painter.layout_no_wrap(label, egui::FontId::proportional(14.0), Color32::WHITE);
@@ -508,6 +514,7 @@ fn draw_selection_chrome(
     full_rect: &egui::Rect,
     start: Pos2,
     curr: Pos2,
+    _i18n: &crate::user_interface::i18n::I18n,
 ) {
     painter.rect_stroke(
         r,
