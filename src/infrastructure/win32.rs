@@ -74,31 +74,36 @@ pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
 }
 
 /// Hollow window region: only the border ring receives mouse hits; center is click-through.
-pub fn set_hollow_window_region(hwnd_raw: isize, width: i32, height: i32, border: i32) {
+/// Borders can be specified individually for each side.
+pub fn set_hollow_window_region(
+    hwnd_raw: isize,
+    width: i32,
+    height: i32,
+    top: i32,
+    left: i32,
+    right: i32,
+    bottom: i32,
+) {
     #[cfg(target_os = "windows")]
     unsafe {
-        if width < border * 3 || height < border * 3 {
-            return;
-        }
         let hwnd = HWND(hwnd_raw as *mut _);
         let outer = CreateRectRgn(0, 0, width, height);
-        let inner = CreateRectRgn(border, border, width - border, height - border);
+        // Create the "hole" in the middle
+        let inner = CreateRectRgn(left, top, width - right, height - bottom);
         let frame = CreateRectRgn(0, 0, 0, 0);
+        
         if outer.0.is_null() || inner.0.is_null() || frame.0.is_null() {
-            if !outer.0.is_null() {
-                let _ = DeleteObject(outer.into());
-            }
-            if !inner.0.is_null() {
-                let _ = DeleteObject(inner.into());
-            }
+            if !outer.0.is_null() { let _ = DeleteObject(outer.into()); }
+            if !inner.0.is_null() { let _ = DeleteObject(inner.into()); }
             return;
         }
+        
         let _ = CombineRgn(Some(frame), Some(outer), Some(inner), RGN_XOR);
         let _ = SetWindowRgn(hwnd, Some(frame), true);
         let _ = DeleteObject(outer.into());
         let _ = DeleteObject(inner.into());
     }
-    let _ = (hwnd_raw, width, height, border);
+    let _ = (hwnd_raw, width, height, top, left, right, bottom);
 }
 
 /// Boosts the current process priority to Above Normal to ensure 

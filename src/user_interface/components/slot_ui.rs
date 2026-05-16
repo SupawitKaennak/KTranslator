@@ -188,14 +188,20 @@ pub fn render_slot_item(
                 }
                 if let Some(r) = slot.rect.as_mut() {
                     ui.horizontal(|ui| {
-                        ui.label("X:"); ui.add(egui::DragValue::new(&mut r.x));
+                        ui.label("X:");
+                        ui.add(egui::DragValue::new(&mut r.x).speed(1.0));
                         ui.add_space(8.0);
-                        ui.label("Y:"); ui.add(egui::DragValue::new(&mut r.y));
+                        ui.label("Y:");
+                        ui.add(egui::DragValue::new(&mut r.y).speed(1.0));
                         ui.add_space(8.0);
-                        ui.label("W:"); ui.add(egui::DragValue::new(&mut r.w));
+                        ui.label("W:");
+                        ui.add(egui::DragValue::new(&mut r.w).speed(1.0).range(150.0..=9999.0));
                         ui.add_space(8.0);
-                        ui.label("H:"); ui.add(egui::DragValue::new(&mut r.h));
+                        ui.label("H:");
+                        ui.add(egui::DragValue::new(&mut r.h).speed(1.0).range(100.0..=9999.0));
                     });
+                    let s = (*r).snap_to_pixels();
+                    *r = s;
                 }
             });
 

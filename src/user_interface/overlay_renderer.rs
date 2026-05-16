@@ -2,13 +2,14 @@ use eframe::egui;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use crate::core::model::AppModel;
+use crate::core::types::physical_px_to_logical_points;
 use crate::infrastructure::settings::Settings;
 use crate::infrastructure::platform::PlatformServices;
 use crate::core::worker::SlotRuntimeState;
 
 /// Convert physical screen pixels to logical viewport coordinates (rounded).
 fn snap_logical(px: f32, ppp: f32) -> f32 {
-    (px / ppp).round()
+    physical_px_to_logical_points(px, ppp)
 }
 
 /// Renders the transparent overlay window for a specific translation region.
@@ -22,19 +23,25 @@ pub fn render_overlay_viewport(
 ) {
     let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
     
-    // Get the rect and visibility state for this slot
+    let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
     let (rect, should_show) = {
         let m = model_arc.lock();
         if slot_idx >= m.slots.len() { return; }
         let slot = &m.slots[slot_idx];
-        (slot.rect, slot.show_frame || slot.overlay_mode)
+        (slot.rect, slot.overlay_mode)
     };
-    
-    let Some(r) = rect else { return; };
-    if !should_show { return; }
+
+    let hwnd = runtime.overlay_hwnd.load(std::sync::atomic::Ordering::Relaxed);
+    if !should_show || rect.is_none() { 
+        if hwnd != 0 {
+            ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Close);
+            runtime.overlay_hwnd.store(0, std::sync::atomic::Ordering::Relaxed);
+        }
+        return; 
+    }
+    let r = rect.unwrap().snap_to_pixels();
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
-    let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
     
     let model_arc_inner = model_arc.clone();
     let hwnd_cache = runtime.overlay_hwnd.clone();
@@ -50,6 +57,7 @@ pub fn render_overlay_viewport(
             .with_always_on_top()
             .with_mouse_passthrough(true)
             .with_active(false)
+            .with_min_inner_size([150.0, 100.0])
             .with_inner_size(egui::vec2(
                 snap_logical(r.w, ppp),
                 snap_logical(r.h, ppp),
@@ -74,7 +82,6 @@ pub fn render_overlay_viewport(
                 if slot_idx < m.slots.len() {
                     let slot = &m.slots[slot_idx];
                     let show_overlay = slot.overlay_mode && !slot.last_translation.is_empty();
-                    let show_border  = slot.show_frame;
                     let ocr_lines    = slot.last_ocr_lines.clone();
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
@@ -341,36 +348,7 @@ pub fn render_overlay_viewport(
                         }
                     }
 
-                    if show_border {
-                        let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
-                        painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
-
-                        // Size label (Luna-style) at bottom center
-                        let m = model_arc_inner.lock();
-                        if slot_idx < m.slots.len() {
-                            if let Some(r) = m.slots[slot_idx].rect {
-                                let label = format!("{} × {}", r.w.round() as i32, r.h.round() as i32);
-                                let galley = ctx.fonts(|f| {
-                                    f.layout_no_wrap(
-                                        label,
-                                        egui::FontId::monospace(12.0),
-                                        egui::Color32::WHITE,
-                                    )
-                                });
-                                let pad = egui::vec2(6.0, 3.0);
-                                let label_pos = egui::pos2(
-                                    full_rect.center().x - galley.size().x / 2.0,
-                                    full_rect.max.y - galley.size().y - 6.0,
-                                );
-                                let bg = egui::Rect::from_min_size(
-                                    label_pos - pad,
-                                    galley.size() + pad * 2.0,
-                                );
-                                painter.rect_filled(bg, 4.0, egui::Color32::from_black_alpha(180));
-                                painter.galley(label_pos, galley, egui::Color32::WHITE);
-                            }
-                        }
-                    }
+                    // No border drawing here, it's handled by live_frame.rs
                 }
             }
 
