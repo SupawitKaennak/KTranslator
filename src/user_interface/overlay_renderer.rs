@@ -17,14 +17,16 @@ pub fn render_overlay_viewport(
 ) {
     let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
     
-    // Get the rect for this slot
-    let rect = {
+    // Get the rect and visibility state for this slot
+    let (rect, should_show) = {
         let m = model_arc.lock();
         if slot_idx >= m.slots.len() { return; }
-        m.slots[slot_idx].rect
+        let slot = &m.slots[slot_idx];
+        (slot.rect, slot.show_frame || slot.overlay_mode)
     };
     
     let Some(r) = rect else { return; };
+    if !should_show { return; }
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
     let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
@@ -331,6 +333,26 @@ pub fn render_overlay_viewport(
                     if show_border {
                         let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
                         painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
+
+                        // --- Premium Custom Title Bar ---
+                        let title_bar_height = 22.0;
+                        let title_bar_rect = egui::Rect::from_min_max(
+                            full_rect.min,
+                            egui::pos2(full_rect.max.x, full_rect.min.y + title_bar_height)
+                        );
+
+                        // Draw title bar background (Greenish to match border)
+                        painter.rect_filled(title_bar_rect, 0.0, egui::Color32::from_rgba_unmultiplied(0, 200, 100, 220));
+
+                        // Draw title text
+                        let title_text = format!("Region {}", slot_idx + 1);
+                        let galley = ctx.fonts(|f| f.layout_no_wrap(
+                            title_text, 
+                            egui::FontId::proportional(13.0), 
+                            egui::Color32::WHITE
+                        ));
+                        let text_pos = title_bar_rect.center() - galley.size() / 2.0;
+                        painter.galley(text_pos, galley, egui::Color32::WHITE);
                     }
                 }
             }
@@ -425,4 +447,4 @@ pub fn render_popup_viewport(
         },
     );
 }
-
+
