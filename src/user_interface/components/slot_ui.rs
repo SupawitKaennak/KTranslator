@@ -70,9 +70,12 @@ pub fn render_slot_item(
                     }
                 }
                 
-                if ui.button(i18n.select_area)
-                    .on_hover_text("Drag to select a new area on the screen")
-                    .clicked() 
+                if ui
+                    .button(i18n.select_area)
+                    .on_hover_text(
+                        "Pick a new area on screen (release to save). With Show Frame on, drag the frame directly.",
+                    )
+                    .clicked()
                 {
                     do_crop = true;
                 }
@@ -153,7 +156,10 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame)).on_hover_text("Show a green border around the captured area");
+            ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame))
+                .on_hover_text(
+                    "Green frame on screen — drag title bar or corners to move/resize in real time (Luna-style)",
+                );
             ui.add_space(10.0);
             ui.checkbox(&mut slot.overlay_mode, format!("{}", i18n.overlay_mode)).on_hover_text("Show translated text directly over the original text on your screen");
             ui.add_space(20.0);
@@ -182,14 +188,20 @@ pub fn render_slot_item(
                 }
                 if let Some(r) = slot.rect.as_mut() {
                     ui.horizontal(|ui| {
-                        ui.label("X:"); ui.add(egui::DragValue::new(&mut r.x));
+                        ui.label("X:");
+                        ui.add(egui::DragValue::new(&mut r.x).speed(1.0));
                         ui.add_space(8.0);
-                        ui.label("Y:"); ui.add(egui::DragValue::new(&mut r.y));
+                        ui.label("Y:");
+                        ui.add(egui::DragValue::new(&mut r.y).speed(1.0));
                         ui.add_space(8.0);
-                        ui.label("W:"); ui.add(egui::DragValue::new(&mut r.w));
+                        ui.label("W:");
+                        ui.add(egui::DragValue::new(&mut r.w).speed(1.0).range(150.0..=9999.0));
                         ui.add_space(8.0);
-                        ui.label("H:"); ui.add(egui::DragValue::new(&mut r.h));
+                        ui.label("H:");
+                        ui.add(egui::DragValue::new(&mut r.h).speed(1.0).range(100.0..=9999.0));
                     });
+                    let s = (*r).snap_to_pixels();
+                    *r = s;
                 }
             });
 

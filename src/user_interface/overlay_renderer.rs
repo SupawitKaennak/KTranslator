@@ -2,9 +2,15 @@ use eframe::egui;
 use parking_lot::Mutex;
 use std::sync::Arc;
 use crate::core::model::AppModel;
+use crate::core::types::physical_px_to_logical_points;
 use crate::infrastructure::settings::Settings;
 use crate::infrastructure::platform::PlatformServices;
 use crate::core::worker::SlotRuntimeState;
+
+/// Convert physical screen pixels to logical viewport coordinates (rounded).
+fn snap_logical(px: f32, ppp: f32) -> f32 {
+    physical_px_to_logical_points(px, ppp)
+}
 
 /// Renders the transparent overlay window for a specific translation region.
 pub fn render_overlay_viewport(
@@ -17,19 +23,25 @@ pub fn render_overlay_viewport(
 ) {
     let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
     
-    // Get the rect and visibility state for this slot
+    let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
     let (rect, should_show) = {
         let m = model_arc.lock();
         if slot_idx >= m.slots.len() { return; }
         let slot = &m.slots[slot_idx];
-        (slot.rect, slot.show_frame || slot.overlay_mode)
+        (slot.rect, slot.overlay_mode)
     };
-    
-    let Some(r) = rect else { return; };
-    if !should_show { return; }
+
+    let hwnd = runtime.overlay_hwnd.load(std::sync::atomic::Ordering::Relaxed);
+    if !should_show || rect.is_none() { 
+        if hwnd != 0 {
+            ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Close);
+            runtime.overlay_hwnd.store(0, std::sync::atomic::Ordering::Relaxed);
+        }
+        return; 
+    }
+    let r = rect.unwrap().snap_to_pixels();
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
-    let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
     
     let model_arc_inner = model_arc.clone();
     let hwnd_cache = runtime.overlay_hwnd.clone();
@@ -45,8 +57,15 @@ pub fn render_overlay_viewport(
             .with_always_on_top()
             .with_mouse_passthrough(true)
             .with_active(false)
-            .with_inner_size(egui::vec2(r.w / ppp, r.h / ppp))
-            .with_position(egui::pos2(r.x / ppp, r.y / ppp)),
+            .with_min_inner_size([150.0, 100.0])
+            .with_inner_size(egui::vec2(
+                snap_logical(r.w, ppp),
+                snap_logical(r.h, ppp),
+            ))
+            .with_position(egui::pos2(
+                snap_logical(r.x, ppp),
+                snap_logical(r.y, ppp),
+            )),
         move |ctx, class| {
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::CentralPanel::default().show(ctx, |ui| {
@@ -63,7 +82,6 @@ pub fn render_overlay_viewport(
                 if slot_idx < m.slots.len() {
                     let slot = &m.slots[slot_idx];
                     let show_overlay = slot.overlay_mode && !slot.last_translation.is_empty();
-                    let show_border  = slot.show_frame;
                     let ocr_lines    = slot.last_ocr_lines.clone();
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
@@ -330,48 +348,9 @@ pub fn render_overlay_viewport(
                         }
                     }
 
-                    if show_border {
-                        let stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(0, 255, 128));
-                        painter.rect_stroke(full_rect, 0.0, stroke, egui::StrokeKind::Inside);
-
-                        // --- Premium Custom Title Bar ---
-                        let title_bar_height = 22.0;
-                        let title_bar_rect = egui::Rect::from_min_max(
-                            full_rect.min,
-                            egui::pos2(full_rect.max.x, full_rect.min.y + title_bar_height)
-                        );
-
-                        // Draw title bar background (Greenish to match border)
-                        painter.rect_filled(title_bar_rect, 0.0, egui::Color32::from_rgba_unmultiplied(0, 200, 100, 220));
-
-                        // Draw title text
-                        let title_text = format!("Region {}", slot_idx + 1);
-                        let galley = ctx.fonts(|f| f.layout_no_wrap(
-                            title_text, 
-                            egui::FontId::proportional(13.0), 
-                            egui::Color32::WHITE
-                        ));
-                        let text_pos = title_bar_rect.center() - galley.size() / 2.0;
-                        painter.galley(text_pos, galley, egui::Color32::WHITE);
-                    }
+                    // No border drawing here, it's handled by live_frame.rs
                 }
             }
-
-            // Drag reposition
-            ctx.input(|i| {
-                if i.pointer.primary_down() {
-                    let delta = i.pointer.delta();
-                    if delta != egui::Vec2::ZERO {
-                        let mut m = model_arc_inner.lock();
-                        if slot_idx < m.slots.len() {
-                            if let Some(rect) = m.slots[slot_idx].rect.as_mut() {
-                                rect.x += delta.x * ppp;
-                                rect.y += delta.y * ppp;
-                            }
-                        }
-                    }
-                }
-            });
 
             // Platform attributes (transparency/color key/capture exclusion)
             let title_inner = format!("Frame Overlay {}", slot_idx + 1);
