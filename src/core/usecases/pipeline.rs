@@ -64,6 +64,7 @@ impl TranslationPipeline {
         status_tx: mpsc::Sender<BgResult>,
         ctx: egui::Context,
         max_cache_entries: usize,
+        platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
     ) -> anyhow::Result<BgResult> {
         let mut frame = capture.capture_rect(rect, display_id)?;
         
@@ -261,10 +262,17 @@ impl TranslationPipeline {
         if !glossary_guidance_str.is_empty() {
             text_to_translate.push_str(&format!("\n\n[MANDATORY_GLOSSARY_TERMS:\n{}]", glossary_guidance_str));
         }
-
-        let raw_translated = translator.as_ref()
+        let translator_output = translator.as_ref()
             .context("No translator provider selected")?
             .translate(&text_to_translate, source_lang.as_ref(), &target_lang)?;
+
+        // --- Thai Word Segmentation ---
+        // If target is Thai, use platform segmenter to insert spaces for proper wrapping.
+        let raw_translated = if target_lang.0 == "th" || target_lang.0 == "Thai" {
+            platform.segment_thai(&translator_output)
+        } else {
+            translator_output
+        };
 
         let trans_lines = build_trans_lines(&raw_translated);
         let translated = trans_lines.iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join("\n");
