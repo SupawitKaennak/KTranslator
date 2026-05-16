@@ -27,44 +27,64 @@ impl WindowsOcr {
     }
 
     fn get_engine(&self, lang_tag: Option<&LanguageTag>) -> Result<Arc<OcrEngine>> {
-        let tag = if let Some(t) = lang_tag {
-            t.0.as_str()
+        let requested_tag = if let Some(t) = lang_tag {
+            t.0.as_str().to_lowercase()
         } else {
-            // If Auto Detect, try to get system default language
-            // We use a static or dynamic lookup here. 
-            // For now, let's try to get it from Windows Globalization
-            "" // Empty means we'll try to get system default
+            // Default to system primary input language for Auto Detect
+            Language::CurrentInputMethodLanguageTag()
+                .map(|h| h.to_string().to_lowercase())
+                .unwrap_or_else(|_| "en-us".to_string())
         };
         
-        // Normalize tags for Windows (e.g. "ja" -> "ja-JP")
-        let win_tag = match tag {
-            "" => {
-                // Try to get system preferred language, fallback to en-US
-                Language::CurrentInputMethodLanguageTag()
-                    .map(|h| h.to_string())
-                    .unwrap_or_else(|_| "en-US".to_string())
+        // 1. Get all available OCR languages from Windows
+        let available_langs = OcrEngine::AvailableRecognizerLanguages()?;
+        
+        // 2. Find the best match
+        let mut best_match = None;
+        
+        // Exact match check
+        for lang in &available_langs {
+            let tag = lang.LanguageTag()?.to_string().to_lowercase();
+            if tag == requested_tag {
+                best_match = Some(lang.clone());
+                break;
             }
-            "ja" => "ja-JP".to_string(),
-            "en" => "en-US".to_string(),
-            "zh-Hans" => "zh-Hans-CN".to_string(),
-            "zh-Hant" => "zh-Hant-HK".to_string(),
-            "ko" => "ko-KR".to_string(),
-            "th" => "th-TH".to_string(),
-            t if t.contains('-') => t.to_string(),
-            t => t.to_string(), // Try as is
+        }
+        
+        // Prefix match check (e.g. "ru" matches "ru-RU")
+        if best_match.is_none() {
+            for lang in &available_langs {
+                let tag = lang.LanguageTag()?.to_string().to_lowercase();
+                if tag.starts_with(&requested_tag) || requested_tag.starts_with(&tag) {
+                    best_match = Some(lang.clone());
+                    break;
+                }
+            }
+        }
+
+        // If still no match and it was Auto Detect, just pick the first available one or en-US
+        let final_lang = match best_match {
+            Some(l) => l,
+            None => {
+                if let Some(first) = available_langs.First()?.into_iter().next() {
+                    first
+                } else {
+                    anyhow::bail!("No Windows OCR languages installed. Please install a Language Pack in Windows Settings.");
+                }
+            }
         };
 
+        let final_tag = final_lang.LanguageTag()?.to_string();
         let mut cache = self.engines.lock();
-        if let Some(engine) = cache.get(&win_tag) {
+        if let Some(engine) = cache.get(&final_tag) {
             return Ok(engine.clone());
         }
 
-        let lang = Language::CreateLanguage(&windows::core::HSTRING::from(&win_tag))?;
-        let engine = OcrEngine::TryCreateFromLanguage(&lang)
-            .map_err(|e| anyhow::anyhow!("Failed to create Windows OCR engine for {}: {}", win_tag, e))?;
+        let engine = OcrEngine::TryCreateFromLanguage(&final_lang)
+            .map_err(|e| anyhow::anyhow!("Failed to create Windows OCR engine for {}: {}", final_tag, e))?;
         
         let engine_arc = Arc::new(engine);
-        cache.insert(win_tag.to_string(), engine_arc.clone());
+        cache.insert(final_tag.clone(), engine_arc.clone());
         Ok(engine_arc)
     }
 
