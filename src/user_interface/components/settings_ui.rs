@@ -67,15 +67,10 @@ pub fn show_settings_window(
     
     let viewport_id = egui::ViewportId::from_hash_of("settings_viewport");
 
-    let i18n = {
-        let s = settings_inner.lock();
-        get_i18n(s.ui_language)
-    };
-
     ctx.show_viewport_immediate(
         viewport_id,
         egui::ViewportBuilder::default()
-            .with_title(format!("KTranslator - {}", i18n.settings))
+            .with_title("KTranslator - Settings")
             .with_inner_size([720.0, 500.0])
             .with_resizable(true)
             .with_always_on_top(),
@@ -86,6 +81,11 @@ pub fn show_settings_window(
 
             let active_tab: SettingsTab = ctx.data(|d| d.get_temp(egui::Id::new("settings_active_tab")))
                 .unwrap_or(SettingsTab::General);
+
+            let i18n = {
+                let s = settings_inner.lock();
+                get_i18n(s.ui_language)
+            };
 
             // ── Left Sidebar (Vertical Tabs) ──
             egui::SidePanel::left("settings_tabs_panel")
@@ -176,7 +176,7 @@ fn render_tab_general(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
 
 
     ui.add_space(12.0);
-    section_header(ui, i18n.capture_section);
+    section_header(ui, "Capture");
     let mut allow = !settings.hide_from_capture;
     if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
         settings.hide_from_capture = !allow;
@@ -202,9 +202,9 @@ fn render_tab_ai_provider(
     let providers = [
         (TranslationProvider::Gemini,       "Gemini"),
         (TranslationProvider::Groq,         "Groq"),
-        (TranslationProvider::Ollama,       &format!("Ollama ({})", i18n.offline)),
-        (TranslationProvider::CustomOpenAI, &format!("Custom ({})", i18n.compatible)),
-        (TranslationProvider::Google,       &format!("Google Translate ({})", i18n.auto_detect)), // Reuse auto_detect for free
+        (TranslationProvider::Ollama,       "Ollama (Offline)"),
+        (TranslationProvider::CustomOpenAI, "Custom (OpenAI-Compatible)"),
+        (TranslationProvider::Google,       "Google Translate (Free)"),
     ];
     for (prov, label) in providers {
         ui.radio_value(&mut settings.provider, prov, label);
@@ -217,29 +217,29 @@ fn render_tab_ai_provider(
     // Show config section for the selected provider
     match settings.provider {
         TranslationProvider::Gemini => {
-            section_header(ui, &format!("Gemini {}", i18n.config_for));
+            section_header(ui, "Gemini Configuration");
             render_api_key_field(ui, i18n, &mut settings.gemini_api_key, &ctrl.gemini_models, &ctrl.gemini_fetching);
             try_fetch_gemini(ctx, settings, &ctrl.gemini_models, &ctrl.gemini_fetching);
             if !settings.gemini_api_key.trim().is_empty() {
                 render_model_dropdown(ui, i18n, "gemini_mdl", &mut settings.gemini_model, &ctrl.gemini_models, &ctrl.gemini_fetching);
             }
             ui.add_space(4.0);
-            ui.hyperlink_to(i18n.get_api_key, "https://aistudio.google.com/app/apikey");
+            ui.hyperlink_to("Get Gemini API Key", "https://aistudio.google.com/app/apikey");
         }
         TranslationProvider::Groq => {
-            section_header(ui, &format!("Groq {}", i18n.config_for));
+            section_header(ui, "Groq Configuration");
             render_api_key_field(ui, i18n, &mut settings.groq_api_key, &ctrl.groq_models, &ctrl.groq_fetching);
             try_fetch_groq(ctx, settings, &ctrl.groq_models, &ctrl.groq_fetching);
             if !settings.groq_api_key.trim().is_empty() {
                 render_model_dropdown(ui, i18n, "groq_mdl", &mut settings.groq_model, &ctrl.groq_models, &ctrl.groq_fetching);
             }
             ui.add_space(4.0);
-            ui.hyperlink_to(i18n.get_api_key, "https://console.groq.com/keys");
+            ui.hyperlink_to("Get Groq API Key", "https://console.groq.com/keys");
         }
         TranslationProvider::Ollama => {
-            section_header(ui, &format!("Ollama {}", i18n.config_for));
+            section_header(ui, "Ollama Configuration");
             ui.horizontal(|ui| {
-                ui.label(format!("{}:", i18n.server_url));
+                ui.label("Server URL:");
                 let resp = ui.text_edit_singleline(&mut settings.ollama_url);
                 if resp.lost_focus() && resp.changed() { ctrl.ollama_models.lock().clear(); }
             });
@@ -248,12 +248,12 @@ fn render_tab_ai_provider(
                 render_model_dropdown(ui, i18n, "ollama_mdl", &mut settings.ollama_model, &ctrl.ollama_models, &ctrl.ollama_fetching);
             }
             ui.add_space(4.0);
-            ui.hyperlink_to(i18n.browse_models, "https://ollama.com/library");
+            ui.hyperlink_to("Browse Ollama Models", "https://ollama.com/library");
         }
         TranslationProvider::CustomOpenAI => {
             section_header(ui, i18n.prov_custom_endpoint);
             ui.horizontal(|ui| {
-                ui.label(format!("{}:", i18n.base_url));
+                ui.label("Base URL:");
                 let resp = ui.text_edit_singleline(&mut settings.custom_openai_url);
                 if resp.lost_focus() && resp.changed() { ctrl.custom_openai_models.lock().clear(); }
             });
@@ -263,17 +263,17 @@ fn render_tab_ai_provider(
                 if resp.lost_focus() && resp.changed() { ctrl.custom_openai_models.lock().clear(); }
             });
             ui.add_space(4.0);
-            ui.label(format!("{}:", i18n.model_selection));
+            ui.label("Model Selection:");
             ui.horizontal(|ui| {
-                if ui.radio_value(&mut settings.custom_openai_use_list, false, i18n.manual_entry).changed() { ctrl.custom_openai_models.lock().clear(); }
-                if ui.radio_value(&mut settings.custom_openai_use_list, true, i18n.fetch_list).changed() { ctrl.custom_openai_models.lock().clear(); }
+                if ui.radio_value(&mut settings.custom_openai_use_list, false, "Manual Entry").changed() { ctrl.custom_openai_models.lock().clear(); }
+                if ui.radio_value(&mut settings.custom_openai_use_list, true, "Fetch from List").changed() { ctrl.custom_openai_models.lock().clear(); }
             });
             if settings.custom_openai_use_list {
                 try_fetch_custom(ctx, settings, &ctrl.custom_openai_models, &ctrl.custom_openai_fetching);
                 render_model_dropdown(ui, i18n, "custom_mdl", &mut settings.custom_openai_model, &ctrl.custom_openai_models, &ctrl.custom_openai_fetching);
             } else {
                 ui.horizontal(|ui| {
-                    ui.label(format!("{}:", i18n.model_name));
+                    ui.label("Model Name:");
                     ui.text_edit_singleline(&mut settings.custom_openai_model);
                 });
             }
@@ -289,7 +289,7 @@ fn render_tab_ai_provider(
         }
         TranslationProvider::Google => {
             section_header(ui, "Google Translate");
-            ui.label(i18n.no_config_needed);
+            ui.label("No configuration needed. Uses free Google Translate API.");
         }
     }
 }
@@ -340,7 +340,7 @@ fn render_tab_ocr(
     if *engine_ref == crate::infrastructure::settings::OcrEngineType::MangaOCR {
         ui.add_space(8.0);
         if download_progress.is_downloading {
-            ui.label(format!("{}: {}", i18n.downloading, download_progress.current_file));
+            ui.label(format!("Downloading: {}", download_progress.current_file));
             ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
         } else {
             if let Some(err) = &download_progress.error {
@@ -366,12 +366,12 @@ fn render_tab_ocr(
             ui.label(i18n.ppocr_variant_label);
             egui::ComboBox::from_id_salt("ppocr_variant_combo")
                 .selected_text(match settings.ppocr_variant {
-                    crate::infrastructure::settings::PpocrVariant::Mobile => i18n.ppocr_mobile_desc,
-                    crate::infrastructure::settings::PpocrVariant::Server => i18n.ppocr_server_desc,
+                    crate::infrastructure::settings::PpocrVariant::Mobile => "Fast: CN/EN Suite (Mobile ~15MB)",
+                    crate::infrastructure::settings::PpocrVariant::Server => "Precision: CN/EN Suite (Server ~194MB)",
                 })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut settings.ppocr_variant, crate::infrastructure::settings::PpocrVariant::Mobile, i18n.ppocr_mobile_desc);
-                    ui.selectable_value(&mut settings.ppocr_variant, crate::infrastructure::settings::PpocrVariant::Server, i18n.ppocr_server_desc);
+                    ui.selectable_value(&mut settings.ppocr_variant, crate::infrastructure::settings::PpocrVariant::Mobile, "Fast: CN/EN Suite (Mobile ~15MB)");
+                    ui.selectable_value(&mut settings.ppocr_variant, crate::infrastructure::settings::PpocrVariant::Server, "Precision: CN/EN Suite (Server ~194MB)");
                 });
         });
 
@@ -379,19 +379,19 @@ fn render_tab_ocr(
             ui.label(i18n.ppocr_dict_label);
             egui::ComboBox::from_id_salt("ppocr_dict_combo")
                 .selected_text(match settings.ppocr_dict {
-                    crate::infrastructure::settings::PpocrDictLanguage::Standard => i18n.ppocr_std_dict,
-                    crate::infrastructure::settings::PpocrDictLanguage::Japanese => i18n.ppocr_jp_dict,
+                    crate::infrastructure::settings::PpocrDictLanguage::Standard => "Standard: CN+EN (Matches Suite)",
+                    crate::infrastructure::settings::PpocrDictLanguage::Japanese => "Japanese Specific (Needs JP Rec Model)",
                 })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut settings.ppocr_dict, crate::infrastructure::settings::PpocrDictLanguage::Standard, i18n.ppocr_std_dict);
-                    ui.selectable_value(&mut settings.ppocr_dict, crate::infrastructure::settings::PpocrDictLanguage::Japanese, i18n.ppocr_jp_dict);
+                    ui.selectable_value(&mut settings.ppocr_dict, crate::infrastructure::settings::PpocrDictLanguage::Standard, "Standard: CN+EN (Matches Suite)");
+                    ui.selectable_value(&mut settings.ppocr_dict, crate::infrastructure::settings::PpocrDictLanguage::Japanese, "Japanese Specific (Needs JP Rec Model)");
                 });
         });
 
         ui.add_space(6.0);
 
         if download_progress.is_downloading {
-            ui.label(format!("{}: {}", i18n.downloading, download_progress.current_file));
+            ui.label(format!("Downloading: {}", download_progress.current_file));
             ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
         } else {
             if let Some(err) = &download_progress.error {
@@ -427,14 +427,14 @@ fn render_tab_ocr(
             let dict_exists = check_exists(&dict_path);
 
             if det_exists && rec_exists && dict_exists {
-                ui.colored_label(egui::Color32::from_rgb(100, 255, 100), format!("✔ {} ({})", i18n.models_found, folder_name));
+                ui.colored_label(egui::Color32::from_rgb(100, 255, 100), format!("✔ Models found ({})", folder_name));
                 if ui.button(i18n.reinstall_update).clicked() {
                     let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::BuiltinPaddle);
                 }
             } else {
                 ui.colored_label(
                     egui::Color32::from_rgb(255, 100, 100), 
-                    format!("⚠ {}: models/ppocr/{}", i18n.missing_models, folder_name)
+                    format!("⚠ Missing models in folder: models/ppocr/{}", folder_name)
                 );
                 ui.label(i18n.ppocr_download_hint);
                 if ui.button(i18n.download_install).clicked() {
@@ -462,7 +462,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.add_space(8.0);
 
     section_header(ui, i18n.txt_pre_trans);
-    ui.label(egui::RichText::new(i18n.txt_proc_adv_desc).italics());
+    ui.label(egui::RichText::new("Advanced filters applied to scrub raw recognized text before entering Translation modules:").italics());
     ui.add_space(6.0);
 
     let tp = &mut settings.txt_proc;
@@ -518,10 +518,10 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         // Japanese
         ui.label(egui::RichText::new("Japanese:").strong());
         ui.vertical(|ui| {
-            ui.checkbox(&mut tp.jp_merge_vertical, i18n.jp_merge_v);
-            ui.checkbox(&mut tp.jp_kana_normalization, i18n.jp_kana_norm);
-            ui.checkbox(&mut tp.jp_remove_furigana, i18n.jp_strip_furi);
-            ui.checkbox(&mut tp.jp_preserve_honorifics, i18n.jp_honorifics);
+            ui.checkbox(&mut tp.jp_merge_vertical, "Merge Vertical Text Layouts");
+            ui.checkbox(&mut tp.jp_kana_normalization, "Full-width Kana Normalization");
+            ui.checkbox(&mut tp.jp_remove_furigana, "Strip Furigana / Reading Rubies");
+            ui.checkbox(&mut tp.jp_preserve_honorifics, "Preserve Honorific Suffixes (-san, -kun)");
         });
         ui.end_row();
 
@@ -530,15 +530,15 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         ui.horizontal(|ui| {
             egui::ComboBox::from_id_salt("cn_conv_sel")
                 .selected_text(match tp.cn_conversion {
-                    crate::infrastructure::settings::ChineseConversionMode::None => i18n.cn_no_conv,
-                    crate::infrastructure::settings::ChineseConversionMode::SimplifiedToTraditional => i18n.cn_s2t,
-                    crate::infrastructure::settings::ChineseConversionMode::TraditionalToSimplified => i18n.cn_t2s,
+                    crate::infrastructure::settings::ChineseConversionMode::None => "No Conversion",
+                    crate::infrastructure::settings::ChineseConversionMode::SimplifiedToTraditional => "Simplified ➜ Traditional",
+                    crate::infrastructure::settings::ChineseConversionMode::TraditionalToSimplified => "Traditional ➜ Simplified",
                 })
                 .show_ui(ui, |ui| {
                     use crate::infrastructure::settings::ChineseConversionMode::*;
-                    ui.selectable_value(&mut tp.cn_conversion, None, i18n.cn_no_conv);
-                    ui.selectable_value(&mut tp.cn_conversion, SimplifiedToTraditional, i18n.cn_s2t);
-                    ui.selectable_value(&mut tp.cn_conversion, TraditionalToSimplified, i18n.cn_t2s);
+                    ui.selectable_value(&mut tp.cn_conversion, None, "No Conversion");
+                    ui.selectable_value(&mut tp.cn_conversion, SimplifiedToTraditional, "Simplified ➜ Traditional");
+                    ui.selectable_value(&mut tp.cn_conversion, TraditionalToSimplified, "Traditional ➜ Simplified");
                 });
         });
         ui.end_row();
@@ -548,24 +548,24 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         ui.vertical(|ui| {
             egui::ComboBox::from_id_salt("th_seg_sel")
                 .selected_text(match tp.th_segmentation {
-                    crate::infrastructure::settings::ThaiSegmentationMode::Standard => i18n.th_std_split,
-                    crate::infrastructure::settings::ThaiSegmentationMode::DictionaryAssisted => i18n.th_dict_break,
-                    crate::infrastructure::settings::ThaiSegmentationMode::SyllableLevel => i18n.th_syllable,
+                    crate::infrastructure::settings::ThaiSegmentationMode::Standard => "Standard Space Split",
+                    crate::infrastructure::settings::ThaiSegmentationMode::DictionaryAssisted => "Dictionary-Assisted Word Break",
+                    crate::infrastructure::settings::ThaiSegmentationMode::SyllableLevel => "Syllable-Level Tokenization",
                 })
                 .show_ui(ui, |ui| {
                     use crate::infrastructure::settings::ThaiSegmentationMode::*;
-                    ui.selectable_value(&mut tp.th_segmentation, Standard, i18n.th_std_split);
-                    ui.selectable_value(&mut tp.th_segmentation, DictionaryAssisted, i18n.th_dict_break);
-                    ui.selectable_value(&mut tp.th_segmentation, SyllableLevel, i18n.th_syllable);
+                    ui.selectable_value(&mut tp.th_segmentation, Standard, "Standard Space Split");
+                    ui.selectable_value(&mut tp.th_segmentation, DictionaryAssisted, "Dictionary-Assisted Word Break");
+                    ui.selectable_value(&mut tp.th_segmentation, SyllableLevel, "Syllable-Level Tokenization");
                 });
             ui.add_space(4.0);
-            ui.checkbox(&mut tp.th_zero_width_cleanup, i18n.th_zw_cleanup);
+            ui.checkbox(&mut tp.th_zero_width_cleanup, "Scrub Zero-Width / Floating Tone Marks");
         });
         ui.end_row();
 
         // Arabic
         ui.label(egui::RichText::new("Arabic:").strong());
-        ui.checkbox(&mut tp.ar_rtl_correction, i18n.ar_rtl_fix);
+        ui.checkbox(&mut tp.ar_rtl_correction, "Right-to-Left (RTL) Glyph Re-ordering Correction");
         ui.end_row();
     });
 
@@ -574,7 +574,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.add_space(8.0);
 
     section_header(ui, i18n.txt_regex);
-    ui.label(egui::RichText::new(i18n.regex_adv_desc).italics());
+    ui.label(egui::RichText::new("Advanced regular expression pipeline applied to OCR blocks or output translated text:").italics());
     ui.add_space(6.0);
 
     let mut remove_idx = None;
@@ -602,7 +602,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
             });
 
             ui.horizontal(|ui| {
-                ui.label(format!("{}:", i18n.pattern));
+                ui.label("Pattern:");
                 ui.add(egui::TextEdit::singleline(&mut rule.pattern).desired_width(140.0));
 
                 let requires_replacement = match rule.rule_type {
@@ -613,7 +613,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
                 };
 
                 if requires_replacement {
-                    ui.label(format!("{}:", i18n.replace));
+                    ui.label("Replace:");
                     ui.add(egui::TextEdit::singleline(&mut rule.replacement).desired_width(100.0));
                 }
             });
@@ -625,7 +625,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         settings.regex_rules.remove(idx);
     }
 
-    if ui.button(i18n.add_regex).clicked() {
+    if ui.button("Add Regex Rule").clicked() {
         settings.regex_rules.push(crate::infrastructure::settings::RegexRule {
             enabled: true,
             pattern: String::new(),
@@ -638,8 +638,8 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
     ui.separator();
     ui.add_space(8.0);
 
-    section_header(ui, &format!("Custom Dictionary / {}", i18n.tab_text_processing.replace("Text Processing", "Glossary Engine").replace("การประมวลผลข้อความ", "พจนานุกรม")));
-    ui.label(egui::RichText::new(i18n.gloss_adv_desc).italics());
+    section_header(ui, "Custom Dictionary / Glossary Engine");
+    ui.label(egui::RichText::new("Enforce specific translations for characters, skills, items, slang, or memory overrides:").italics());
     ui.add_space(6.0);
 
     let mut remove_gloss_idx = None;
@@ -653,12 +653,12 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
                     .selected_text(format!("{:?}", entry.entry_type))
                     .show_ui(ui, |ui| {
                         use crate::infrastructure::settings::GlossaryType::*;
-                        ui.selectable_value(&mut entry.entry_type, CharacterName, i18n.gloss_char_name);
-                        ui.selectable_value(&mut entry.entry_type, GameTerminology, i18n.gloss_game_term);
-                        ui.selectable_value(&mut entry.entry_type, SlangJargon, i18n.gloss_slang);
-                        ui.selectable_value(&mut entry.entry_type, ProtectedWord, i18n.gloss_protected);
-                        ui.selectable_value(&mut entry.entry_type, PhraseOverride, i18n.gloss_phrase);
-                        ui.selectable_value(&mut entry.entry_type, TranslationMemory, i18n.gloss_tm);
+                        ui.selectable_value(&mut entry.entry_type, CharacterName, "Character Name");
+                        ui.selectable_value(&mut entry.entry_type, GameTerminology, "Game Terminology");
+                        ui.selectable_value(&mut entry.entry_type, SlangJargon, "Slang / Jargon");
+                        ui.selectable_value(&mut entry.entry_type, ProtectedWord, "Protected Word (Masked)");
+                        ui.selectable_value(&mut entry.entry_type, PhraseOverride, "Phrase Override (Pre-replace)");
+                        ui.selectable_value(&mut entry.entry_type, TranslationMemory, "Translation Memory (100% Hit)");
                     });
 
                 ui.label("Prio:");
@@ -684,7 +684,7 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
         settings.glossary_entries.remove(idx);
     }
 
-    if ui.button(i18n.add_glossary).clicked() {
+    if ui.button("Add Glossary Entry").clicked() {
         settings.glossary_entries.push(crate::infrastructure::settings::GlossaryEntry {
             enabled: true,
             source: String::new(),
@@ -1259,45 +1259,45 @@ fn render_tab_debugging(ui: &mut egui::Ui, debug_infos: &[SlotDebugInfo], i18n: 
     ui.add_space(8.0);
     
     section_header(ui, i18n.dbg_telemetry);
-    ui.label(egui::RichText::new(i18n.dbg_desc).small().color(egui::Color32::GRAY));
+    ui.label(egui::RichText::new("Real-time telemetry and debug state for internal workers.").small().color(egui::Color32::GRAY));
     ui.add_space(10.0);
 
     if debug_infos.is_empty() {
-        ui.label(egui::RichText::new(i18n.dbg_no_active).color(egui::Color32::DARK_GRAY));
+        ui.label(egui::RichText::new("No active translation regions/slots available.").color(egui::Color32::DARK_GRAY));
         return;
     }
 
     for (idx, info) in debug_infos.iter().enumerate() {
-        egui::CollapsingHeader::new(format!("{} #{} [{}]", i18n.region, idx + 1, info.status))
+        egui::CollapsingHeader::new(format!("Region Slot #{} [{}]", idx + 1, info.status))
             .default_open(true)
             .show(ui, |ui| {
                 egui::Grid::new(format!("debug_grid_{}", idx)).num_columns(2).spacing([20.0, 8.0]).show(ui, |ui| {
-                    ui.label(format!("{}:", i18n.dbg_worker_state));
+                    ui.label("Worker State:");
                     ui.horizontal(|ui| {
                         if info.busy {
-                            ui.label(egui::RichText::new(i18n.dbg_capturing).color(egui::Color32::GOLD));
+                            ui.label(egui::RichText::new("Capturing/OCR").color(egui::Color32::GOLD));
                         } else if info.processing {
-                            ui.label(egui::RichText::new(i18n.dbg_waiting_ai).color(egui::Color32::LIGHT_BLUE));
+                            ui.label(egui::RichText::new("Waiting AI").color(egui::Color32::LIGHT_BLUE));
                         } else {
-                            ui.label(egui::RichText::new(i18n.idle).color(egui::Color32::GREEN));
+                            ui.label(egui::RichText::new("Idle").color(egui::Color32::GREEN));
                         }
                         ui.label(format!("({})", info.status));
                     });
                     ui.end_row();
 
-                    ui.label(format!("{}:", i18n.dbg_debounce));
-                    ui.label(format!("{} {}", info.identical_frames, i18n.dbg_frames_ident));
+                    ui.label("Debounce Counter:");
+                    ui.label(format!("{} frames identical", info.identical_frames));
                     ui.end_row();
 
-                    ui.label(format!("{}:", i18n.dbg_ocr_lines));
-                    ui.label(format!("{} {}", info.ocr_lines_count, i18n.dbg_entries_mapped));
+                    ui.label("Persistent OCR Lines:");
+                    ui.label(format!("{} entries mapped", info.ocr_lines_count));
                     ui.end_row();
 
-                    ui.label(format!("{}:", i18n.dbg_trans_lines));
-                    ui.label(format!("{} {}", info.trans_lines_count, i18n.dbg_entries_mapped));
+                    ui.label("Persistent Trans Lines:");
+                    ui.label(format!("{} entries mapped", info.trans_lines_count));
                     ui.end_row();
 
-                    ui.label(format!("{}:", i18n.dbg_processed_ocr));
+                    ui.label("Processed OCR Output:");
                     ui.end_row();
                 });
 
