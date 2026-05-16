@@ -11,7 +11,8 @@ use screenshots::Screen;
 
 use crate::core::types::Rect;
 
-const MIN_SIDE_PX: f32 = 48.0;
+const MIN_W_PX: f32 = 150.0;
+const MIN_H_PX: f32 = 100.0;
 const HANDLE_RADIUS: f32 = 9.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -151,7 +152,7 @@ impl RegionOverlayState {
         let y = sy1.min(sy2);
         let w = (sx1 - sx2).abs();
         let h = (sy1 - sy2).abs();
-        if w < MIN_SIDE_PX || h < MIN_SIDE_PX {
+        if w < MIN_W_PX || h < MIN_H_PX {
             return None;
         }
         Some(Rect { x, y, w, h })
@@ -208,39 +209,39 @@ impl RegionOverlayState {
                 x += dx;
                 y += dy;
             }
-            Handle::E => w = (origin.w + dx).max(MIN_SIDE_PX),
+            Handle::E => w = (origin.w + dx).max(MIN_W_PX),
             Handle::W => {
-                let nw = (origin.w - dx).max(MIN_SIDE_PX);
+                let nw = (origin.w - dx).max(MIN_W_PX);
                 x = origin.x + origin.w - nw;
                 w = nw;
             }
-            Handle::S => h = (origin.h + dy).max(MIN_SIDE_PX),
+            Handle::S => h = (origin.h + dy).max(MIN_H_PX),
             Handle::N => {
-                let nh = (origin.h - dy).max(MIN_SIDE_PX);
+                let nh = (origin.h - dy).max(MIN_H_PX);
                 y = origin.y + origin.h - nh;
                 h = nh;
             }
             Handle::Se => {
-                w = (origin.w + dx).max(MIN_SIDE_PX);
-                h = (origin.h + dy).max(MIN_SIDE_PX);
+                w = (origin.w + dx).max(MIN_W_PX);
+                h = (origin.h + dy).max(MIN_H_PX);
             }
             Handle::Sw => {
-                let nw = (origin.w - dx).max(MIN_SIDE_PX);
+                let nw = (origin.w - dx).max(MIN_W_PX);
                 x = origin.x + origin.w - nw;
                 w = nw;
-                h = (origin.h + dy).max(MIN_SIDE_PX);
+                h = (origin.h + dy).max(MIN_H_PX);
             }
             Handle::Ne => {
-                w = (origin.w + dx).max(MIN_SIDE_PX);
-                let nh = (origin.h - dy).max(MIN_SIDE_PX);
+                w = (origin.w + dx).max(MIN_W_PX);
+                let nh = (origin.h - dy).max(MIN_H_PX);
                 y = origin.y + origin.h - nh;
                 h = nh;
             }
             Handle::Nw => {
-                let nw = (origin.w - dx).max(MIN_SIDE_PX);
+                let nw = (origin.w - dx).max(MIN_W_PX);
                 x = origin.x + origin.w - nw;
                 w = nw;
-                let nh = (origin.h - dy).max(MIN_SIDE_PX);
+                let nh = (origin.h - dy).max(MIN_H_PX);
                 y = origin.y + origin.h - nh;
                 h = nh;
             }
@@ -295,7 +296,7 @@ fn region_content(
     let mut st = state.lock();
     let tex = st.texture.clone();
     let mode = st.mode;
-    let slot_idx = st.slot_idx;
+    let _slot_idx = st.slot_idx;
 
     if ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
         drop(st);
@@ -371,8 +372,9 @@ fn run_create_mode(
         if let (Some(a), Some(b)) = (st.create_drag_start, st.create_drag_current) {
             if let Some(rect) = st.try_finish_create(full_rect, a, b) {
                 let slot = st.slot_idx;
-                drop(st);
-                *outcome.lock() = Some(RegionOutcome::Done { slot, rect });
+                let _ = st;
+                *outcome.lock() =
+                    Some(RegionOutcome::Done { slot, rect: rect.snap_to_pixels() });
                 return;
             }
         }
@@ -460,7 +462,7 @@ fn run_edit_mode(
 
     if ui.ctx().input(|i| i.pointer.primary_released()) {
         if st.edit_drag_active {
-            if let Some(rect) = st.rect {
+            if let Some(rect) = st.rect.map(|r| r.snap_to_pixels()) {
                 let slot = st.slot_idx;
                 *outcome.lock() = Some(RegionOutcome::Done { slot, rect });
                 return;
