@@ -12,15 +12,60 @@ use crate::core::{
     types::LanguageTag,
 };
 
+use parking_lot::Mutex;
+use std::collections::HashMap;
+
 pub struct WindowsOcr {
-    engine: Arc<OcrEngine>,
+    engines: Mutex<HashMap<String, Arc<OcrEngine>>>,
 }
 
 impl WindowsOcr {
     pub fn new() -> Self {
-        let lang = Language::CreateLanguage(&windows::core::HSTRING::from("en-US")).unwrap();
-        let engine = OcrEngine::TryCreateFromLanguage(&lang).unwrap();
-        Self { engine: Arc::new(engine) }
+        Self { 
+            engines: Mutex::new(HashMap::new()) 
+        }
+    }
+
+    fn get_engine(&self, lang_tag: Option<&LanguageTag>) -> Result<Arc<OcrEngine>> {
+        let tag = if let Some(t) = lang_tag {
+            t.0.as_str()
+        } else {
+            // If Auto Detect, try to get system default language
+            // We use a static or dynamic lookup here. 
+            // For now, let's try to get it from Windows Globalization
+            "" // Empty means we'll try to get system default
+        };
+        
+        // Normalize tags for Windows (e.g. "ja" -> "ja-JP")
+        let win_tag = match tag {
+            "" => {
+                // Try to get system preferred language, fallback to en-US
+                Language::CurrentInputMethodLanguageTag()
+                    .map(|h| h.to_string())
+                    .unwrap_or_else(|_| "en-US".to_string())
+            }
+            "ja" => "ja-JP".to_string(),
+            "en" => "en-US".to_string(),
+            "zh-Hans" => "zh-Hans-CN".to_string(),
+            "zh-Hant" => "zh-Hant-HK".to_string(),
+            "ko" => "ko-KR".to_string(),
+            "th" => "th-TH".to_string(),
+            t if t.contains('-') => t.to_string(),
+            t => t.to_string(), // Try as is
+        };
+
+        let mut cache = self.engines.lock();
+        if let Some(engine) = cache.get(&win_tag) {
+            return Ok(engine.clone());
+        }
+
+        let lang = Language::CreateLanguage(&windows::core::HSTRING::from(&win_tag))?;
+        let engine = OcrEngine::TryCreateFromLanguage(&lang)
+            .map_err(|e| anyhow::anyhow!("Failed to create Windows OCR engine for {}: {}", win_tag, e))?;
+        
+        let engine_arc = Arc::new(engine);
+        cache.insert(win_tag.to_string(), engine_arc.clone());
+        Ok(engine_arc)
     }
 
     fn preprocess(frame: FrameRgba) -> (FrameRgba, f32) {
@@ -91,7 +136,8 @@ fn wait_for<F: std::future::Future>(f: F) -> F::Output {
 }
 
 impl OcrEngineTrait for WindowsOcr {
-    fn recognize(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<String> {
+    fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
+        let engine = self.get_engine(lang_hint)?;
         let (processed, _) = Self::preprocess(frame);
         
         // Encode raw pixels to PNG in memory
@@ -113,11 +159,12 @@ impl OcrEngineTrait for WindowsOcr {
         let decoder = wait_for(BitmapDecoder::CreateWithIdAsync(windows::Graphics::Imaging::BitmapDecoder::PngDecoderId()?, &stream)?.into_future())?;
         let bitmap = wait_for(decoder.GetSoftwareBitmapAsync()?.into_future())?;
 
-        let result = wait_for(self.engine.RecognizeAsync(&bitmap)?.into_future())?;
+        let result = wait_for(engine.RecognizeAsync(&bitmap)?.into_future())?;
         Ok(result.Text()?.to_string())
     }
 
-    fn recognize_lines(&self, frame: FrameRgba, _lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+    fn recognize_lines(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
+        let engine = self.get_engine(lang_hint)?;
         let (processed, scale) = Self::preprocess(frame);
         
         // Encode raw pixels to PNG in memory
@@ -139,7 +186,7 @@ impl OcrEngineTrait for WindowsOcr {
         let decoder = wait_for(BitmapDecoder::CreateWithIdAsync(windows::Graphics::Imaging::BitmapDecoder::PngDecoderId()?, &stream)?.into_future())?;
         let bitmap = wait_for(decoder.GetSoftwareBitmapAsync()?.into_future())?;
 
-        let result = wait_for(self.engine.RecognizeAsync(&bitmap)?.into_future())?;
+        let result = wait_for(engine.RecognizeAsync(&bitmap)?.into_future())?;
         let lines_api = result.Lines()?;
 
         let mut out_lines = Vec::new();
