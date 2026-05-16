@@ -133,10 +133,7 @@ impl App {
         let coordinator = BackgroundCoordinator::new();
 
         let err_handler = crate::core::usecases::error_handler::ErrorHandler::new();
-        let (ocr_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&settings);
-        if let Some(err) = err_opt {
-            err_handler.report_simple(err);
-        }
+        let (ocr_engine, _) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&settings);
 
         let (dt_tx, dt_rx) = std::sync::mpsc::channel();
         let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
@@ -385,6 +382,10 @@ impl App {
                 .with_decorations(true)
                 .with_resizable(false),
             move |ctx, _| {
+                if ctx.input(|i| i.viewport().close_requested()) {
+                    let _ = tx.send(());
+                }
+
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(10.0);

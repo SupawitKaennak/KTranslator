@@ -346,7 +346,13 @@ fn render_tab_ocr(
             if let Some(err) = &download_progress.error {
                 ui.colored_label(egui::Color32::from_rgb(255, 100, 100), format!("Error: {}", err));
             }
-            let models_exist = std::path::Path::new("models/manga-ocr/manga109_yolo_s.onnx").exists();
+            let enc_p = "models/manga-ocr/encoder_model.onnx";
+            let dec_p = "models/manga-ocr/decoder_model.onnx";
+            let tok_p = "models/manga-ocr/tokenizer.json";
+            let yolo_p = "models/manga-ocr/manga109_yolo_s.onnx";
+
+            let models_exist = check_file_exists(enc_p) && check_file_exists(dec_p) && check_file_exists(tok_p) && check_file_exists(yolo_p);
+            
             if !models_exist {
                 ui.colored_label(egui::Color32::from_rgb(255, 100, 100), i18n.models_not_found);
                 if ui.button(i18n.download_install).clicked() { let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::MangaOCR); }
@@ -411,20 +417,9 @@ fn render_tab_ocr(
             let rec_path = format!("{}/rec.onnx", base_p);
             let dict_path = format!("{}/dict.txt", base_p);
 
-            // Portable check helper: tests CWD path first, then EXE directory path
-            let check_exists = |rel_path: &str| -> bool {
-                if std::path::Path::new(rel_path).exists() { return true; }
-                if let Ok(exe) = std::env::current_exe() {
-                    if let Some(dir) = exe.parent() {
-                        if dir.join(rel_path).exists() { return true; }
-                    }
-                }
-                false
-            };
-
-            let det_exists = check_exists(&det_path);
-            let rec_exists = check_exists(&rec_path);
-            let dict_exists = check_exists(&dict_path);
+            let det_exists = check_file_exists(&det_path);
+            let rec_exists = check_file_exists(&rec_path);
+            let dict_exists = check_file_exists(&dict_path);
 
             if det_exists && rec_exists && dict_exists {
                 ui.colored_label(egui::Color32::from_rgb(100, 255, 100), format!("✔ {} ({})", i18n.models_found, folder_name));
@@ -443,6 +438,16 @@ fn render_tab_ocr(
             }
         }
     }
+}
+
+fn check_file_exists(rel_path: &str) -> bool {
+    if std::path::Path::new(rel_path).exists() { return true; }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            if dir.join(rel_path).exists() { return true; }
+        }
+    }
+    false
 }
 
 // ─────────────────────────────────────────────
@@ -1283,8 +1288,6 @@ fn render_tab_debugging(ui: &mut egui::Ui, debug_infos: &[SlotDebugInfo], i18n: 
                         }
                         ui.label(format!("({})", info.status));
                     });
-                    ui.end_row();
-
                     ui.end_row();
  
                     ui.label(format!("{}:", i18n.dbg_debounce));
