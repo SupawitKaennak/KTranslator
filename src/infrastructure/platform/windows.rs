@@ -12,4 +12,8 @@ impl PlatformServices for WindowsPlatform {
     fn boost_process_priority(&self) {
         crate::infrastructure::win32::boost_process_priority();
     }
+
+    fn segment_thai(&self, text: &str) -> String {
+        crate::infrastructure::win32::segment_thai(text)
+    }
 }

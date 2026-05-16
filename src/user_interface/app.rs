@@ -297,6 +297,7 @@ impl App {
             &self.translation_cache,
             &self.text_translation_cache,
             &self.settings,
+            &self.platform,
             ctx.clone(),
         );
     }
