@@ -70,6 +70,7 @@ pub struct I18n {
     pub tab_text_processing: &'static str,
     pub tab_image_processing: &'static str,
     pub tab_overlay: &'static str,
+    pub tab_debugging: &'static str,
 
     // Text Processing Details
     pub clean_remove_dups: &'static str,
@@ -83,8 +84,6 @@ pub struct I18n {
     pub clean_consonant_spam: &'static str,
     pub clean_kana_spam: &'static str,
     pub clean_punc_norm: &'static str,
-
-    pub tab_debugging: &'static str,
 
     // AI Provider
     pub prov_custom_endpoint: &'static str,
@@ -212,6 +211,13 @@ pub struct I18n {
     pub dbg_trans_lines: &'static str,
     pub dbg_entries_mapped: &'static str,
     pub dbg_processed_ocr: &'static str,
+    pub lang_japanese: &'static str,
+    pub lang_arabic: &'static str,
+    pub prov_google: &'static str,
+    pub ppocr_mobile: &'static str,
+    pub ppocr_server: &'static str,
+    pub ppocr_dict_std: &'static str,
+    pub ppocr_dict_jp: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -275,6 +281,7 @@ const EN: I18n = I18n {
     tab_text_processing: "Text Processing",
     tab_image_processing: "Image Processing",
     tab_overlay: "Overlay",
+    tab_debugging: "Debugging Panel",
     clean_remove_dups: "Remove Duplicate Lines",
     clean_merge_broken: "Merge Broken Lines",
     clean_merge_fragments: "Merge Subtitle Fragments",
@@ -284,9 +291,8 @@ const EN: I18n = I18n {
     clean_min_len: "Minimum Text Length",
     clean_spec_ratio: "Special Character Limit Ratio",
     clean_consonant_spam: "Consonant Spam Filter (e.g. wwwww)",
-    clean_kana_spam: "Kana Spam Cleanup (e.g. ののの)",
+    clean_kana_spam: "Kana Spam Cleanup (e.g. ののของ)",
     clean_punc_norm: "Punctuation Normalization",
-    tab_debugging: "Debugging Panel",
     prov_custom_endpoint: "Custom Endpoint URL",
     prov_api_verification: "API Verification",
     beh_prompt_cust: "AI Prompt Customization",
@@ -394,6 +400,13 @@ const EN: I18n = I18n {
     dbg_trans_lines: "Persistent Trans Lines",
     dbg_entries_mapped: "entries mapped",
     dbg_processed_ocr: "Processed OCR Output",
+    lang_japanese: "Japanese:",
+    lang_arabic: "Arabic:",
+    prov_google: "Google Translate",
+    ppocr_mobile: "Fast: CN/EN Suite (Mobile ~15MB)",
+    ppocr_server: "Precision: CN/EN Suite (Server ~194MB)",
+    ppocr_dict_std: "Standard: CN+EN (Matches Suite)",
+    ppocr_dict_jp: "Japanese Specific (Needs JP Rec Model)",
 };
 
 const TH: I18n = I18n {
@@ -457,6 +470,7 @@ const TH: I18n = I18n {
     tab_text_processing: "การประมวลผลข้อความ",
     tab_image_processing: "การปรับแต่งภาพ (Pre-OCR)",
     tab_overlay: "หน้าตาซ้อนทับ",
+    tab_debugging: "แผงดีบักและสถิติ",
     clean_remove_dups: "ลบบรรทัดซ้ำซ้อน (ระวังพิกัดคลาดเคลื่อน)",
     clean_merge_broken: "ผสานบรรทัดที่ขาดหาย",
     clean_merge_fragments: "สมานเศษประโยคซับไตเติล",
@@ -468,7 +482,6 @@ const TH: I18n = I18n {
     clean_consonant_spam: "กรองสแปมพยัญชนะ (เช่น wwwww)",
     clean_kana_spam: "กรองสแปมคานะ (เช่น ののの)",
     clean_punc_norm: "ปรับเครื่องหมายวรรคตอนมาตรฐาน",
-    tab_debugging: "แผงดีบักและสถิติ",
     prov_custom_endpoint: "กำหนด URL ของ API เอง",
     prov_api_verification: "ตรวจสอบการเชื่อมต่อ API",
     beh_prompt_cust: "ปรับแต่งคำสั่ง Prompt แปลภาษา",
@@ -502,16 +515,16 @@ const TH: I18n = I18n {
     img_deskew: "หมุนปรับแก้ภาพเอียงอัตโนมัติ (Deskew)",
     overlay_customization: "ปรับแต่งหน้าตาหน้าต่างแปล",
     dbg_telemetry: "ข้อมูลสถานะเชิงลึกของระบบ",
-    capture_section: "การบันทึกภาพ",
+    capture_section: "การจับภาพหน้าจอ",
     offline: "ออฟไลน์",
     compatible: "ที่รองรับ",
     config_for: "การตั้งค่า",
-    get_api_key: "ขอรหัส API",
+    get_api_key: "ขอรับคีย์ API",
     server_url: "URL ของเซิร์ฟเวอร์",
-    base_url: "Base URL",
+    base_url: "URL พื้นฐาน",
     model_selection: "การเลือกโมเดล",
-    manual_entry: "ระบุเอง",
-    fetch_list: "ดึงจากรายการ",
+    manual_entry: "กรอกข้อมูลเอง",
+    fetch_list: "ดึงข้อมูลจากรายการ",
     downloading: "กำลังดาวน์โหลด",
     models_found: "พบโมเดล",
     missing_models: "ไม่พบไฟล์โมเดลในโฟลเดอร์",
@@ -576,6 +589,13 @@ const TH: I18n = I18n {
     dbg_trans_lines: "บรรทัดคำแปลในหน่วยความจำ",
     dbg_entries_mapped: "รายการที่บันทึกไว้",
     dbg_processed_ocr: "ผลลัพธ์ OCR ที่ประมวลผลแล้ว",
+    lang_japanese: "ภาษาญี่ปุ่น:",
+    lang_arabic: "ภาษาอาหรับ:",
+    prov_google: "กูเกิลแปลภาษา (Google Translate)",
+    ppocr_mobile: "ความเร็วสูง: ชุดภาษา จีน/อังกฤษ (Mobile ~15MB)",
+    ppocr_server: "ความแม่นยำสูง: ชุดภาษา จีน/อังกฤษ (Server ~194MB)",
+    ppocr_dict_std: "มาตรฐาน: จีน+อังกฤษ (ตรงตามชุดโมเดล)",
+    ppocr_dict_jp: "เฉพาะทางภาษาญี่ปุ่น (ต้องใช้โมเดล JP Rec)",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {
