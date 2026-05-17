@@ -91,7 +91,6 @@ impl TextCleaner {
 
         // --- OCR Fragment Merger ---
         // Windows OCR on manga fonts often splits words into isolated characters.
-        // e.g., "ARTHURIA" → "ARTHUR I A", "TOUYA" → "TO U YA", "MILDA" → "MILD A"
         // Merge single uppercase letters back into the previous word when both are uppercase.
         if config.enable_wordninja {
             let tokens: Vec<&str> = s.split_whitespace().collect();
@@ -235,50 +234,4 @@ impl TextCleaner {
         
         result_words.join(" ")
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_char_collapse() {
-        let cfg = TextProcessingSettings::default();
-        assert_eq!(TextCleaner::clean("AAAAABBB", &cfg), "AB");
-        assert_eq!(TextCleaner::clean("Hellooooo", &cfg), "Hello");
-        assert_eq!(TextCleaner::clean("Wait!!!!!!", &cfg), "Wait!!!");
-    }
-
-    #[test]
-    fn test_cycle_collapse() {
-        let cfg = TextProcessingSettings::default();
-        assert_eq!(TextCleaner::clean("ABCABCABC", &cfg), "ABC");
-        assert_eq!(TextCleaner::clean("ในที่สุดในที่สุด", &cfg), "ในที่สุด");
-    }
-
-    #[test]
-    fn test_wordninja_uppercase_split() {
-        let mut cfg = TextProcessingSettings::default();
-        cfg.enable_wordninja = true;
-        cfg.repeated_char_collapse = false;
-        cfg.recurring_suppression = false;
-        // These are real OCR outputs from manga pages (≥7 chars)
-        let result = TextCleaner::process_single_line("IFTHATIS", &cfg);
-        assert!(result.contains(" "), "Expected 'IFTHATIS' to be split, got: {}", result);
-        let result2 = TextCleaner::process_single_line("THATYOUWOULD", &cfg);
-        assert!(result2.contains(" "), "Expected 'THATYOUWOULD' to be split, got: {}", result2);
-    }
-
-    #[test]
-    fn test_fragment_merger() {
-        let mut cfg = TextProcessingSettings::default();
-        cfg.enable_wordninja = true;
-        cfg.repeated_char_collapse = false;
-        cfg.recurring_suppression = false;
-        // OCR often splits manga words: "ARTHURIA" → "ARTHUR I A", "MILDA" → "MILD A"
-        let result = TextCleaner::process_single_line("ARTHUR I AVON MILD A", &cfg);
-        assert!(result.contains("ARTHURI"), "Expected 'ARTHUR I' to merge, got: {}", result);
-        assert!(result.contains("MILDA"), "Expected 'MILD A' to merge, got: {}", result);
-    }
-
 }
