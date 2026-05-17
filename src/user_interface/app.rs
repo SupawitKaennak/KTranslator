@@ -277,15 +277,33 @@ impl App {
         }
 
         if self.settings.realtime.fade_smoothing {
+            let mut requires_repaint = false;
             for rt in &mut self.slots_runtime {
-                let step = ((now.saturating_sub(rt.last_overlay_fade_ms)) as f32 / 180.0).clamp(0.0, 1.0);
-                if step > 0.0 {
-                    rt.overlay_fade_alpha += (rt.overlay_fade_target - rt.overlay_fade_alpha) * step;
-                    if (rt.overlay_fade_alpha - rt.overlay_fade_target).abs() < 0.02 {
-                        rt.overlay_fade_alpha = rt.overlay_fade_target;
-                    }
+                if rt.last_overlay_fade_ms == 0 {
                     rt.last_overlay_fade_ms = now;
                 }
+                
+                let diff = (rt.overlay_fade_target - rt.overlay_fade_alpha).abs();
+                if diff > 0.005 {
+                    // Calculate precise delta time in seconds
+                    let dt = (now.saturating_sub(rt.last_overlay_fade_ms) as f32 / 1000.0).clamp(0.0, 0.1);
+                    rt.last_overlay_fade_ms = now;
+                    
+                    if dt > 0.0 {
+                        // Premium Cinematic Exponential Interpolation (Independent of FPS)
+                        // Speed constant 8.5 provides an elegant ~300ms buttery smooth fade transition.
+                        let speed = 8.5;
+                        let t = 1.0 - (-speed * dt).exp();
+                        rt.overlay_fade_alpha += (rt.overlay_fade_target - rt.overlay_fade_alpha) * t;
+                        requires_repaint = true;
+                    }
+                } else {
+                    rt.overlay_fade_alpha = rt.overlay_fade_target;
+                    rt.last_overlay_fade_ms = now;
+                }
+            }
+            if requires_repaint {
+                ctx.request_repaint();
             }
         }
 
