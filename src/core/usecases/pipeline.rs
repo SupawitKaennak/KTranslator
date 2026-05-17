@@ -171,11 +171,13 @@ impl TranslationPipeline {
             });
         }
         
-        // Apply Glossary Engine Overrides and Protected words
-        let (ocr_text_gloss, gloss_protected_map) = crate::core::usecases::glossary_engine::GlossaryEngine::apply_pre_override(&ocr_text_base, &glossary_entries);
+        // 1. Apply Pre-Translation Regex Engine Rules FIRST
+        // This ensures space-separated words like "HA NAZO NO" are merged to "HANAZONO" BEFORE glossary looks for it.
+        let (ocr_text_regex, regex_protected_map) = crate::core::usecases::regex_engine::RegexEngine::apply_pre_rules(&ocr_text_base, &regex_rules);
 
-        // Apply Pre-Translation Regex Engine Rules
-        let (ocr_text, regex_protected_map) = crate::core::usecases::regex_engine::RegexEngine::apply_pre_rules(&ocr_text_gloss, &regex_rules);
+        // 2. Apply Glossary Engine Overrides and Protected words SECOND
+        // Now Glossary will successfully catch "HANAZONO" and apply protection or guidance correctly!
+        let (ocr_text, gloss_protected_map) = crate::core::usecases::glossary_engine::GlossaryEngine::apply_pre_override(&ocr_text_regex, &glossary_entries);
 
         // Extract active glossary metadata for injection into AI Guidance prompt
         let active_glossary_entries = crate::core::usecases::glossary_engine::GlossaryEngine::filter_active_entries(&ocr_text, &glossary_entries);
@@ -184,6 +186,7 @@ impl TranslationPipeline {
         // Helper to map block-level translations back to line-level `trans_lines`
         let txt_proc_cfg_inner = txt_proc_cfg.clone();
         let regex_rules_inner = regex_rules.clone();
+        let glossary_entries_inner = Arc::new(glossary_entries.clone());
         let gloss_protected_map_inner = Arc::new(gloss_protected_map);
         let regex_protected_map_inner = Arc::new(regex_protected_map);
         let platform_inner = platform.clone();
@@ -192,9 +195,14 @@ impl TranslationPipeline {
         let build_trans_lines = move |translated: &str| -> Vec<String> {
             // Decode Glossary protected masks first
             let decoded_gloss = crate::core::usecases::glossary_engine::GlossaryEngine::apply_post_override(translated, &gloss_protected_map_inner);
-            // Apply Regex Post rules and decode masks
-            let post_trans = crate::core::usecases::regex_engine::RegexEngine::apply_post_rules(&decoded_gloss, &regex_rules_inner, &regex_protected_map_inner);
             
+            // Apply Regex Post rules and decode masks
+            let mut post_trans = crate::core::usecases::regex_engine::RegexEngine::apply_post_rules(&decoded_gloss, &regex_rules_inner, &regex_protected_map_inner);
+            
+            // Forcefully apply any missed Glossary entries (like CharacterName, Terms) on the final text
+            // to serve as a 100% reliable post-translation enforcer.
+            post_trans = crate::core::usecases::glossary_engine::GlossaryEngine::apply_post_glossary_overrides(&post_trans, &glossary_entries_inner);
+
             let mut block_translations = Self::parse_numbered_lines(&post_trans, blocks.len(), &txt_proc_cfg_inner);
             
             // --- Thai Word Segmentation ---
