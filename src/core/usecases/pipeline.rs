@@ -65,6 +65,12 @@ impl TranslationPipeline {
         ctx: egui::Context,
         max_cache_entries: usize,
         platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
+        enable_batching: bool,
+        context_segments: Vec<String>,
+        contextual_translation: bool,
+        context_window_size: u32,
+        th_segmentation: crate::infrastructure::settings::ThaiSegmentationMode,
+        jp_merge_vertical: bool,
     ) -> anyhow::Result<BgResult> {
         let mut frame = capture.capture_rect(rect, display_id)?;
         
@@ -142,7 +148,7 @@ impl TranslationPipeline {
             }
         }
         
-        let blocks = crate::core::layout::build_blocks(raw_ocr_lines, smart_merge);
+        let blocks = crate::core::layout::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
         
         let mut ocr_lines = Vec::new();
         let mut block_sizes = Vec::new();
@@ -191,6 +197,7 @@ impl TranslationPipeline {
         let regex_protected_map_inner = Arc::new(regex_protected_map);
         let platform_inner = platform.clone();
         let target_lang_inner = target_lang.clone();
+        let th_segmentation_inner = th_segmentation;
         
         let build_trans_lines = move |translated: &str| -> Vec<String> {
             // Decode Glossary protected masks first
@@ -209,7 +216,7 @@ impl TranslationPipeline {
             // Apply segmentation to each individual block only if target is Thai
             if target_lang_inner.0 == "th" || target_lang_inner.0 == "Thai" {
                 for text in block_translations.iter_mut() {
-                    *text = platform_inner.segment_thai(text);
+                    *text = platform_inner.segment_thai(text, th_segmentation_inner);
                 }
             }
             let mut trans_lines = Vec::new();
@@ -281,9 +288,23 @@ impl TranslationPipeline {
         if !glossary_guidance_str.is_empty() {
             text_to_translate.push_str(&format!("\n\n[MANDATORY_GLOSSARY_TERMS:\n{}]", glossary_guidance_str));
         }
-        let translator_output = translator.as_ref()
-            .context("No translator provider selected")?
-            .translate(&text_to_translate, source_lang.as_ref(), &target_lang)?;
+        let context_hint = if contextual_translation {
+            crate::core::usecases::translation_runner::build_context_hint(
+                &context_segments,
+                context_window_size,
+            )
+        } else {
+            None
+        };
+        let context_hint_ref = context_hint.as_deref();
+        let translator_output = crate::core::usecases::translation_runner::translate_text(
+            translator.as_deref().context("No translator provider selected")?,
+            &text_to_translate,
+            source_lang.as_ref(),
+            &target_lang,
+            enable_batching,
+            context_hint_ref,
+        )?;
 
         // --- Thai Word Segmentation ---
         // If target is Thai, use platform segmenter to insert spaces for proper wrapping.

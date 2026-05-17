@@ -276,6 +276,19 @@ impl App {
             ctx.request_repaint();
         }
 
+        if self.settings.realtime.fade_smoothing {
+            for rt in &mut self.slots_runtime {
+                let step = ((now.saturating_sub(rt.last_overlay_fade_ms)) as f32 / 180.0).clamp(0.0, 1.0);
+                if step > 0.0 {
+                    rt.overlay_fade_alpha += (rt.overlay_fade_target - rt.overlay_fade_alpha) * step;
+                    if (rt.overlay_fade_alpha - rt.overlay_fade_target).abs() < 0.02 {
+                        rt.overlay_fade_alpha = rt.overlay_fade_target;
+                    }
+                    rt.last_overlay_fade_ms = now;
+                }
+            }
+        }
+
         // 2. Delegate background logic to coordinator
         self.coordinator.process_results(
             &self.model,
@@ -323,6 +336,8 @@ impl App {
                 || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
             
             let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
+            let realtime_changed = updated.realtime != self.settings.realtime;
+            let txt_proc_changed = updated.txt_proc != self.settings.txt_proc;
             let rebuild_trans = updated.provider != self.settings.provider 
                 || updated.gemini_api_key != self.settings.gemini_api_key
                 || updated.gemini_model != self.settings.gemini_model
@@ -345,6 +360,13 @@ impl App {
                         self.translation_cache.lock().clear();
                         self.text_translation_cache.lock().clear();
                     }
+                }
+                if realtime_changed || txt_proc_changed {
+                    for rt in &mut self.slots_runtime {
+                        rt.recent_translations.clear();
+                    }
+                    self.translation_cache.lock().clear();
+                    self.text_translation_cache.lock().clear();
                 }
                 
                 if rebuild_ocr {
