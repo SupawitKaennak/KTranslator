@@ -122,6 +122,20 @@ impl BackgroundCoordinator {
                                     slot.last_ocr_lines = ocr_lines.clone();
                                     slot.last_trans_lines = trans_lines.clone();
 
+                                    if !translated.trim().is_empty() {
+                                        let cap = settings.realtime.context_window_size.max(1) as usize;
+                                        runtime.recent_translations.push_back(translated.trim().to_string());
+                                        while runtime.recent_translations.len() > cap {
+                                            runtime.recent_translations.pop_front();
+                                        }
+                                    }
+
+                                    if settings.realtime.fade_smoothing {
+                                        runtime.overlay_fade_target = 1.0;
+                                        runtime.overlay_fade_alpha = 0.35;
+                                        runtime.last_overlay_fade_ms = now;
+                                    }
+
                                     if frame_hash != 0 {
                                         let cache_key = (frame_hash, slot.source_lang.as_ref().map(|l| l.0.clone()), slot.target_lang.0.clone());
                                         translation_cache.lock().insert(cache_key, (ocr_text, translated.clone()));
@@ -301,6 +315,9 @@ impl BackgroundCoordinator {
         let snapshot = { model_arc.lock().clone() };
         if !snapshot.running { return; }
 
+        let parallel_ocr = settings.perf.parallel_ocr;
+        let any_busy = !parallel_ocr && slots_runtime.iter().any(|r| r.busy);
+
         for (i, slot) in snapshot.slots.iter().enumerate() {
             if !slot.enabled || slot.rect.is_none() { continue; }
 
@@ -315,6 +332,7 @@ impl BackgroundCoordinator {
             if lang_changed {
                 slots_runtime[i].last_langs = (cur_src, cur_tgt);
                 slots_runtime[i].last_hash = 0;
+                slots_runtime[i].recent_translations.clear();
                 translation_cache.lock().clear();
                 text_translation_cache.lock().clear();
                 
@@ -333,7 +351,7 @@ impl BackgroundCoordinator {
                 continue;
             }
 
-            if slots_runtime[i].busy || now < slot.next_tick_at_ms {
+            if slots_runtime[i].busy || now < slot.next_tick_at_ms || any_busy {
                 continue;
             }
 
@@ -369,6 +387,16 @@ impl BackgroundCoordinator {
             let glossary_entries = settings.glossary_entries.clone();
             let last_frame_arc = slots_runtime[i].last_frame.clone();
             let max_cache_entries = settings.perf.max_cache_entries;
+            let enable_batching = settings.perf.enable_batching;
+            let context_segments: Vec<String> = slots_runtime[i]
+                .recent_translations
+                .iter()
+                .cloned()
+                .collect();
+            let contextual_translation = settings.trans_behavior.contextual_translation;
+            let context_window_size = settings.realtime.context_window_size;
+            let th_segmentation = settings.txt_proc.th_segmentation;
+            let jp_merge_vertical = settings.txt_proc.jp_merge_vertical;
 
             let ctx_worker = ctx.clone();
             self.pool.lock().execute(move || {
@@ -383,6 +411,8 @@ impl BackgroundCoordinator {
                         stable_since_ms, language_version, cache_arc, text_cache_arc,
                         first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
                         max_cache_entries, platform.clone(),
+                        enable_batching, context_segments, contextual_translation, context_window_size,
+                        th_segmentation, jp_merge_vertical,
                     );
 
                     match result {

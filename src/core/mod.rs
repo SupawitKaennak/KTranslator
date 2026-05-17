@@ -2,6 +2,7 @@ pub mod model;
 pub mod worker;
 pub mod ports;
 pub mod types;
+pub mod chinese_convert;
 pub mod text_cleaner;
 pub mod coordinator;
 pub mod prompt_builder;
