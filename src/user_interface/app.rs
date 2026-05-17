@@ -276,6 +276,37 @@ impl App {
             ctx.request_repaint();
         }
 
+        if self.settings.realtime.fade_smoothing {
+            let mut requires_repaint = false;
+            for rt in &mut self.slots_runtime {
+                if rt.last_overlay_fade_ms == 0 {
+                    rt.last_overlay_fade_ms = now;
+                }
+                
+                let diff = (rt.overlay_fade_target - rt.overlay_fade_alpha).abs();
+                if diff > 0.005 {
+                    // Calculate precise delta time in seconds
+                    let dt = (now.saturating_sub(rt.last_overlay_fade_ms) as f32 / 1000.0).clamp(0.0, 0.1);
+                    rt.last_overlay_fade_ms = now;
+                    
+                    if dt > 0.0 {
+                        // Premium Cinematic Exponential Interpolation (Independent of FPS)
+                        // Speed constant 8.5 provides an elegant ~300ms buttery smooth fade transition.
+                        let speed = 8.5;
+                        let t = 1.0 - (-speed * dt).exp();
+                        rt.overlay_fade_alpha += (rt.overlay_fade_target - rt.overlay_fade_alpha) * t;
+                        requires_repaint = true;
+                    }
+                } else {
+                    rt.overlay_fade_alpha = rt.overlay_fade_target;
+                    rt.last_overlay_fade_ms = now;
+                }
+            }
+            if requires_repaint {
+                ctx.request_repaint();
+            }
+        }
+
         // 2. Delegate background logic to coordinator
         self.coordinator.process_results(
             &self.model,
@@ -323,6 +354,8 @@ impl App {
                 || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
             
             let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
+            let realtime_changed = updated.realtime != self.settings.realtime;
+            let txt_proc_changed = updated.txt_proc != self.settings.txt_proc;
             let rebuild_trans = updated.provider != self.settings.provider 
                 || updated.gemini_api_key != self.settings.gemini_api_key
                 || updated.gemini_model != self.settings.gemini_model
@@ -345,6 +378,13 @@ impl App {
                         self.translation_cache.lock().clear();
                         self.text_translation_cache.lock().clear();
                     }
+                }
+                if realtime_changed || txt_proc_changed {
+                    for rt in &mut self.slots_runtime {
+                        rt.recent_translations.clear();
+                    }
+                    self.translation_cache.lock().clear();
+                    self.text_translation_cache.lock().clear();
                 }
                 
                 if rebuild_ocr {

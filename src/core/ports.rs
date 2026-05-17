@@ -46,6 +46,7 @@ pub trait Translator: Send + Sync {
         text: &str,
         source: Option<&LanguageTag>,
         target: &LanguageTag,
+        context_hint: Option<&str>,
     ) -> Result<String>;
 
     /// Optional: Translate directly from an image frame (Vision mode)

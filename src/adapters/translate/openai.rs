@@ -72,13 +72,21 @@ impl Translator for OpenAiTranslator {
         text: &str,
         source: Option<&LanguageTag>,
         target: &LanguageTag,
+        context_hint: Option<&str>,
     ) -> Result<String> {
         if self.base_url.is_empty() {
             bail!("Custom OpenAI Base URL is empty");
         }
 
         let lines: Vec<&str> = text.lines().collect();
-        let prompt = prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, self.behavior.as_ref());
+        let ctx = if self.behavior.as_ref().map(|b| b.contextual_translation).unwrap_or(false) {
+            context_hint
+        } else {
+            None
+        };
+        let prompt = prompt_builder::build_translation_prompt_with_behavior(
+            &lines, source, target, self.behavior.as_ref(), ctx,
+        );
         
         let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.3);
 
