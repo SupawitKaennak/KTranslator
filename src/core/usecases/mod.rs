@@ -5,3 +5,4 @@ pub mod text_formatter;
 pub mod image_processor;
 pub mod regex_engine;
 pub mod glossary_engine;
+pub mod translation_runner;

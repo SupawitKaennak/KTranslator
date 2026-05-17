@@ -7,7 +7,7 @@ fn get_char_size(line: &OcrTextLine) -> f32 {
     line.h.min(line.w).max(12.0)
 }
 
-fn is_close(a: &OcrTextLine, b: &OcrTextLine) -> bool {
+fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
     let char_size_a = get_char_size(a);
     let char_size_b = get_char_size(b);
     let char_size = char_size_a.max(char_size_b);
@@ -15,7 +15,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine) -> bool {
     // Check if the lines are likely part of vertical text (typical in Japanese Manga)
     let is_a_vertical = a.h > a.w * 1.2;
     let is_b_vertical = b.h > b.w * 1.2;
-    let is_vertical_context = is_a_vertical || is_b_vertical;
+    let is_vertical_context = jp_merge_vertical && (is_a_vertical || is_b_vertical);
 
     if is_vertical_context {
         // --- CJK Vertical Text Context ---
@@ -133,7 +133,7 @@ fn merge_text(lines: &[OcrTextLine]) -> String {
     result
 }
 
-pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool) -> Vec<OcrTextBlock> {
+pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool, jp_merge_vertical: bool) -> Vec<OcrTextBlock> {
     if lines.is_empty() {
         return vec![];
     }
@@ -150,7 +150,7 @@ pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool) -> Vec<OcrTextBl
     for line in lines {
         let mut matched_idx = None;
         for (i, block) in blocks.iter().enumerate() {
-            if block.lines.iter().any(|existing_line| is_close(&line, existing_line)) {
+            if block.lines.iter().any(|existing_line| is_close(&line, existing_line, jp_merge_vertical)) {
                 matched_idx = Some(i);
                 break;
             }
