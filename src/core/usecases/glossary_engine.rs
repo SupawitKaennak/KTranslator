@@ -113,4 +113,45 @@ impl GlossaryEngine {
         }
         current_text
     }
+
+    /// Post-Translation Enforcer: Forcefully apply glossary rules (like CharacterNames) 
+    /// on the final translated text to ensure 100% delivery even if LLM ignores the system prompt instructions.
+    pub fn apply_post_glossary_overrides(text: &str, entries: &[GlossaryEntry]) -> String {
+        let mut current_text = text.to_string();
+        
+        // Sort active entries by length of source text descending to avoid substring collision (e.g. "Hana" replacing part of "Hanazono")
+        let mut active_rules: Vec<GlossaryEntry> = entries.iter()
+            .filter(|e| e.enabled && !e.source.trim().is_empty() && !e.target.trim().is_empty())
+            .filter(|e| e.entry_type == GlossaryType::CharacterName 
+                     || e.entry_type == GlossaryType::GameTerminology 
+                     || e.entry_type == GlossaryType::SlangJargon 
+                     || e.entry_type == GlossaryType::PhraseOverride)
+            .cloned()
+            .collect();
+            
+        active_rules.sort_by(|a, b| b.source.len().cmp(&a.source.len()));
+        
+        for entry in active_rules {
+            // Apply case-insensitive replacements in the final translated text
+            let source_lower = entry.source.to_lowercase();
+            let mut start = 0;
+            let mut temp = String::new();
+            
+            let text_lower = current_text.to_lowercase();
+            while let Some(pos) = text_lower[start..].find(&source_lower) {
+                let actual_start = start + pos;
+                let actual_end = actual_start + entry.source.len();
+                temp.push_str(&current_text[start..actual_start]);
+                temp.push_str(&entry.target); // Insert the target custom translation
+                start = actual_end;
+            }
+            
+            if start > 0 {
+                temp.push_str(&current_text[start..]);
+                current_text = temp;
+            }
+        }
+        
+        current_text
+    }
 }
