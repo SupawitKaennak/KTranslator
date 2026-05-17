@@ -1,4 +1,5 @@
 use crate::core::ports::OcrTextLine;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::AtomicIsize;
 use parking_lot::Mutex;
@@ -89,6 +90,12 @@ pub struct SlotRuntimeState {
     pub persistent_trans_lines: Arc<Mutex<Vec<String>>>,
     /// Number of consecutive errors for exponential backoff calculation
     pub error_streak: u32,
+    /// Recent translated segments for low-token contextual translation
+    pub recent_translations: VecDeque<String>,
+    /// Overlay fade alpha (0.0–1.0) when fade smoothing is enabled
+    pub overlay_fade_alpha: f32,
+    pub overlay_fade_target: f32,
+    pub last_overlay_fade_ms: u64,
 }
 
 impl SlotRuntimeState {
@@ -111,6 +118,10 @@ impl SlotRuntimeState {
             persistent_ocr_lines: Arc::new(Mutex::new(Vec::new())),
             persistent_trans_lines: Arc::new(Mutex::new(Vec::new())),
             error_streak: 0,
+            recent_translations: VecDeque::new(),
+            overlay_fade_alpha: 1.0,
+            overlay_fade_target: 1.0,
+            last_overlay_fade_ms: 0,
         }
     }
 }

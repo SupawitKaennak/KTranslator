@@ -1,6 +1,13 @@
+use regex::Regex;
+use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
+use crate::core::chinese_convert::convert_chinese;
 use crate::infrastructure::settings::TextProcessingSettings;
+
+static FURIGANA_PAREN_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"[（(][\p{Hiragana}\p{Katakana}・ー\s]+[）)]").unwrap()
+});
 
 pub struct TextCleaner;
 
@@ -54,8 +61,23 @@ impl TextCleaner {
             return String::new();
         }
 
-        // 1. Unicode Normalization (NFKC)
+        // 1. Unicode Normalization (NFKC) + optional kana width normalization
         let mut normalized: String = text.nfkc().collect();
+        if config.jp_kana_normalization {
+            normalized = Self::normalize_kana_width(&normalized);
+        }
+        if config.jp_remove_furigana {
+            normalized = Self::strip_furigana(&normalized);
+        }
+        if config.cn_conversion != crate::infrastructure::settings::ChineseConversionMode::None {
+            normalized = convert_chinese(&normalized, config.cn_conversion);
+        }
+        if config.th_zero_width_cleanup {
+            normalized = Self::strip_zero_width(&normalized);
+        }
+        if config.ar_rtl_correction {
+            normalized = Self::fix_arabic_rtl(&normalized);
+        }
 
         // Punctuation Normalization
         if config.punctuation_normalization {
@@ -66,13 +88,168 @@ impl TextCleaner {
                                    .replace("？？", "？");
         }
 
-        // Process each line individually, PRESERVING line count for bounding box coordinates.
-        let lines: Vec<String> = normalized
+        let mut lines: Vec<String> = normalized
             .lines()
-            .map(|l| Self::process_single_line(l.trim(), config))
+            .map(|l| l.trim().to_string())
+            .collect();
+
+        if config.remove_duplicates {
+            lines = Self::dedupe_consecutive_lines(lines);
+        }
+        if config.merge_broken_lines {
+            lines = Self::merge_broken_lines(lines);
+        }
+        if config.merge_subtitle_fragments {
+            lines = Self::merge_subtitle_fragments(lines);
+        }
+
+        let lines: Vec<String> = lines
+            .into_iter()
+            .map(|l| Self::process_single_line(&l, config))
             .collect();
 
         lines.join("\n")
+    }
+
+    fn normalize_kana_width(s: &str) -> String {
+        s.chars()
+            .map(|c| {
+                let u = c as u32;
+                // Half-width katakana → full-width
+                if (0xFF61..=0xFF9F).contains(&u) {
+                    char::from_u32(u - 0xFF61 + 0x30A1).unwrap_or(c)
+                } else {
+                    c
+                }
+            })
+            .collect()
+    }
+
+    fn strip_furigana(s: &str) -> String {
+        FURIGANA_PAREN_RE.replace_all(s, "").into_owned()
+    }
+
+    fn strip_zero_width(s: &str) -> String {
+        s.chars()
+            .filter(|c| !matches!(c, '\u{200B}' | '\u{200C}' | '\u{200D}' | '\u{FEFF}' | '\u{2060}'))
+            .collect()
+    }
+
+    fn is_arabic_char(c: char) -> bool {
+        matches!(c as u32, 0x0600..=0x06FF)
+    }
+
+    fn fix_arabic_rtl(s: &str) -> String {
+        if !s.chars().any(Self::is_arabic_char) {
+            return s.to_string();
+        }
+        // Wrap Arabic runs with RLM to reduce OCR left-to-right ordering artifacts.
+        let mut out = String::with_capacity(s.len() + 4);
+        let mut in_arabic = false;
+        for c in s.chars() {
+            let is_ar = Self::is_arabic_char(c);
+            if is_ar && !in_arabic {
+                out.push('\u{200F}');
+                in_arabic = true;
+            } else if !is_ar && in_arabic {
+                out.push('\u{200F}');
+                in_arabic = false;
+            }
+            out.push(c);
+        }
+        if in_arabic {
+            out.push('\u{200F}');
+        }
+        out
+    }
+
+    fn dedupe_consecutive_lines(lines: Vec<String>) -> Vec<String> {
+        let mut out = Vec::with_capacity(lines.len());
+        let mut prev: Option<String> = None;
+        for line in lines {
+            if line.is_empty() {
+                out.push(line);
+                prev = None;
+                continue;
+            }
+            if prev.as_ref() == Some(&line) {
+                continue;
+            }
+            prev = Some(line.clone());
+            out.push(line);
+        }
+        out
+    }
+
+    fn merge_broken_lines(lines: Vec<String>) -> Vec<String> {
+        if lines.len() < 2 {
+            return lines;
+        }
+        let mut out = Vec::new();
+        let mut buf = String::new();
+        for line in lines {
+            if line.is_empty() {
+                if !buf.is_empty() {
+                    out.push(buf.clone());
+                    buf.clear();
+                }
+                out.push(String::new());
+                continue;
+            }
+            if buf.is_empty() {
+                buf = line;
+                continue;
+            }
+            let continues = !buf.ends_with(['.', '!', '?', '。', '！', '？', '…', ':', '：'])
+                && line.chars().next().is_some_and(|c| !c.is_uppercase() || line.len() <= 2);
+            if continues {
+                let latin_join = buf.chars().last().is_some_and(|c| c.is_ascii_alphabetic())
+                    && line.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
+                if latin_join && !buf.ends_with('-') {
+                    buf.push(' ');
+                }
+                buf.push_str(&line);
+            } else {
+                out.push(buf.clone());
+                buf = line;
+            }
+        }
+        if !buf.is_empty() {
+            out.push(buf);
+        }
+        out
+    }
+
+    fn merge_subtitle_fragments(lines: Vec<String>) -> Vec<String> {
+        if lines.len() < 2 {
+            return lines;
+        }
+        let mut out = Vec::new();
+        let mut buf = String::new();
+        for line in lines {
+            if line.is_empty() {
+                if !buf.is_empty() {
+                    out.push(buf.clone());
+                    buf.clear();
+                }
+                out.push(String::new());
+                continue;
+            }
+            let is_fragment = line.chars().count() <= 4;
+            if buf.is_empty() {
+                buf = line;
+            } else if is_fragment || buf.chars().count() <= 4 {
+                buf.push(' ');
+                buf.push_str(&line);
+            } else {
+                out.push(buf.clone());
+                buf = line;
+            }
+        }
+        if !buf.is_empty() {
+            out.push(buf);
+        }
+        out
     }
 
     fn process_single_line(line: &str, config: &TextProcessingSettings) -> String {

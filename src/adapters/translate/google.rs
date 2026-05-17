@@ -20,7 +20,13 @@ impl GoogleTranslator {
 }
 
 impl Translator for GoogleTranslator {
-    fn translate(&self, text: &str, source: Option<&LanguageTag>, target: &LanguageTag) -> Result<String> {
+    fn translate(
+        &self,
+        text: &str,
+        source: Option<&LanguageTag>,
+        target: &LanguageTag,
+        _context_hint: Option<&str>,
+    ) -> Result<String> {
         let sl = source.map(|s| s.as_str()).unwrap_or("auto");
         let tl = target.as_str();
 

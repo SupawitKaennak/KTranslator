@@ -125,6 +125,7 @@ pub fn build_translation_prompt_with_behavior(
     source: Option<&LanguageTag>,
     target: &LanguageTag,
     behavior: Option<&crate::infrastructure::settings::TranslationBehaviorSettings>,
+    context_hint: Option<&str>,
 ) -> TranslationPrompt {
     let mut base = build_translation_prompt(lines, source, target);
     
@@ -175,6 +176,18 @@ pub fn build_translation_prompt_with_behavior(
         if beh.preserve_emojis {
             custom_guidance.push_str(" - Retain all original emojis, kaomojis, and expressive punctuation icons.\n");
         }
+        if beh.preserve_formatting {
+            custom_guidance.push_str(" - Preserve original spacing, indentation, and inline formatting.\n");
+        }
+        if beh.preserve_line_breaks && lines.len() > 1 {
+            custom_guidance.push_str(" - Keep the exact same number of lines and line breaks as the input.\n");
+        }
+        if beh.preserve_punctuation {
+            custom_guidance.push_str(" - Do not add, remove, or replace punctuation marks unless required by grammar.\n");
+        }
+        if beh.contextual_translation {
+            custom_guidance.push_str(" - Use reference context only for names/tone continuity; never copy it into the output.\n");
+        }
         if beh.profanity_filter {
             custom_guidance.push_str(" - STRICT PROFANITY FILTER: Mask or replace offensive language with professional mild expressions.\n");
         }
@@ -199,6 +212,13 @@ pub fn build_translation_prompt_with_behavior(
         if !custom_guidance.is_empty() {
             base.system.push_str(&format!("\n\nBEHAVIOR & STYLE OVERRIDES:\n{}", custom_guidance));
         }
+    }
+
+    if let Some(ctx) = context_hint.filter(|c| !c.is_empty()) {
+        base.user = format!(
+            "Reference only (do NOT translate):\n{ctx}\n\n---\n{}",
+            base.user
+        );
     }
     
     base

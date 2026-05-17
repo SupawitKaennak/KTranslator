@@ -28,7 +28,11 @@ pub trait PlatformServices: Send + Sync {
     fn boost_process_priority(&self);
 
     /// Break Thai text into words with spaces for better rendering.
-    fn segment_thai(&self, text: &str) -> String;
+    fn segment_thai(
+        &self,
+        text: &str,
+        mode: crate::infrastructure::settings::ThaiSegmentationMode,
+    ) -> String;
 }
 
 /// Create the platform services implementation for the current OS.
@@ -48,5 +52,11 @@ struct StubPlatform;
 impl PlatformServices for StubPlatform {
     fn find_window_by_title(&self, _title: &str) -> Option<isize> { None }
     fn boost_process_priority(&self) {}
-    fn segment_thai(&self, text: &str) -> String { text.to_string() }
+    fn segment_thai(
+        &self,
+        text: &str,
+        _mode: crate::infrastructure::settings::ThaiSegmentationMode,
+    ) -> String {
+        text.to_string()
+    }
 }
