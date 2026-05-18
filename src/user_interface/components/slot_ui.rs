@@ -114,41 +114,56 @@ pub fn render_slot_item(
             let slot = &mut model.slots[slot_idx];
 
             ui.label(format!("{}:", i18n.from));
-            let mut src = slot.source_lang.as_ref().map(|l| l.0.clone()).unwrap_or_default();
+            
+            // Define source language code: Default to "en" (English) if None
+            let mut current_src = slot.source_lang.as_ref().map(|l| l.0.clone()).unwrap_or_else(|| "en".to_string());
+            
+            let mut src_changed = false;
             egui::ComboBox::from_id_salt(format!("src_{slot_idx}"))
                 .selected_text(
                     LANGUAGE_OPTIONS.iter()
-                        .find(|(_, code)| code.to_string() == src)
-                        .map(|(name, code)| if *code == "" { i18n.auto_detect } else { *name }).unwrap_or(i18n.auto_detect),
+                        .find(|(_, code)| *code == current_src)
+                        .map(|(name, _)| *name)
+                        .unwrap_or("English (en)")
                 )
                 .show_ui(ui, |ui| {
+                    // Render all language options (No Auto Detect)
                     for (name, code) in LANGUAGE_OPTIONS {
-                        let label = if *code == "" { i18n.auto_detect } else { *name };
-                        ui.selectable_value(&mut src, code.to_string(), label);
+                        if ui.selectable_value(&mut current_src, code.to_string(), *name).clicked() {
+                            src_changed = true;
+                        }
                     }
                 });
-            let old_src = slot.source_lang.as_ref().map(|l| l.0.clone());
-            slot.source_lang = if src.is_empty() { None } else { Some(LanguageTag(src.clone())) };
-            if old_src.as_ref() != slot.source_lang.as_ref().map(|l| &l.0) {
-                tracing::info!("Slot {} source language changed: {:?} -> {:?}", slot_idx, old_src, slot.source_lang);
+
+            if src_changed || slot.source_lang.is_none() {
+                let old_src = slot.source_lang.clone();
+                slot.source_lang = Some(LanguageTag(current_src));
+                tracing::info!("Slot {} source language forced/changed: {:?} -> {:?}", slot_idx, old_src, slot.source_lang);
             }
 
             ui.add_space(10.0);
             ui.label(format!("{}:", i18n.to));
-            let mut tgt = slot.target_lang.0.clone();
+            
+            let mut current_tgt = slot.target_lang.0.clone();
+            let mut tgt_changed = false;
             egui::ComboBox::from_id_salt(format!("tgt_{slot_idx}"))
                 .selected_text(
                     LANGUAGE_OPTIONS.iter()
-                        .find(|(_, code)| code.to_string() == tgt)
-                        .map(|(name, _)| *name).unwrap_or("Thai (th)"),
+                        .find(|(_, code)| *code == current_tgt)
+                        .map(|(name, _)| *name)
+                        .unwrap_or("Thai (th)")
                 )
                 .show_ui(ui, |ui| {
                     for (name, code) in LANGUAGE_OPTIONS {
-                        if code.is_empty() { continue; }
-                        ui.selectable_value(&mut tgt, code.to_string(), *name);
+                        if ui.selectable_value(&mut current_tgt, code.to_string(), *name).clicked() {
+                            tgt_changed = true;
+                        }
                     }
                 });
-            slot.target_lang = LanguageTag(tgt);
+
+            if tgt_changed {
+                slot.target_lang = LanguageTag(current_tgt);
+            }
         });
 
         ui.add_space(8.0);
