@@ -23,24 +23,23 @@ pub fn process_image_for_ocr(
 
     // 1. Grayscale Conversion
     if config.grayscale || config.binarize || config.adaptive_threshold {
-        for i in (0..out.len()).step_by(4) {
-            let r = out[i] as f32;
-            let g = out[i+1] as f32;
-            let b = out[i+2] as f32;
-            // Standard BT.601 luminance mapping
-            let gray = (0.299 * r + 0.587 * g + 0.114 * b) as u8;
-            out[i]   = gray;
-            out[i+1] = gray;
-            out[i+2] = gray;
+        for chunk in out.chunks_exact_mut(4) {
+            let r = chunk[0] as u32;
+            let g = chunk[1] as u32;
+            let b = chunk[2] as u32;
+            let gray = ((r * 77 + g * 150 + b * 29) >> 8) as u8;
+            chunk[0] = gray;
+            chunk[1] = gray;
+            chunk[2] = gray;
         }
     }
 
     // 2. Invert Colors
     if config.invert {
-        for i in (0..out.len()).step_by(4) {
-            out[i]   = 255 - out[i];
-            out[i+1] = 255 - out[i+1];
-            out[i+2] = 255 - out[i+2];
+        for chunk in out.chunks_exact_mut(4) {
+            chunk[0] = 255 - chunk[0];
+            chunk[1] = 255 - chunk[1];
+            chunk[2] = 255 - chunk[2];
         }
     }
 
@@ -59,19 +58,19 @@ pub fn process_image_for_ocr(
             }
             lut[p] = val.clamp(0.0, 255.0) as u8;
         }
-        for i in (0..out.len()).step_by(4) {
-            out[i]   = lut[out[i] as usize];
-            out[i+1] = lut[out[i+1] as usize];
-            out[i+2] = lut[out[i+2] as usize];
+        for chunk in out.chunks_exact_mut(4) {
+            chunk[0] = lut[chunk[0] as usize];
+            chunk[1] = lut[chunk[1] as usize];
+            chunk[2] = lut[chunk[2] as usize];
         }
     }
 
     // 4. Anti-alias Removal (Sharp dynamic boundary quantization)
     if config.anti_alias_removal {
-        for i in (0..out.len()).step_by(4) {
-            for c in 0..3 {
-                let v = out[i+c];
-                out[i+c] = if v > 160 { 255 } else if v < 96 { 0 } else { v };
+        for chunk in out.chunks_exact_mut(4) {
+            for val in chunk.iter_mut().take(3) {
+                let v = *val;
+                *val = if v > 160 { 255 } else if v < 96 { 0 } else { v };
             }
         }
     }
@@ -79,40 +78,56 @@ pub fn process_image_for_ocr(
     // 5. Binary Threshold / Adaptive Threshold
     if config.binarize && !config.adaptive_threshold {
         let thresh = config.binary_threshold;
-        for i in (0..out.len()).step_by(4) {
-            let gray = out[i]; 
+        for chunk in out.chunks_exact_mut(4) {
+            let gray = chunk[0]; 
             let val = if gray >= thresh { 255 } else { 0 };
-            out[i]   = val;
-            out[i+1] = val;
-            out[i+2] = val;
+            chunk[0] = val;
+            chunk[1] = val;
+            chunk[2] = val;
         }
     } else if config.adaptive_threshold {
-        // High-performance windowed local-mean adaptive binarization
+        // High-performance O(W * H) windowed local-mean adaptive binarization using Integral Image
         let temp = out.clone();
         let w = width as usize;
         let h = height as usize;
         let radius = 7;
+        
+        let mut integral = vec![0u32; (w + 1) * (h + 1)];
         for y in 0..h {
+            let mut row_sum = 0;
+            let row_idx = y * w;
+            let int_row_idx = y * (w + 1);
+            let next_int_row_idx = (y + 1) * (w + 1);
             for x in 0..w {
-                let mut sum = 0;
-                let mut count = 0;
-                let y_min = y.saturating_sub(radius);
-                let y_max = (y + radius).min(h - 1);
+                row_sum += temp[(row_idx + x) * 4] as u32;
+                integral[next_int_row_idx + x + 1] = row_sum + integral[int_row_idx + x + 1];
+            }
+        }
+
+        for y in 0..h {
+            let row_idx = y * w;
+            let y_min = y.saturating_sub(radius);
+            let y_max = (y + radius).min(h - 1);
+            for x in 0..w {
                 let x_min = x.saturating_sub(radius);
                 let x_max = (x + radius).min(w - 1);
                 
-                for dy in y_min..=y_max {
-                    for dx in x_min..=x_max {
-                        let idx = (dy * w + dx) * 4;
-                        sum += temp[idx] as u32;
-                        count += 1;
-                    }
-                }
-                let avg = (sum / count.max(1)) as u8;
-                let current = temp[(y * w + x) * 4];
-                // Binarize based on variance delta
+                // O(1) sum calculation using the integral image
+                let i_y_max = y_max + 1;
+                let i_x_max = x_max + 1;
+                let i_w = w + 1;
+                
+                let sum = integral[i_y_max * i_w + i_x_max]
+                    - integral[y_min * i_w + i_x_max]
+                    - integral[i_y_max * i_w + x_min]
+                    + integral[y_min * i_w + x_min];
+                    
+                let count = (x_max - x_min + 1) * (y_max - y_min + 1);
+                let avg = (sum / count as u32) as u8;
+                let current = temp[(row_idx + x) * 4];
                 let res = if current as i32 <= avg as i32 - 10 { 0 } else { 255 };
-                let out_idx = (y * w + x) * 4;
+                
+                let out_idx = (row_idx + x) * 4;
                 out[out_idx]   = res;
                 out[out_idx+1] = res;
                 out[out_idx+2] = res;
@@ -126,16 +141,24 @@ pub fn process_image_for_ocr(
         let w = width as usize;
         let h = height as usize;
         for y in 1..(h.saturating_sub(1)) {
+            let row_idx = y * w;
+            let prev_row_idx = (y - 1) * w;
+            let next_row_idx = (y + 1) * w;
             for x in 1..(w.saturating_sub(1)) {
+                let idx = (row_idx + x) * 4;
+                let top_idx = (prev_row_idx + x) * 4;
+                let bottom_idx = (next_row_idx + x) * 4;
+                let left_idx = (row_idx + x - 1) * 4;
+                let right_idx = (row_idx + x + 1) * 4;
                 for c in 0..3 {
-                    let center = temp[((y * w + x) * 4) + c] as i32;
-                    let top    = temp[(((y-1) * w + x) * 4) + c] as i32;
-                    let bottom = temp[(((y+1) * w + x) * 4) + c] as i32;
-                    let left   = temp[((y * w + (x-1)) * 4) + c] as i32;
-                    let right  = temp[((y * w + (x+1)) * 4) + c] as i32;
+                    let center = temp[idx + c] as i32;
+                    let top    = temp[top_idx + c] as i32;
+                    let bottom = temp[bottom_idx + c] as i32;
+                    let left   = temp[left_idx + c] as i32;
+                    let right  = temp[right_idx + c] as i32;
                     
                     let sharpened = (center * 5) - top - bottom - left - right;
-                    out[((y * w + x) * 4) + c] = sharpened.clamp(0, 255) as u8;
+                    out[idx + c] = sharpened.clamp(0, 255) as u8;
                 }
             }
         }
@@ -148,14 +171,16 @@ pub fn process_image_for_ocr(
         let h = height as usize;
         let is_dilation = config.morphology == MorphologyOp::Dilation;
         for y in 1..(h.saturating_sub(1)) {
+            let row_idx = y * w;
             for x in 1..(w.saturating_sub(1)) {
+                let out_idx = (row_idx + x) * 4;
                 for c in 0..3 {
-                    let mut extreme = temp[((y * w + x) * 4) + c];
-                    for dy in [-1isize, 0, 1] {
-                        for dx in [-1isize, 0, 1] {
-                            let ny = (y as isize + dy) as usize;
+                    let mut extreme = temp[out_idx + c];
+                    for dy in -1..=1 {
+                        let ny_row = ((y as isize + dy) as usize) * w;
+                        for dx in -1..=1 {
                             let nx = (x as isize + dx) as usize;
-                            let val = temp[((ny * w + nx) * 4) + c];
+                            let val = temp[(ny_row + nx) * 4 + c];
                             if is_dilation {
                                 extreme = extreme.max(val);
                             } else {
@@ -163,7 +188,7 @@ pub fn process_image_for_ocr(
                             }
                         }
                     }
-                    out[((y * w + x) * 4) + c] = extreme;
+                    out[out_idx + c] = extreme;
                 }
             }
         }
@@ -175,17 +200,27 @@ pub fn process_image_for_ocr(
         let w = width as usize;
         let h = height as usize;
         for y in 1..(h.saturating_sub(1)) {
+            let row_idx = y * w;
+            let prev_row_idx = (y - 1) * w;
+            let next_row_idx = (y + 1) * w;
             for x in 1..(w.saturating_sub(1)) {
+                let idx = (row_idx + x) * 4;
+                let top_idx = (prev_row_idx + x) * 4;
+                let bottom_idx = (next_row_idx + x) * 4;
+                let left_idx = (row_idx + x - 1) * 4;
+                let right_idx = (row_idx + x + 1) * 4;
                 for c in 0..3 {
-                    let mut sum = 0;
-                    for dy in [-1isize, 0, 1] {
-                        for dx in [-1isize, 0, 1] {
-                            let ny = (y as isize + dy) as usize;
-                            let nx = (x as isize + dx) as usize;
-                            sum += temp[((ny * w + nx) * 4) + c] as u32;
-                        }
-                    }
-                    out[((y * w + x) * 4) + c] = (sum / 9) as u8;
+                    let mut sum = temp[idx + c] as u32;
+                    sum += temp[top_idx + c] as u32;
+                    sum += temp[bottom_idx + c] as u32;
+                    sum += temp[left_idx + c] as u32;
+                    sum += temp[right_idx + c] as u32;
+                    // Corners
+                    sum += temp[(prev_row_idx + x - 1) * 4 + c] as u32;
+                    sum += temp[(prev_row_idx + x + 1) * 4 + c] as u32;
+                    sum += temp[(next_row_idx + x - 1) * 4 + c] as u32;
+                    sum += temp[(next_row_idx + x + 1) * 4 + c] as u32;
+                    out[idx + c] = (sum / 9) as u8;
                 }
             }
         }
