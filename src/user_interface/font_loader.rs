@@ -5,6 +5,11 @@ use std::sync::Arc;
 /// Includes an embedded Thai font and attempts to load common Windows 
 /// system fonts for CJK and other scripts.
 pub fn setup_fonts(ctx: &egui::Context) {
+    let loaded_id = egui::Id::new("fonts_setup_completed");
+    if ctx.data(|d| d.get_temp::<bool>(loaded_id).unwrap_or(false)) {
+        return;
+    }
+
     let mut fonts = egui::FontDefinitions::default();
 
     // 1. Embedded Thai font (always available)
@@ -72,4 +77,5 @@ pub fn setup_fonts(ctx: &egui::Context) {
     fonts.families.get_mut(&egui::FontFamily::Monospace).unwrap().extend(fallback_order);
 
     ctx.set_fonts(fonts);
+    ctx.data_mut(|d| d.insert_temp(loaded_id, true));
 }

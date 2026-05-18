@@ -73,6 +73,7 @@ pub struct SlotRuntimeState {
     pub frame_live_hwnd: Arc<AtomicIsize>,
     /// Track language changes to invalidate caches
     pub last_langs: (Option<String>, String),
+    pub last_ppocr_model: Option<crate::infrastructure::settings::PpocrModelSuite>,
     /// Time when the screen first became unstable. 
     /// Used to force a translation if it never settles (e.g. in games).
     pub first_unstable_at: u64,
@@ -108,6 +109,7 @@ impl SlotRuntimeState {
             overlay_hwnd: Arc::new(AtomicIsize::new(0)),
             frame_live_hwnd: Arc::new(AtomicIsize::new(0)),
             last_langs: (None, String::new()),
+            last_ppocr_model: None,
             first_unstable_at: 0,
             last_capture_hide: Arc::new(Mutex::new(None)),
             last_frame: Arc::new(Mutex::new(None)),
