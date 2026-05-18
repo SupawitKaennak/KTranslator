@@ -294,33 +294,48 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    if matched_indices.len() >= (expected_count + 1) / 2 {
-        return numbered_result;
-    }
-
-    // ── Strategy 3: Plain newline split ──────────────────────────────────
-    let lines: Vec<String> = trimmed
-        .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| !l.is_empty())
-        .collect();
-
-    if lines.len() == expected_count {
-        return lines;
-    }
-
-    // ── Strategy 4: Best-effort pad/truncate ─────────────────────────────
-    let mut result = if lines.len() > expected_count {
-        lines[..expected_count].to_vec()
+    let mut final_result = if matched_indices.len() >= (expected_count + 1) / 2 {
+        numbered_result
     } else {
-        lines
+        // ── Strategy 3: Plain newline split ──────────────────────────────────
+        let lines: Vec<String> = trimmed
+            .lines()
+            .map(|l| l.trim().to_string())
+            .filter(|l| !l.is_empty())
+            .collect();
+
+        if lines.len() == expected_count {
+            lines
+        } else {
+            // ── Strategy 4: Best-effort pad/truncate ─────────────────────────────
+            let mut result = if lines.len() > expected_count {
+                lines[..expected_count].to_vec()
+            } else {
+                lines
+            };
+
+            // Pad with empty strings to reach expected count
+            while result.len() < expected_count {
+                result.push(String::new());
+            }
+            result
+        }
     };
 
-    // Pad with empty strings to reach expected count
-    while result.len() < expected_count {
-        result.push(String::new());
+    // Unified prefix-stripping pass to remove list markers (e.g. "1. ", "1)", "1.เน่ย")
+    static RE_STRIP_PREFIX: LazyLock<regex::Regex> = LazyLock::new(|| {
+        regex::Regex::new(r"^[\s\*\-]*[\[\(]?\s*\d+\s*[\]\)]?[\s\.\:\->\*]+\s*(.*)$").unwrap()
+    });
+    for s in final_result.iter_mut() {
+        if let Some(caps) = RE_STRIP_PREFIX.captures(s) {
+            *s = caps[1].trim().to_string();
+        }
+        // Run a second pass in case the model double-numbered! E.g. "1. 1.เน่ย" -> "1.เน่ย" -> "เน่ย"
+        if let Some(caps) = RE_STRIP_PREFIX.captures(s) {
+            *s = caps[1].trim().to_string();
+        }
     }
 
-    result
+    final_result
 }
 
