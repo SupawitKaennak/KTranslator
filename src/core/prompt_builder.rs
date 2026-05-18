@@ -75,12 +75,7 @@ pub fn build_translation_prompt(
     if lines.len() <= 1 {
         // ── Single-line mode ─────────────────────────────────────────────
         // Use extremely compact instructions to save maximum input tokens per request.
-        let extra_rules = if target.0 == "th" {
-            " Space Thai words."
-        } else {
-            ""
-        };
-        let system = format!("Translate to {target_name}. Output translation ONLY.{extra_rules}");
+        let system = format!("Translate to {target_name}. Output translation ONLY.");
         let user = lines.first().unwrap_or(&"").to_string();
         TranslationPrompt { system, user, line_count: lines.len() }
     } else {
@@ -91,10 +86,7 @@ pub fn build_translation_prompt(
             joined_input.push_str(&format!("{}. {}\n", i + 1, line));
         }
 
-        let mut extra_rules = String::new();
-        if target.0 == "th" {
-            extra_rules.push_str("             8. IMPORTANT: Add spaces between words in Thai to allow proper line wrapping (e.g., 'วัน นี้ ผม ไป ตลาด').\n");
-        }
+        let extra_rules = String::new();
 
         let system = format!(
             "You are an expert professional manga/game translator.\n\
