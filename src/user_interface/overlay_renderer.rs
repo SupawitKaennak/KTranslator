@@ -178,7 +178,7 @@ pub fn render_overlay_viewport(
                                         last_bottom_y = last_bottom_y.max(padded_bg.max.y);
 
                                         // Render the whole joined text inside the union rect
-                                        let raw_text = chunks.join("\n");
+                                        let raw_text = trans.clone();
                                         let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&raw_text);
                                         let font_size = overlay_settings.overlay_font_size;
                                         let wrap_width = bg_rect.width().max(50.0);
