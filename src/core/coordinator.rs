@@ -329,8 +329,11 @@ impl BackgroundCoordinator {
             let cur_src = slot.source_lang.as_ref().map(|l| l.0.clone());
             let cur_tgt = slot.target_lang.0.clone();
             let lang_changed = slots_runtime[i].last_langs != (cur_src.clone(), cur_tgt.clone());
-            if lang_changed {
+            let model_changed = slots_runtime[i].last_ppocr_model != Some(settings.ppocr_model);
+
+            if lang_changed || model_changed {
                 slots_runtime[i].last_langs = (cur_src, cur_tgt);
+                slots_runtime[i].last_ppocr_model = Some(settings.ppocr_model);
                 slots_runtime[i].last_hash = 0;
                 slots_runtime[i].recent_translations.clear();
                 translation_cache.lock().clear();
