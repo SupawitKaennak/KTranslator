@@ -69,6 +69,7 @@ pub fn render_overlay_viewport(
                 snap_logical(r.y, ppp),
             )),
         move |ctx, class| {
+            crate::user_interface::font_loader::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.label("Frame Viewer (Embedded)");

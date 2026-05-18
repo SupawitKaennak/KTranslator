@@ -104,6 +104,30 @@ pub const PPOCR_DICT_JAPANESE: ModelAsset = ModelAsset {
     path: "models/ppocr/japan_dict.txt",
 };
 
+pub const PPOCR_DICT_KOREAN: ModelAsset = ModelAsset {
+    name: "PP-OCR Dictionary (Korean)",
+    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt",
+    path: "models/ppocr/korean_dict.txt",
+};
+
+pub const PPOCR_DICT_THAI: ModelAsset = ModelAsset {
+    name: "PP-OCR Dictionary (Thai)",
+    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/th_dict.txt",
+    path: "models/ppocr/thai_dict.txt",
+};
+
+pub const PPOCR_DICT_LATIN: ModelAsset = ModelAsset {
+    name: "PP-OCR Dictionary (Latin)",
+    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/latin_dict.txt",
+    path: "models/ppocr/latin_dict.txt",
+};
+
+pub const PPOCR_DICT_CYRILLIC: ModelAsset = ModelAsset {
+    name: "PP-OCR Dictionary (Cyrillic)",
+    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/cyrillic_dict.txt",
+    path: "models/ppocr/cyrillic_dict.txt",
+};
+
 #[derive(Clone, Default, Debug)]
 pub struct DownloadProgress {
     pub current_file: String,
@@ -199,25 +223,71 @@ pub async fn download_models(progress_tx: tokio::sync::mpsc::Sender<DownloadProg
 pub async fn download_ppocr_models(progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>) -> Result<()> {
     let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
     
-    let det_url = match settings.ppocr_variant {
-        crate::infrastructure::settings::PpocrVariant::Mobile => PPOCR_MOBILE_MODELS[0].url,
-        crate::infrastructure::settings::PpocrVariant::Server => PPOCR_SERVER_MODELS[0].url,
-    };
-    let rec_url = match settings.ppocr_variant {
-        crate::infrastructure::settings::PpocrVariant::Mobile => PPOCR_MOBILE_MODELS[1].url,
-        crate::infrastructure::settings::PpocrVariant::Server => PPOCR_SERVER_MODELS[1].url,
-    };
-    let dict_url = match settings.ppocr_dict {
-        crate::infrastructure::settings::PpocrDictLanguage::Standard => PPOCR_MOBILE_MODELS[2].url,
-        crate::infrastructure::settings::PpocrDictLanguage::Japanese => PPOCR_DICT_JAPANESE.url,
+    // 1. Detection Model URL
+    let det_url = match settings.ppocr_model {
+        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile |
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => PPOCR_MOBILE_MODELS[0].url,
+        
+        crate::infrastructure::settings::PpocrModelSuite::CnEnServer |
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer |
+        crate::infrastructure::settings::PpocrModelSuite::KoreanServer |
+        crate::infrastructure::settings::PpocrModelSuite::ThaiServer |
+        crate::infrastructure::settings::PpocrModelSuite::LatinServer |
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => PPOCR_SERVER_MODELS[0].url,
     };
 
-    let folder_name = match (settings.ppocr_variant, settings.ppocr_dict) {
-        (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_mobile",
-        (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "mobile_japanese",
-        (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_server",
-        (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "server_japanese",
+    // 2. Recognition Model URL
+    let rec_url = match settings.ppocr_model {
+        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => PPOCR_MOBILE_MODELS[1].url,
+        crate::infrastructure::settings::PpocrModelSuite::CnEnServer => PPOCR_SERVER_MODELS[1].url,
+        
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => 
+            "https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/model.onnx",
+            
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
+        crate::infrastructure::settings::PpocrModelSuite::KoreanServer => 
+            "https://huggingface.co/cycloneboy/korean_PP-OCRv4_rec_infer/resolve/main/model.onnx",
+            
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
+        crate::infrastructure::settings::PpocrModelSuite::ThaiServer => 
+            "https://huggingface.co/itextresearch/itext-th_PP-OCRv5_mobile_rec_infer/resolve/main/inference.onnx",
+
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
+        crate::infrastructure::settings::PpocrModelSuite::LatinServer => 
+            "https://huggingface.co/cycloneboy/latin_PP-OCRv3_rec_infer/resolve/main/model.onnx",
+
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile |
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => 
+            "https://huggingface.co/cycloneboy/cyrillic_PP-OCRv3_rec_infer/resolve/main/model.onnx",
     };
+
+    // 3. Dictionary URL
+    let dict_url = match settings.ppocr_model {
+        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile |
+        crate::infrastructure::settings::PpocrModelSuite::CnEnServer => PPOCR_MOBILE_MODELS[2].url,
+        
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => PPOCR_DICT_JAPANESE.url,
+        
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
+        crate::infrastructure::settings::PpocrModelSuite::KoreanServer => PPOCR_DICT_KOREAN.url,
+        
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
+        crate::infrastructure::settings::PpocrModelSuite::ThaiServer => PPOCR_DICT_THAI.url,
+
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
+        crate::infrastructure::settings::PpocrModelSuite::LatinServer => PPOCR_DICT_LATIN.url,
+
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile |
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => PPOCR_DICT_CYRILLIC.url,
+    };
+
+    let folder_name = settings.ppocr_model.folder_name();
 
     // Construct persistent path names within isolated subset directories
     let base_p = format!("models/ppocr/{}", folder_name);

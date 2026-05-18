@@ -370,27 +370,34 @@ fn render_tab_ocr(
         // Configuration dropdowns
         ui.horizontal(|ui| {
             ui.label(i18n.ppocr_variant_label);
-            egui::ComboBox::from_id_salt("ppocr_variant_combo")
-                .selected_text(match settings.ppocr_variant {
-                    crate::infrastructure::settings::PpocrVariant::Mobile => i18n.ppocr_mobile,
-                    crate::infrastructure::settings::PpocrVariant::Server => i18n.ppocr_server,
+            egui::ComboBox::from_id_salt("ppocr_model_suite_combo")
+                .selected_text(match settings.ppocr_model {
+                    crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => i18n.ppocr_suite_cnen_mobile,
+                    crate::infrastructure::settings::PpocrModelSuite::CnEnServer => i18n.ppocr_suite_cnen_server,
+                    crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => i18n.ppocr_suite_jp_mobile,
+                    crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => i18n.ppocr_suite_jp_server,
+                    crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => i18n.ppocr_suite_ko_mobile,
+                    crate::infrastructure::settings::PpocrModelSuite::KoreanServer => i18n.ppocr_suite_ko_server,
+                    crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => i18n.ppocr_suite_th_mobile,
+                    crate::infrastructure::settings::PpocrModelSuite::ThaiServer => i18n.ppocr_suite_th_server,
+                    crate::infrastructure::settings::PpocrModelSuite::LatinMobile => i18n.ppocr_suite_latin_mobile,
+                    crate::infrastructure::settings::PpocrModelSuite::LatinServer => i18n.ppocr_suite_latin_server,
+                    crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => i18n.ppocr_suite_cyrillic_mobile,
+                    crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => i18n.ppocr_suite_cyrillic_server,
                 })
                 .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut settings.ppocr_variant, crate::infrastructure::settings::PpocrVariant::Mobile, i18n.ppocr_mobile);
-                    ui.selectable_value(&mut settings.ppocr_variant, crate::infrastructure::settings::PpocrVariant::Server, i18n.ppocr_server);
-                });
-        });
-
-        ui.horizontal(|ui| {
-            ui.label(i18n.ppocr_dict_label);
-            egui::ComboBox::from_id_salt("ppocr_dict_combo")
-                .selected_text(match settings.ppocr_dict {
-                    crate::infrastructure::settings::PpocrDictLanguage::Standard => i18n.ppocr_dict_std,
-                    crate::infrastructure::settings::PpocrDictLanguage::Japanese => i18n.ppocr_dict_jp,
-                })
-                .show_ui(ui, |ui| {
-                    ui.selectable_value(&mut settings.ppocr_dict, crate::infrastructure::settings::PpocrDictLanguage::Standard, i18n.ppocr_dict_std);
-                    ui.selectable_value(&mut settings.ppocr_dict, crate::infrastructure::settings::PpocrDictLanguage::Japanese, i18n.ppocr_dict_jp);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::CnEnMobile, i18n.ppocr_suite_cnen_mobile);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::CnEnServer, i18n.ppocr_suite_cnen_server);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile, i18n.ppocr_suite_jp_mobile);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::JapaneseServer, i18n.ppocr_suite_jp_server);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::KoreanMobile, i18n.ppocr_suite_ko_mobile);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::KoreanServer, i18n.ppocr_suite_ko_server);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::ThaiMobile, i18n.ppocr_suite_th_mobile);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::ThaiServer, i18n.ppocr_suite_th_server);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::LatinMobile, i18n.ppocr_suite_latin_mobile);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::LatinServer, i18n.ppocr_suite_latin_server);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile, i18n.ppocr_suite_cyrillic_mobile);
+                    ui.selectable_value(&mut settings.ppocr_model, crate::infrastructure::settings::PpocrModelSuite::CyrillicServer, i18n.ppocr_suite_cyrillic_server);
                 });
         });
 
@@ -405,12 +412,7 @@ fn render_tab_ocr(
             }
             
             // Check status dynamically based on current configuration suite folder
-            let folder_name = match (settings.ppocr_variant, settings.ppocr_dict) {
-                (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_mobile",
-                (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "mobile_japanese",
-                (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_server",
-                (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "server_japanese",
-            };
+            let folder_name = settings.ppocr_model.folder_name();
 
             let base_p = format!("models/ppocr/{}", folder_name);
             let det_path = format!("{}/det.onnx", base_p);
