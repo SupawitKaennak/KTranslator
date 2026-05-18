@@ -119,6 +119,7 @@ pub fn render_live_frame_viewport(
             .with_min_inner_size([150.0, 100.0])
             .with_mouse_passthrough(false),
         move |ctx, class| {
+            crate::user_interface::font_loader::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 return;
             }

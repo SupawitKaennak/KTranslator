@@ -21,16 +21,46 @@ pub enum OcrEngineType {
     MangaOCR,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PpocrVariant {
-    Mobile,
-    Server,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum PpocrDictLanguage {
-    Standard, // Chinese + English (PP-OCR default)
-    Japanese, // PP-OCR specialized Japanese dict
+pub enum PpocrModelSuite {
+    CnEnMobile,
+    CnEnServer,
+    JapaneseMobile,
+    JapaneseServer,
+    KoreanMobile,
+    KoreanServer,
+    ThaiMobile,
+    ThaiServer,
+    LatinMobile,
+    LatinServer,
+    CyrillicMobile,
+    CyrillicServer,
+}
+
+impl PpocrModelSuite {
+    pub fn folder_name(&self) -> &'static str {
+        match self {
+            PpocrModelSuite::CnEnMobile => "cn_en_mobile",
+            PpocrModelSuite::CnEnServer => "cn_en_server",
+            PpocrModelSuite::JapaneseMobile => "mobile_japanese",
+            PpocrModelSuite::JapaneseServer => "server_japanese",
+            PpocrModelSuite::KoreanMobile => "mobile_korean",
+            PpocrModelSuite::KoreanServer => "server_korean",
+            PpocrModelSuite::ThaiMobile => "mobile_thai",
+            PpocrModelSuite::ThaiServer => "server_thai",
+            PpocrModelSuite::LatinMobile => "mobile_latin",
+            PpocrModelSuite::LatinServer => "server_latin",
+            PpocrModelSuite::CyrillicMobile => "mobile_cyrillic",
+            PpocrModelSuite::CyrillicServer => "server_cyrillic",
+        }
+    }
+}
+
+impl Default for PpocrModelSuite {
+    fn default() -> Self {
+        Self::CnEnMobile
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -412,8 +442,7 @@ pub struct Settings {
     pub manga_ocr_engine: OcrEngineType,
     pub document_ocr_engine: OcrEngineType,
     pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
-    pub ppocr_variant: PpocrVariant,
-    pub ppocr_dict: PpocrDictLanguage,
+    pub ppocr_model: PpocrModelSuite,
     pub gemini_api_key: String,
     pub gemini_model: String,
     pub groq_api_key: String,
@@ -455,8 +484,7 @@ impl Default for Settings {
             manga_ocr_engine: OcrEngineType::BuiltinPaddle,
             document_ocr_engine: OcrEngineType::Windows,
             ocr_engine: OcrEngineType::Windows,
-            ppocr_variant: PpocrVariant::Mobile,
-            ppocr_dict: PpocrDictLanguage::Standard,
+            ppocr_model: PpocrModelSuite::CnEnMobile,
             gemini_api_key: String::new(),
             gemini_model: "gemini-2.0-flash".to_string(),
             groq_api_key: String::new(),
