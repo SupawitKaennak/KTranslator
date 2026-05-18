@@ -110,6 +110,7 @@ pub fn build_translation_prompt(
              6. Prevent hallucinations: translate ONLY what is written.\n\
              7. Maintain professional grammar, correct capitalization, and punctuation.\n\
              8. Output ONLY the numbered list in {target_name}.\n\
+             9. DO NOT double-number the output (e.g., never output \"1. 1. Translation\" or \"1. 1.เน่ย\"). Output exactly one number prefix per line.\n\
 {extra_rules}",
             count = lines.len(),
             target_name = target_name,
@@ -275,7 +276,16 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     for caps in RE_NUMBERED.captures_iter(trimmed) {
         if let Ok(num) = caps[1].parse::<usize>() {
             if num > 0 && num <= expected_count {
-                let content = caps[2].trim().to_string();
+                let mut content = caps[2].trim().to_string();
+
+                // If the model double-numbered (e.g. "1.เน่ย" or "1. เน่ย"), strip the inner one!
+                static RE_INNER_NUM: LazyLock<regex::Regex> = LazyLock::new(|| {
+                    regex::Regex::new(r"^(\d+)\s*[\.\:\-\s]+\s*(.*)$").unwrap()
+                });
+                if let Some(inner_caps) = RE_INNER_NUM.captures(&content) {
+                    content = inner_caps[2].trim().to_string();
+                }
+
                 if numbered_result[num - 1].len() < content.len() {
                     numbered_result[num - 1] = content;
                     matched_indices.insert(num - 1);
