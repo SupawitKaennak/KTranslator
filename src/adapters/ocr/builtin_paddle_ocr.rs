@@ -106,10 +106,10 @@ impl OcrEngine for BuiltinPaddleOcr {
         let pixel_count = (frame.width * frame.height) as usize;
         let mut rgb_data = Vec::with_capacity(pixel_count * 3);
         
-        for i in (0..src_data.len()).step_by(4) {
-            rgb_data.push(src_data[i]);
-            rgb_data.push(src_data[i+1]);
-            rgb_data.push(src_data[i+2]);
+        for chunk in src_data.chunks_exact(4) {
+            rgb_data.push(chunk[0]);
+            rgb_data.push(chunk[1]);
+            rgb_data.push(chunk[2]);
         }
         
         let rgb_img = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(

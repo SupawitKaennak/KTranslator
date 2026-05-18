@@ -24,6 +24,12 @@ pub fn lang_name(tag: &LanguageTag) -> &str {
         "it" => "Italian",
         "ar" => "Arabic",
         "hi" => "Hindi",
+        "uk" => "Ukrainian",
+        "bg" => "Bulgarian",
+        "sr" => "Serbian",
+        "hr" => "Croatian",
+        "sw" => "Swahili",
+        "af" => "Afrikaans",
         other => other,
     }
 }
