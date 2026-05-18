@@ -12,7 +12,7 @@ use crate::core::{
 /// Unlike PaddleOcr (subprocess), this runs the detection+recognition models
 /// directly in-process via ONNX Runtime, eliminating IPC overhead (~125ms).
 pub struct BuiltinPaddleOcr {
-    pipeline: Arc<Mutex<Option<oar_ocr::oarocr::OAROCR>>>,
+    pipeline: Arc<Mutex<Option<(oar_ocr::oarocr::OAROCR, crate::infrastructure::settings::PpocrModelSuite)>>>,
     models_dir: String,
 }
 
@@ -26,18 +26,20 @@ impl BuiltinPaddleOcr {
 
     fn ensure_pipeline(&self) -> Result<()> {
         let mut guard = self.pipeline.lock();
-        if guard.is_some() {
-            return Ok(());
-        }
-
         let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
+
+        if let Some((_, active_suite)) = guard.as_ref() {
+            if *active_suite == settings.ppocr_model {
+                return Ok(());
+            }
+            tracing::info!(
+                "Active PaddleOCR model suite changed from {:?} to {:?}. Invalidating cached pipeline...",
+                active_suite, settings.ppocr_model
+            );
+            *guard = None; // Invalidate the cached pipeline to force reload
+        }
         
-        let folder_name = match (settings.ppocr_variant, settings.ppocr_dict) {
-            (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_mobile",
-            (crate::infrastructure::settings::PpocrVariant::Mobile, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "mobile_japanese",
-            (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Standard) => "cn_en_server",
-            (crate::infrastructure::settings::PpocrVariant::Server, crate::infrastructure::settings::PpocrDictLanguage::Japanese) => "server_japanese",
-        };
+        let folder_name = settings.ppocr_model.folder_name();
 
         let target_suite_dir = Path::new(&self.models_dir).join(folder_name);
         
@@ -82,8 +84,8 @@ impl BuiltinPaddleOcr {
             .build()
             .context("Failed to initialize Built-in PaddleOCR pipeline")?;
 
-        *guard = Some(pipeline);
-        tracing::info!("Built-in PaddleOCR pipeline ready (GPU accelerated via DirectML)");
+        *guard = Some((pipeline, settings.ppocr_model));
+        tracing::info!("Built-in PaddleOCR pipeline ready (GPU accelerated via DirectML) for {:?}", settings.ppocr_model);
         Ok(())
     }
 }
@@ -104,10 +106,10 @@ impl OcrEngine for BuiltinPaddleOcr {
         let pixel_count = (frame.width * frame.height) as usize;
         let mut rgb_data = Vec::with_capacity(pixel_count * 3);
         
-        for i in (0..src_data.len()).step_by(4) {
-            rgb_data.push(src_data[i]);
-            rgb_data.push(src_data[i+1]);
-            rgb_data.push(src_data[i+2]);
+        for chunk in src_data.chunks_exact(4) {
+            rgb_data.push(chunk[0]);
+            rgb_data.push(chunk[1]);
+            rgb_data.push(chunk[2]);
         }
         
         let rgb_img = image::ImageBuffer::<image::Rgb<u8>, Vec<u8>>::from_raw(
@@ -119,7 +121,7 @@ impl OcrEngine for BuiltinPaddleOcr {
 
         // Run OCR pipeline — predict() takes Vec<ImageBuffer<Rgb<u8>>>
         let guard = self.pipeline.lock();
-        let pipeline = guard.as_ref().unwrap();
+        let (pipeline, _) = guard.as_ref().context("BuiltinPaddleOcr pipeline not initialized")?;
         let results = pipeline.predict(vec![rgb_img])
             .map_err(|e| anyhow!("Built-in PaddleOCR inference failed: {}", e))?;
 

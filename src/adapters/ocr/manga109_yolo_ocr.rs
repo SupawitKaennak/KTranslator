@@ -157,7 +157,7 @@ impl OnnxMangaRecognizer {
             .map_err(|e| anyhow::anyhow!("YOLO input error: {}", e))?;
             
         let mut yolo_guard = self.yolo.lock();
-        let yolo = yolo_guard.as_mut().unwrap();
+        let yolo = yolo_guard.as_mut().ok_or_else(|| anyhow::anyhow!("YOLO session not initialized"))?;
         let outputs = yolo.run(ort::inputs![input_tensor])
             .map_err(|e| anyhow::anyhow!("YOLO run error: {}", e))?;
             
@@ -246,7 +246,7 @@ impl OnnxMangaRecognizer {
             .map_err(|e| anyhow::anyhow!("Value creation error: {}", e))?;
             
         let mut encoder_guard = self.encoder.lock();
-        let encoder = encoder_guard.as_mut().unwrap();
+        let encoder = encoder_guard.as_mut().ok_or_else(|| anyhow::anyhow!("Encoder session not initialized"))?;
         let encoder_outputs = encoder.run(ort::inputs![input_tensor])
             .map_err(|e| anyhow::anyhow!("Encoder run error: {}", e))?;
             
@@ -255,6 +255,9 @@ impl OnnxMangaRecognizer {
         
         let mut tokens = vec![self.decoder_start_token_id];
         let max_length = 128;
+
+        let mut decoder_guard = self.decoder.lock();
+        let decoder = decoder_guard.as_mut().ok_or_else(|| anyhow::anyhow!("Decoder session not initialized"))?;
 
         for _ in 0..max_length {
             let seq_len = tokens.len();
@@ -265,8 +268,6 @@ impl OnnxMangaRecognizer {
             let encoder_hidden_tensor = ort::value::Value::from_array(last_hidden_state.to_owned())
                 .map_err(|e| anyhow::anyhow!("Value creation error: {}", e))?;
 
-            let mut decoder_guard = self.decoder.lock();
-            let decoder = decoder_guard.as_mut().unwrap();
             let decoder_outputs = decoder.run(ort::inputs![
                 input_ids_tensor,
                 encoder_hidden_tensor
@@ -294,7 +295,7 @@ impl OnnxMangaRecognizer {
 
         let u32_tokens: Vec<u32> = tokens.iter().map(|&t| t as u32).collect();
         let tok_guard = self.tokenizer.lock();
-        let tokenizer = tok_guard.as_ref().unwrap();
+        let tokenizer = tok_guard.as_ref().ok_or_else(|| anyhow::anyhow!("Tokenizer not initialized"))?;
         let decoded = tokenizer.decode(&u32_tokens, true)
             .map_err(|e| anyhow::anyhow!("Decode error: {}", e))?;
             
@@ -323,17 +324,35 @@ impl OcrEngine for OnnxMangaRecognizer {
 
         let mut result = Vec::new();
         let mut sorted_boxes = boxes;
-        // Professional Column-Major Right-to-Left sorting tailored for Double-Page Manga spreads
-        sorted_boxes.sort_by(|a, b| {
-            let col_diff = (a.x1 - b.x1).abs();
-            if col_diff > 120.0 {
-                // Read rightmost column first
-                b.x1.partial_cmp(&a.x1).unwrap_or(Ordering::Equal)
-            } else {
-                // Read top-to-bottom within the same vertical column
-                a.y1.partial_cmp(&b.y1).unwrap_or(Ordering::Equal)
+        // Step 1: Sort by x descending (RTL: rightmost first)
+        sorted_boxes.sort_by(|a, b| b.x1.partial_cmp(&a.x1).unwrap_or(Ordering::Equal));
+
+        // Step 2: Group boxes into columns based on x distance
+        let mut columns: Vec<Vec<BoundingBox>> = Vec::new();
+        for bbox in sorted_boxes {
+            let mut added = false;
+            // Try to find a column group where this box fits (x-coordinate is within 120px of the column's first element)
+            for col in &mut columns {
+                if let Some(first_in_col) = col.first() {
+                    if (bbox.x1 - first_in_col.x1).abs() <= 120.0 {
+                        col.push(bbox.clone());
+                        added = true;
+                        break;
+                    }
+                }
             }
-        });
+            if !added {
+                columns.push(vec![bbox]);
+            }
+        }
+
+        // Step 3: Sort each column top-to-bottom (y ascending)
+        for col in &mut columns {
+            col.sort_by(|a, b| a.y1.partial_cmp(&b.y1).unwrap_or(Ordering::Equal));
+        }
+
+        // Step 4: Flatten columns back to a sorted vector
+        let sorted_boxes: Vec<BoundingBox> = columns.into_iter().flatten().collect();
 
         for bbox in sorted_boxes {
             let pad = 10.0;
