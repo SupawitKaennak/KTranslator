@@ -19,6 +19,7 @@ pub enum OcrEngineType {
     #[serde(alias = "Paddle")]
     BuiltinPaddle,
     MangaOCR,
+    BubbleYOLO,
 }
 
 
@@ -463,14 +464,12 @@ pub struct Settings {
     pub overlay_corner_radius: f32,
     pub overlay_text_align: TextAlign,
 
+    pub use_yolo_bubble: bool,
+    pub show_yolo_debug_borders: bool,
+
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
     
-    #[serde(default)]
-    pub ocr_use_yolo: bool,
-    #[serde(default)]
-    pub yolo_draw_boxes: bool,
-
     pub img_proc: ImageProcessingSettings,
     pub txt_proc: TextProcessingSettings,
     pub regex_rules: Vec<RegexRule>,
@@ -508,10 +507,10 @@ impl Default for Settings {
             overlay_padding: 4.0,
             overlay_corner_radius: 4.0,
             overlay_text_align: TextAlign::Center,
+            use_yolo_bubble: false,
+            show_yolo_debug_borders: false,
             ui_language: UiLanguage::System,
             hide_from_capture: true,
-            ocr_use_yolo: false,
-            yolo_draw_boxes: false,
             img_proc: ImageProcessingSettings::default(),
             txt_proc: TextProcessingSettings::default(),
             regex_rules: vec![],

@@ -130,6 +130,8 @@ pub struct I18n {
 
     // Overlay Customization
     pub overlay_customization: &'static str,
+    pub use_yolo_bubble: &'static str,
+    pub show_yolo_debug_borders: &'static str,
     
     // Debugging Panel
     pub dbg_telemetry: &'static str,
@@ -335,6 +337,8 @@ const EN: I18n = I18n {
     img_antialias: "Anti-alias Removal",
     img_deskew: "Deskew Rotation",
     overlay_customization: "Overlay Customization",
+    use_yolo_bubble: "Enable YOLO Speech Bubble OCR (Segment bubbles before running OCR)",
+    show_yolo_debug_borders: "Show YOLO debug borders (Render red outlines around detected bubbles)",
     dbg_telemetry: "Advanced Pipeline Telemetry",
     capture_section: "Capture",
     offline: "Offline",
@@ -534,6 +538,8 @@ const TH: I18n = I18n {
     img_antialias: "ลบรอยหยักขอบอักษร (Anti-alias Removal)",
     img_deskew: "หมุนปรับแก้ภาพเอียงอัตโนมัติ (Deskew)",
     overlay_customization: "ปรับแต่งหน้าตาหน้าต่างแปล",
+    use_yolo_bubble: "เปิดใช้งาน YOLO ตรวจจับกรอบคำพูด (สแกนกรอบคำพูดก่อนทำ OCR สำหรับทุกเอนจิน)",
+    show_yolo_debug_borders: "แสดงกรอบตรวจจับของ YOLO (วาดเส้นสีแดงรอบกรอบคำพูดที่ตรวจเจอ)",
     dbg_telemetry: "ข้อมูลสถานะเชิงลึกของระบบ",
     capture_section: "การจับภาพหน้าจอ",
     offline: "ออฟไลน์",
