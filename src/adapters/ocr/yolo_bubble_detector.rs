@@ -100,21 +100,18 @@ impl YoloBubbleDetector {
         let orig_w = img.width() as f32;
         let orig_h = img.height() as f32;
 
-        // YOLO26n / YOLOv10 typically uses 1280x1280
-        let target_size = 1280.0;
-        let scale = (target_size / orig_w).min(target_size / orig_h);
-        let new_w = (orig_w * scale) as u32;
-        let new_h = (orig_h * scale) as u32;
-
-        let resized = img.resize_exact(new_w, new_h, image::imageops::FilterType::Triangle).to_rgb8();
+        // YOLO26n / YOLOv10 typically uses 1280x1280 input size, trained by stretching
+        let resized = img.resize_exact(1280, 1280, image::imageops::FilterType::Triangle).to_rgb8();
         let mut input = Array4::<f32>::zeros((1, 3, 1280, 1280));
-        input.fill(114.0 / 255.0); // padding color
 
         for (x, y, pixel) in resized.enumerate_pixels() {
             for c in 0..3 {
                 input[[0, c, y as usize, x as usize]] = pixel[c] as f32 / 255.0;
             }
         }
+
+        let scale_x = orig_w / 1280.0;
+        let scale_y = orig_h / 1280.0;
 
         let input_tensor = ort::value::Value::from_array(input)
             .map_err(|e| anyhow::anyhow!("YOLO input tensor error: {}", e))?;
@@ -146,10 +143,10 @@ impl YoloBubbleDetector {
 
                 if prob > 0.25 {
                     boxes.push(BubbleBox {
-                        x1: x1 / scale,
-                        y1: y1 / scale,
-                        x2: x2 / scale,
-                        y2: y2 / scale,
+                        x1: x1 * scale_x,
+                        y1: y1 * scale_y,
+                        x2: x2 * scale_x,
+                        y2: y2 * scale_y,
                         prob,
                         class_id,
                     });
@@ -183,10 +180,10 @@ impl YoloBubbleDetector {
                     let y2 = cy + h / 2.0;
 
                     boxes.push(BubbleBox {
-                        x1: x1 / scale,
-                        y1: y1 / scale,
-                        x2: x2 / scale,
-                        y2: y2 / scale,
+                        x1: x1 * scale_x,
+                        y1: y1 * scale_y,
+                        x2: x2 * scale_x,
+                        y2: y2 * scale_y,
                         prob: max_conf,
                         class_id: max_class,
                     });
