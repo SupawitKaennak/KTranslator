@@ -197,5 +197,36 @@ pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool, jp_merge_vertica
         block.source_text = merge_text(&block.lines);
     }
 
+    // Sort blocks by reading order to preserve dialogue flow
+    blocks.sort_by(|a, b| {
+        let (a_x1, a_y1, _a_x2, a_y2) = a.lines.iter().fold(
+            (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+            |(min_x, min_y, max_x, max_y), l| {
+                (min_x.min(l.x), min_y.min(l.y), max_x.max(l.x + l.w), max_y.max(l.y + l.h))
+            }
+        );
+        let (b_x1, b_y1, _b_x2, b_y2) = b.lines.iter().fold(
+            (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+            |(min_x, min_y, max_x, max_y), l| {
+                (min_x.min(l.x), min_y.min(l.y), max_x.max(l.x + l.w), max_y.max(l.y + l.h))
+            }
+        );
+
+        let a_h = a_y2 - a_y1;
+        let b_h = b_y2 - b_y1;
+        let tolerance = a_h.min(b_h) * 0.4;
+        let y_diff = (a_y1 - b_y1).abs();
+
+        if y_diff > tolerance {
+            a_y1.partial_cmp(&b_y1).unwrap_or(std::cmp::Ordering::Equal)
+        } else {
+            if jp_merge_vertical {
+                b_x1.partial_cmp(&a_x1).unwrap_or(std::cmp::Ordering::Equal)
+            } else {
+                a_x1.partial_cmp(&b_x1).unwrap_or(std::cmp::Ordering::Equal)
+            }
+        }
+    });
+
     blocks
 }
