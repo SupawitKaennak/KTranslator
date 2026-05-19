@@ -113,6 +113,7 @@ impl OllamaTranslator {
                 repeat_penalty: 1.2,   // Penalty for repeating the same words
                 presence_penalty: 0.6, // Penalty for repeating topics/lines
             }),
+            format: Some("json".to_string()),
         };
 
         let endpoint = format!("{}/api/chat", self.url);
@@ -140,6 +141,8 @@ struct OllamaChatRequest {
     stream: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     options: Option<OllamaOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    format: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
