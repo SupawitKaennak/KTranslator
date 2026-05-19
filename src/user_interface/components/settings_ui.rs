@@ -799,7 +799,7 @@ fn render_tab_overlay(
                 ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
             } else {
                 ui.horizontal(|ui| {
-                    ui.colored_label(egui::Color32::from_rgb(235, 120, 0), "⚠ YOLO Speech Bubble model (YOLO26n.onnx) is not installed.");
+                    ui.colored_label(egui::Color32::from_rgb(235, 120, 0), "⚠ YOLO Speech Bubble model (yolo26n.onnx) is not installed.");
                     if ui.button("Download (6MB)").clicked() {
                         let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
                     }
