@@ -88,6 +88,7 @@ pub fn render_overlay_viewport(
                     let ocr_lines    = slot.last_ocr_lines.clone();
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
+                    let yolo_boxes   = slot.last_yolo_boxes.clone();
                     drop(m);
 
                     if show_overlay {
@@ -138,22 +139,6 @@ pub fn render_overlay_viewport(
                         if has_positions {
                             let max_text_w = full_rect.width() - 8.0;
                             let mut last_bottom_y = full_rect.top();
-
-                            // Draw YOLO green boxes if enabled
-                            if overlay_settings.show_yolo_boxes {
-                                for line in &ocr_lines {
-                                    let border_rect = egui::Rect::from_min_size(
-                                        egui::pos2(line.x / ppp, line.y / ppp),
-                                        egui::vec2(line.w / ppp, line.h / ppp)
-                                    );
-                                    painter.rect_stroke(
-                                        border_rect,
-                                        overlay_corner_radius,
-                                        egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 255, 0)),
-                                        egui::StrokeKind::Outside
-                                    );
-                                }
-                            }
 
                             let mut idx = 0;
                             while idx < ocr_lines.len() {
@@ -369,6 +354,21 @@ pub fn render_overlay_viewport(
                                 painter.galley(pos, galley, overlay_text_color);
                                 y += line_h + 4.0;
                             }
+                        }
+                    }
+
+                    if overlay_settings.yolo_draw_boxes {
+                        for bbox in &yolo_boxes {
+                            let rect = egui::Rect::from_min_size(
+                                egui::pos2(bbox.x / ppp, bbox.y / ppp),
+                                egui::vec2(bbox.w / ppp, bbox.h / ppp)
+                            );
+                            painter.rect_stroke(
+                                rect,
+                                2.0,
+                                egui::Stroke::new(2.0, egui::Color32::from_rgb(0, 255, 0)),
+                                egui::StrokeKind::Outside,
+                            );
                         }
                     }
 

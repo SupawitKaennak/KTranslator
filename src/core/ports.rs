@@ -38,6 +38,9 @@ pub trait FrameSource: Send + Sync {
 pub trait OcrEngine: Send + Sync {
     fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String>;
     fn recognize_lines(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>>;
+    fn get_last_yolo_boxes(&self) -> Vec<Rect> {
+        Vec::new()
+    }
 }
 
 pub trait Translator: Send + Sync {

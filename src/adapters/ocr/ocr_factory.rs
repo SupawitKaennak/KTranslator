@@ -46,13 +46,14 @@ impl OcrAdapterFactory {
             }
         };
 
-        if settings.use_yolo_layout && engine_type != OcrEngineType::MangaOCR {
-            let yolo_wrapped = Arc::new(super::yolo_layout_wrapper::YoloLayoutOcrWrapper::new(
-                std::path::PathBuf::from("models/manga-ocr"),
-                settings.perf.gpu_backend,
+        if settings.ocr_use_yolo && engine_type != OcrEngineType::MangaOCR {
+            let yolo_model_path = "models/manga-ocr/manga109_yolo_s.onnx".to_string();
+            let wrapped = Arc::new(super::yolo_layout_wrapper::YoloLayoutOcrWrapper::new(
                 base_engine,
+                yolo_model_path,
+                settings.perf.gpu_backend,
             ));
-            (yolo_wrapped, err)
+            (wrapped, err)
         } else {
             (base_engine, err)
         }

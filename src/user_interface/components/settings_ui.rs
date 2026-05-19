@@ -440,6 +440,15 @@ fn render_tab_ocr(
             }
         }
     }
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(12.0);
+
+    section_header(ui, "YOLO Speech Bubble Layout Detection");
+    ui.add_space(4.0);
+    ui.checkbox(&mut settings.ocr_use_yolo, "Run YOLO speech bubble detector before OCR");
+    ui.label(egui::RichText::new("Improves coordinate sorting & sentence mapping accuracy by processing individual speech bubbles. (Requires YOLO Text Detector model)").small().weak());
 }
 
 fn check_file_exists(rel_path: &str) -> bool {
@@ -772,12 +781,11 @@ fn render_tab_overlay(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
             });
             ui.end_row();
 
-            ui.label("YOLO Bubble Frames / กรอบคำพูด YOLO:");
-            ui.checkbox(&mut settings.show_yolo_boxes, "Show Green Borders / แสดงเส้นขอบสีเขียว");
-            ui.end_row();
-
-            ui.label("YOLO Layout Analysis / จัดรูปเลย์เอาต์ YOLO:");
-            ui.checkbox(&mut settings.use_yolo_layout, "OCR via Cropped Bubbles / เปิดใช้สแกนผ่านกล่องคำพูด");
+            ui.label("YOLO Debug Frames:");
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut settings.yolo_draw_boxes, true, "Draw Detected Borders (Debug)");
+                ui.radio_value(&mut settings.yolo_draw_boxes, false, "Hide Borders");
+            });
             ui.end_row();
         });
 }

@@ -1,13 +1,12 @@
 use anyhow::Result;
 use ort::session::Session;
+use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
-use parking_lot::Mutex;
 use ndarray::Array4;
-use std::cmp::Ordering;
 
 use crate::core::ports::{OcrEngine, FrameRgba, OcrTextLine};
-use crate::core::types::LanguageTag;
+use crate::core::types::{LanguageTag, Rect};
 use crate::infrastructure::settings::GpuBackend;
 
 #[derive(Debug, Clone)]
@@ -38,7 +37,7 @@ fn iou(a: &BoundingBox, b: &BoundingBox) -> f32 {
 }
 
 fn nms(mut boxes: Vec<BoundingBox>, iou_threshold: f32) -> Vec<BoundingBox> {
-    boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
+    boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(std::cmp::Ordering::Equal));
     let mut result = Vec::new();
     for i in 0..boxes.len() {
         let mut keep = true;
@@ -56,33 +55,38 @@ fn nms(mut boxes: Vec<BoundingBox>, iou_threshold: f32) -> Vec<BoundingBox> {
 }
 
 pub struct YoloLayoutOcrWrapper {
+    underlying: Arc<dyn OcrEngine>,
     yolo: Arc<Mutex<Option<Session>>>,
-    models_dir: PathBuf,
+    last_boxes: Mutex<Vec<Rect>>,
+    model_path: PathBuf,
     gpu_backend: GpuBackend,
-    base_engine: Arc<dyn OcrEngine>,
 }
 
 impl YoloLayoutOcrWrapper {
-    pub fn new(models_dir: PathBuf, gpu_backend: GpuBackend, base_engine: Arc<dyn OcrEngine>) -> Self {
+    pub fn new(underlying: Arc<dyn OcrEngine>, model_path: String, gpu_backend: GpuBackend) -> Self {
         Self {
+            underlying,
             yolo: Arc::new(Mutex::new(None)),
-            models_dir,
+            last_boxes: Mutex::new(Vec::new()),
+            model_path: PathBuf::from(model_path),
             gpu_backend,
-            base_engine,
         }
     }
 
-    fn ensure_yolo(&self) -> Result<()> {
-        let mut guard = self.yolo.lock();
-        if guard.is_some() {
+    fn ensure_session(&self) -> Result<()> {
+        let mut yolo_guard = self.yolo.lock();
+        if yolo_guard.is_some() {
             return Ok(());
         }
 
-        let mut resolved_path = self.models_dir.clone();
+        let mut resolved_path = self.model_path.clone();
+
+        // 1. Try relative to CWD
         if !resolved_path.exists() {
+            // 2. Try relative to EXE
             if let Ok(exe_path) = std::env::current_exe() {
                 if let Some(exe_dir) = exe_path.parent() {
-                    let exe_relative = exe_dir.join(&self.models_dir);
+                    let exe_relative = exe_dir.join(&self.model_path);
                     if exe_relative.exists() {
                         resolved_path = exe_relative;
                     }
@@ -90,19 +94,19 @@ impl YoloLayoutOcrWrapper {
             }
         }
 
-        let yolo_path = resolved_path.join("manga109_yolo_s.onnx");
-        if !yolo_path.exists() {
-            anyhow::bail!("YOLO model not found at {:?}. Please download Manga-OCR models first.", yolo_path);
+        if !resolved_path.exists() {
+            anyhow::bail!(
+                "YOLO Layout Model not found at path: {:?}. Please ensure the models directory contains manga-ocr/manga109_yolo_s.onnx",
+                self.model_path
+            );
         }
 
-        let yolo = super::onnx_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
-        *guard = Some(yolo);
+        let session = crate::adapters::ocr::onnx_engine::OnnxEngine::create_session(&resolved_path, self.gpu_backend)?;
+        *yolo_guard = Some(session);
         Ok(())
     }
 
     fn detect_text_boxes(&self, img: &image::DynamicImage) -> Result<Vec<BoundingBox>> {
-        self.ensure_yolo()?;
-
         let orig_w = img.width() as f32;
         let orig_h = img.height() as f32;
         
@@ -122,6 +126,8 @@ impl YoloLayoutOcrWrapper {
             }
         }
 
+        self.ensure_session()?;
+
         let input_tensor = ort::value::Value::from_array(input)
             .map_err(|e| anyhow::anyhow!("YOLO input error: {}", e))?;
             
@@ -138,7 +144,10 @@ impl YoloLayoutOcrWrapper {
         let num_anchors = shape[2];
         let num_classes = shape[1] - 4;
         
+        // Manga109 4-class: 0=body, 1=face, 2=frame, 3=text → text is class 3
+        // Single-class text detector: text is class 0
         let text_class_id: usize = if num_classes >= 4 { 3 } else { 0 };
+        
         let mut boxes = Vec::new();
         
         for i in 0..num_anchors {
@@ -191,23 +200,33 @@ impl YoloLayoutOcrWrapper {
 impl OcrEngine for YoloLayoutOcrWrapper {
     fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String> {
         let lines = self.recognize_lines(frame, lang_hint)?;
-        Ok(lines.iter().map(|l| l.text.clone()).collect::<Vec<_>>().join("\n"))
+        let joined = lines.into_iter().map(|l| l.text).collect::<Vec<_>>().join("\n");
+        Ok(joined)
     }
 
     fn recognize_lines(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>> {
-        let dynamic_img = image::DynamicImage::ImageRgba8(
-            image::ImageBuffer::<image::Rgba<u8>, Vec<u8>>::from_raw(
-                frame.width, frame.height, frame.data.clone()
-            ).ok_or_else(|| anyhow::anyhow!("Failed to convert FrameRgba to DynamicImage"))?
-        );
+        let img = match image::RgbaImage::from_raw(frame.width, frame.height, frame.data.clone()) {
+            Some(i) => image::DynamicImage::ImageRgba8(i),
+            None => return Err(anyhow::anyhow!("Failed to convert frame to image")),
+        };
 
-        let boxes = self.detect_text_boxes(&dynamic_img)?;
-        let mut result = Vec::new();
+        let boxes = match self.detect_text_boxes(&img) {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!("YOLO Layout detection failed, falling back to full-frame OCR. Error: {:?}", e);
+                return self.underlying.recognize_lines(frame, lang_hint);
+            }
+        };
 
-        // Sort bounding boxes Right-to-Left vertical column grouping to match reading flow
+        if boxes.is_empty() {
+            return self.underlying.recognize_lines(frame, lang_hint);
+        }
+
         let mut sorted_boxes = boxes;
-        sorted_boxes.sort_by(|a, b| b.x1.partial_cmp(&a.x1).unwrap_or(Ordering::Equal));
+        // Step 1: Sort by x descending (RTL: rightmost first)
+        sorted_boxes.sort_by(|a, b| b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal));
 
+        // Step 2: Group boxes into columns based on x distance
         let mut columns: Vec<Vec<BoundingBox>> = Vec::new();
         for bbox in sorted_boxes {
             let mut added = false;
@@ -225,11 +244,27 @@ impl OcrEngine for YoloLayoutOcrWrapper {
             }
         }
 
+        // Step 3: Sort each column top-to-bottom (y ascending)
         for col in &mut columns {
-            col.sort_by(|a, b| a.y1.partial_cmp(&b.y1).unwrap_or(Ordering::Equal));
+            col.sort_by(|a, b| a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal));
         }
 
+        // Step 4: Flatten columns back to a sorted vector
         let sorted_boxes: Vec<BoundingBox> = columns.into_iter().flatten().collect();
+
+        // Save layout boxes for rendering overlay borders
+        let mut rect_boxes = Vec::new();
+        for bbox in &sorted_boxes {
+            rect_boxes.push(Rect {
+                x: bbox.x1,
+                y: bbox.y1,
+                w: bbox.x2 - bbox.x1,
+                h: bbox.y2 - bbox.y1,
+            });
+        }
+        *self.last_boxes.lock() = rect_boxes;
+
+        let mut result = Vec::new();
 
         for bbox in sorted_boxes {
             let pad = 10.0;
@@ -237,10 +272,10 @@ impl OcrEngine for YoloLayoutOcrWrapper {
             let y1 = (bbox.y1 - pad).max(0.0) as u32;
             let x2 = (bbox.x2 + pad).min(frame.width as f32) as u32;
             let y2 = (bbox.y2 + pad).min(frame.height as f32) as u32;
-            
+
             if x2 <= x1 || y2 <= y1 { continue; }
-            
-            let cropped = dynamic_img.crop_imm(x1, y1, x2 - x1, y2 - y1);
+
+            let cropped = img.crop_imm(x1, y1, x2 - x1, y2 - y1);
             let cropped_rgba = cropped.to_rgba8();
             let cropped_frame = FrameRgba {
                 width: cropped_rgba.width(),
@@ -248,17 +283,20 @@ impl OcrEngine for YoloLayoutOcrWrapper {
                 data: cropped_rgba.into_raw(),
             };
 
-            // Recognize text in cropped area using the base engine
-            if let Ok(cropped_lines) = self.base_engine.recognize_lines(cropped_frame, lang_hint) {
-                for mut line in cropped_lines {
-                    // Shift local coordinate back to global coordinates
-                    line.x += x1 as f32;
-                    line.y += y1 as f32;
-                    result.push(line);
+            if let Ok(lines) = self.underlying.recognize_lines(cropped_frame, lang_hint) {
+                for line in lines {
+                    let mut offset_line = line;
+                    offset_line.x += x1 as f32;
+                    offset_line.y += y1 as f32;
+                    result.push(offset_line);
                 }
             }
         }
 
         Ok(result)
+    }
+
+    fn get_last_yolo_boxes(&self) -> Vec<Rect> {
+        self.last_boxes.lock().clone()
     }
 }
