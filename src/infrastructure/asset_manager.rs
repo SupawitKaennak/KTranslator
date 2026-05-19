@@ -128,6 +128,22 @@ pub const PPOCR_DICT_CYRILLIC: ModelAsset = ModelAsset {
     path: "models/ppocr/cyrillic_dict.txt",
 };
 
+pub const BUBBLE_YOLO_MODEL: ModelAsset = ModelAsset {
+    name: "YOLO Bubble Detector (Manga-Bubble-YOLO)",
+    url: "https://huggingface.co/Kiuyha/Manga-Bubble-YOLO/resolve/main/onnx/YOLO26n.onnx",
+    path: "models/bubble-yolo/YOLO26n.onnx",
+};
+
+pub fn check_bubble_yolo_exists() -> bool {
+    let mut p = PathBuf::from(BUBBLE_YOLO_MODEL.path);
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            p = exe_dir.join(BUBBLE_YOLO_MODEL.path);
+        }
+    }
+    p.exists() && fs::metadata(&p).map(|m| m.len() > 5 * 1024 * 1024).unwrap_or(false)
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct DownloadProgress {
     pub current_file: String,
@@ -312,4 +328,18 @@ pub async fn download_ppocr_models(progress_tx: tokio::sync::mpsc::Sender<Downlo
 
     Ok(())
 }
+
+pub async fn download_bubble_yolo_model(progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>) -> Result<()> {
+    download_asset_list(&[BUBBLE_YOLO_MODEL], &progress_tx).await?;
+
+    let _ = progress_tx.send(DownloadProgress {
+        current_file: "Bubble YOLO model downloaded successfully!".to_string(),
+        progress: 1.0,
+        is_downloading: false,
+        error: None,
+    }).await;
+
+    Ok(())
+}
+
 

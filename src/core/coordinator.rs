@@ -12,13 +12,15 @@ pub struct BackgroundCoordinator {
     pub bg_tx: mpsc::Sender<BgResult>,
     pub bg_rx: mpsc::Receiver<BgResult>,
     pool: Mutex<threadpool::ThreadPool>,
+    yolo_bubble: Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>>>,
 }
 
 impl BackgroundCoordinator {
     pub fn new() -> Self {
         let (bg_tx, bg_rx) = mpsc::channel();
         let pool = Mutex::new(threadpool::ThreadPool::new(4)); // Default 4 worker threads
-        Self { bg_tx, bg_rx, pool }
+        let yolo_bubble = Arc::new(Mutex::new(None));
+        Self { bg_tx, bg_rx, pool, yolo_bubble }
     }
 
     pub fn now_ms() -> u64 {
@@ -46,7 +48,7 @@ impl BackgroundCoordinator {
                     frame_hash,
                     ocr_lines,
                     trans_lines,
-                    yolo_boxes,
+                    yolo_bubbles,
                 } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         let mut model = model_arc.lock();
@@ -71,7 +73,6 @@ impl BackgroundCoordinator {
 
                         let now = Self::now_ms();
                         slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(500));
-                        slot.last_yolo_boxes = yolo_boxes;
 
                         let new_ocr = ocr_text.trim();
                         let old_ocr = slot.last_ocr_text.trim();
@@ -94,6 +95,7 @@ impl BackgroundCoordinator {
                                     slot.last_translation.clear();
                                     slot.last_ocr_lines.clear();
                                     slot.last_trans_lines.clear();
+                                    slot.last_yolo_bubbles.clear();
                                 }
                             } else {
                                 // Persistence expired, clear fully
@@ -101,6 +103,7 @@ impl BackgroundCoordinator {
                                 slot.last_translation.clear();
                                 slot.last_ocr_lines.clear();
                                 slot.last_trans_lines.clear();
+                                slot.last_yolo_bubbles.clear();
                                 *runtime.persistent_translation.lock() = None;
                                 runtime.persistent_ocr_lines.lock().clear();
                                 runtime.persistent_trans_lines.lock().clear();
@@ -123,6 +126,7 @@ impl BackgroundCoordinator {
                                     slot.last_translation = translated.clone();
                                     slot.last_ocr_lines = ocr_lines.clone();
                                     slot.last_trans_lines = trans_lines.clone();
+                                    slot.last_yolo_bubbles = yolo_bubbles.clone();
 
                                     if !translated.trim().is_empty() {
                                         let cap = settings.realtime.context_window_size.max(1) as usize;
@@ -146,6 +150,7 @@ impl BackgroundCoordinator {
                                     if !translated.trim().is_empty() {
                                         slot.last_trans_lines = trans_lines.clone();
                                         slot.last_ocr_lines = ocr_lines.clone();
+                                        slot.last_yolo_bubbles = yolo_bubbles.clone();
                                         slot.last_translation = translated.clone();
                                     }
                                 }
@@ -214,7 +219,7 @@ impl BackgroundCoordinator {
                         slot.next_tick_at_ms = Self::now_ms() + 16; // 60fps responsive polling (16ms)
                     }
                 }
-                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines, yolo_boxes } => {
+                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines, yolo_bubbles } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         let mut model = model_arc.lock();
                         let slot = match model.slots.get_mut(slot_idx) {
@@ -238,7 +243,7 @@ impl BackgroundCoordinator {
                         slot.last_ocr_text = ocr_text;
                         slot.last_translation = translated.clone();
                         slot.last_ocr_lines = ocr_lines; // Update positions!
-                        slot.last_yolo_boxes = yolo_boxes;
+                        slot.last_yolo_bubbles = yolo_bubbles;
                         
                         // Re-align cached translation to the current OCR lines
                         slot.last_trans_lines = trans_lines;
@@ -317,6 +322,18 @@ impl BackgroundCoordinator {
         let now = Self::now_ms();
         let snapshot = { model_arc.lock().clone() };
         if !snapshot.running { return; }
+
+        let yolo_detector = if settings.use_yolo_bubble {
+            let mut guard = self.yolo_bubble.lock();
+            if guard.is_none() {
+                if crate::infrastructure::asset_manager::check_bubble_yolo_exists() {
+                    *guard = Some(Arc::new(crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector::new(settings.perf.gpu_backend)));
+                }
+            }
+            guard.clone()
+        } else {
+            None
+        };
 
         let parallel_ocr = settings.perf.parallel_ocr;
         let any_busy = !parallel_ocr && slots_runtime.iter().any(|r| r.busy);
@@ -404,6 +421,7 @@ impl BackgroundCoordinator {
             let th_segmentation = settings.txt_proc.th_segmentation;
             let jp_merge_vertical = settings.txt_proc.jp_merge_vertical;
 
+            let yolo_detector = yolo_detector.clone();
             let ctx_worker = ctx.clone();
             self.pool.lock().execute(move || {
                 ctx_worker.request_repaint();
@@ -418,7 +436,7 @@ impl BackgroundCoordinator {
                         first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
                         max_cache_entries, platform.clone(),
                         enable_batching, context_segments, contextual_translation, context_window_size,
-                        th_segmentation, jp_merge_vertical,
+                        th_segmentation, jp_merge_vertical, yolo_detector,
                     );
 
                     match result {

@@ -25,37 +25,28 @@ impl OcrAdapterFactory {
     /// Automatically falls back to Windows OCR if initialization fails.
     pub fn create_engine(settings: &Settings) -> (Arc<dyn OcrEngine>, Option<String>) {
         let engine_type = Self::get_active_engine_type(settings);
-        let (base_engine, err) = match engine_type {
+        match engine_type {
             OcrEngineType::BuiltinPaddle => {
                 match std::panic::catch_unwind(|| {
                     BuiltinPaddleOcr::new("models/ppocr".to_string())
                 }) {
-                    Ok(engine) => (Arc::new(engine) as Arc<dyn OcrEngine>, None),
+                    Ok(engine) => (Arc::new(engine), None),
                     Err(_) => {
                         let err_msg = "Built-in PaddleOCR init failed, falling back to Windows OCR".to_string();
                         tracing::error!("{err_msg}");
-                        (Arc::new(WindowsOcr::new()) as Arc<dyn OcrEngine>, Some(err_msg))
+                        (Arc::new(WindowsOcr::new()), Some(err_msg))
                     }
                 }
             }
             OcrEngineType::MangaOCR => {
-                (Arc::new(OnnxMangaRecognizer::new("models/manga-ocr", settings.perf.gpu_backend)) as Arc<dyn OcrEngine>, None)
+                (Arc::new(OnnxMangaRecognizer::new("models/manga-ocr", settings.perf.gpu_backend)), None)
             }
             OcrEngineType::Windows => {
-                (Arc::new(WindowsOcr::new()) as Arc<dyn OcrEngine>, None)
+                (Arc::new(WindowsOcr::new()), None)
             }
-        };
-
-        if settings.ocr_use_yolo && engine_type != OcrEngineType::MangaOCR {
-            let yolo_model_path = "models/manga-ocr/manga109_yolo_s.onnx".to_string();
-            let wrapped = Arc::new(super::yolo_layout_wrapper::YoloLayoutOcrWrapper::new(
-                base_engine,
-                yolo_model_path,
-                settings.perf.gpu_backend,
-            ));
-            (wrapped, err)
-        } else {
-            (base_engine, err)
+            OcrEngineType::BubbleYOLO => {
+                (Arc::new(WindowsOcr::new()), None)
+            }
         }
     }
 }
