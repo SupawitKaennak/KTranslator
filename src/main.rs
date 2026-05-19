@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod core;
 mod adapters;
@@ -8,7 +8,7 @@ mod user_interface;
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ktranslator=info,info"));
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ktranslator=debug,debug"));
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)

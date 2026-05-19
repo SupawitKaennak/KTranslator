@@ -44,6 +44,9 @@ impl OcrAdapterFactory {
             OcrEngineType::Windows => {
                 (Arc::new(WindowsOcr::new()), None)
             }
+            OcrEngineType::BubbleYOLO => {
+                (Arc::new(WindowsOcr::new()), None)
+            }
         }
     }
 }
