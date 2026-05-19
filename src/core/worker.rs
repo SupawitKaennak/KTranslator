@@ -17,6 +17,7 @@ pub enum BgResult {
         ocr_lines: Vec<OcrTextLine>,
         /// Translation split by newline, matching ocr_lines length.
         trans_lines: Vec<String>,
+        yolo_bubbles: Vec<OcrTextLine>,
     },
     /// The captured frame is identical to the previous one — skip API call.
     Unchanged {
@@ -40,6 +41,7 @@ pub enum BgResult {
         frame_hash: u64,
         ocr_lines: Vec<OcrTextLine>,
         trans_lines: Vec<String>,
+        yolo_bubbles: Vec<OcrTextLine>,
     },
     /// Direct status update for the UI spinner/label
     StatusUpdate {

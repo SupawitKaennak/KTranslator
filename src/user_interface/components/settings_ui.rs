@@ -140,7 +140,7 @@ pub fn show_settings_window(
                         SettingsTab::Ocr => render_tab_ocr(ui, &mut settings, i18n, &download_progress, &download_trigger_tx),
                         SettingsTab::TextProcessing => render_tab_text_processing(ui, &mut settings, i18n),
                         SettingsTab::ImageProcessing => render_tab_image_processing(ui, ctx, &mut settings, i18n, sample_frame.as_ref()),
-                        SettingsTab::Overlay => render_tab_overlay(ui, &mut settings, i18n),
+                        SettingsTab::Overlay => render_tab_overlay(ui, &mut settings, i18n, &download_progress, &download_trigger_tx),
                         SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
                     }
                 });
@@ -705,7 +705,13 @@ fn render_tab_text_processing(ui: &mut egui::Ui, settings: &mut Settings, i18n: 
 // ─────────────────────────────────────────────
 // Tab 5: Overlay
 // ─────────────────────────────────────────────
-fn render_tab_overlay(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::user_interface::i18n::I18n) {
+fn render_tab_overlay(
+    ui: &mut egui::Ui,
+    settings: &mut Settings,
+    i18n: &crate::user_interface::i18n::I18n,
+    download_progress: &crate::infrastructure::asset_manager::DownloadProgress,
+    download_trigger_tx: &std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
+) {
     ui.heading(i18n.tab_overlay);
     ui.add_space(8.0);
 
@@ -772,6 +778,38 @@ fn render_tab_overlay(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
             });
             ui.end_row();
         });
+
+    ui.add_space(16.0);
+    section_header(ui, "YOLO Speech Bubble Detection (Manga-Bubble-YOLO)");
+    ui.add_space(4.0);
+    
+    ui.checkbox(&mut settings.use_yolo_bubble, i18n.use_yolo_bubble);
+    ui.add_space(4.0);
+    ui.checkbox(&mut settings.show_yolo_debug_borders, i18n.show_yolo_debug_borders);
+
+    if settings.use_yolo_bubble {
+        let exists = crate::infrastructure::asset_manager::check_bubble_yolo_exists();
+        if !exists {
+            ui.add_space(8.0);
+            if download_progress.is_downloading && download_progress.current_file.contains("Bubble") {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.label(format!("Downloading model: {}", download_progress.current_file));
+                });
+                ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+            } else {
+                ui.horizontal(|ui| {
+                    ui.colored_label(egui::Color32::from_rgb(235, 120, 0), "⚠ YOLO Speech Bubble model (yolo26n.onnx) is not installed.");
+                    if ui.button("Download (6MB)").clicked() {
+                        let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
+                    }
+                });
+            }
+        } else {
+            ui.add_space(8.0);
+            ui.colored_label(egui::Color32::from_rgb(0, 180, 50), "✅ YOLO Speech Bubble model installed.");
+        }
+    }
 }
 
 // ─────────────────────────────────────────────
