@@ -771,6 +771,14 @@ fn render_tab_overlay(ui: &mut egui::Ui, settings: &mut Settings, i18n: &crate::
                 ui.radio_value(&mut settings.overlay_text_align, crate::infrastructure::settings::TextAlign::Right, i18n.align_right);
             });
             ui.end_row();
+
+            ui.label("YOLO Bubble Frames / กรอบคำพูด YOLO:");
+            ui.checkbox(&mut settings.show_yolo_boxes, "Show Green Borders / แสดงเส้นขอบสีเขียว");
+            ui.end_row();
+
+            ui.label("YOLO Layout Analysis / จัดรูปเลย์เอาต์ YOLO:");
+            ui.checkbox(&mut settings.use_yolo_layout, "OCR via Cropped Bubbles / เปิดใช้สแกนผ่านกล่องคำพูด");
+            ui.end_row();
         });
 }
 

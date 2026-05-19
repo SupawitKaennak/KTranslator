@@ -25,25 +25,36 @@ impl OcrAdapterFactory {
     /// Automatically falls back to Windows OCR if initialization fails.
     pub fn create_engine(settings: &Settings) -> (Arc<dyn OcrEngine>, Option<String>) {
         let engine_type = Self::get_active_engine_type(settings);
-        match engine_type {
+        let (base_engine, err) = match engine_type {
             OcrEngineType::BuiltinPaddle => {
                 match std::panic::catch_unwind(|| {
                     BuiltinPaddleOcr::new("models/ppocr".to_string())
                 }) {
-                    Ok(engine) => (Arc::new(engine), None),
+                    Ok(engine) => (Arc::new(engine) as Arc<dyn OcrEngine>, None),
                     Err(_) => {
                         let err_msg = "Built-in PaddleOCR init failed, falling back to Windows OCR".to_string();
                         tracing::error!("{err_msg}");
-                        (Arc::new(WindowsOcr::new()), Some(err_msg))
+                        (Arc::new(WindowsOcr::new()) as Arc<dyn OcrEngine>, Some(err_msg))
                     }
                 }
             }
             OcrEngineType::MangaOCR => {
-                (Arc::new(OnnxMangaRecognizer::new("models/manga-ocr", settings.perf.gpu_backend)), None)
+                (Arc::new(OnnxMangaRecognizer::new("models/manga-ocr", settings.perf.gpu_backend)) as Arc<dyn OcrEngine>, None)
             }
             OcrEngineType::Windows => {
-                (Arc::new(WindowsOcr::new()), None)
+                (Arc::new(WindowsOcr::new()) as Arc<dyn OcrEngine>, None)
             }
+        };
+
+        if settings.use_yolo_layout && engine_type != OcrEngineType::MangaOCR {
+            let yolo_wrapped = Arc::new(super::yolo_layout_wrapper::YoloLayoutOcrWrapper::new(
+                std::path::PathBuf::from("models/manga-ocr"),
+                settings.perf.gpu_backend,
+                base_engine,
+            ));
+            (yolo_wrapped, err)
+        } else {
+            (base_engine, err)
         }
     }
 }

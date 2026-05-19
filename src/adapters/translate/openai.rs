@@ -108,7 +108,6 @@ impl Translator for OpenAiTranslator {
             ],
             temperature: temp,
             max_tokens,
-            response_format: Some(OpenAiResponseFormat { format_type: "json_object".to_string() }),
         };
 
         let endpoint = format!("{}/chat/completions", self.base_url);
@@ -150,14 +149,6 @@ struct OpenAiRequest {
     messages: Vec<OpenAiMessage>,
     temperature: f32,
     max_tokens: u32,
-    #[serde(rename = "response_format", skip_serializing_if = "Option::is_none")]
-    response_format: Option<OpenAiResponseFormat>,
-}
-
-#[derive(Debug, Serialize)]
-struct OpenAiResponseFormat {
-    #[serde(rename = "type")]
-    format_type: String, // "json_object"
 }
 
 #[derive(Debug, Serialize, Deserialize)]
