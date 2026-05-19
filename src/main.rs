@@ -5,38 +5,8 @@ mod adapters;
 mod infrastructure;
 mod user_interface;
 
-#[cfg(windows)]
-fn redirect_stdout_to_nul() {
-    use std::fs::OpenOptions;
-    use std::os::windows::io::AsRawHandle;
-    
-    if let Ok(file) = OpenOptions::new().write(true).open("NUL") {
-        let handle = file.as_raw_handle();
-        unsafe extern "system" {
-            fn SetStdHandle(n_std_handle: u32, h_handle: *mut std::ffi::c_void) -> i32;
-        }
-        unsafe {
-            let _ = SetStdHandle(4294967285, handle as *mut _); // STD_OUTPUT_HANDLE
-            let _ = SetStdHandle(4294967284, handle as *mut _); // STD_ERROR_HANDLE
-        }
-        // Leak the file to keep the handle open
-        std::mem::forget(file);
-    }
-}
-
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
-    #[cfg(windows)]
-    {
-        unsafe extern "system" {
-            fn GetConsoleWindow() -> *mut std::ffi::c_void;
-        }
-        let has_console = unsafe { !GetConsoleWindow().is_null() };
-        if !has_console {
-            redirect_stdout_to_nul();
-        }
-    }
-
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ktranslator=info,info"));
 
