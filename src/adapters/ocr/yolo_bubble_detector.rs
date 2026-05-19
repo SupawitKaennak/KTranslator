@@ -100,18 +100,25 @@ impl YoloBubbleDetector {
         let orig_w = img.width() as f32;
         let orig_h = img.height() as f32;
 
-        // YOLO26n / YOLOv10 typically uses 1280x1280 input size, trained by stretching
-        let resized = img.resize_exact(1280, 1280, image::imageops::FilterType::Triangle).to_rgb8();
+        // Calculate letterbox scaling factor to preserve aspect ratio (crucial for ultrawide screens)
+        let scale = (1280.0 / orig_w).min(1280.0 / orig_h);
+        let resized = img.resize(1280, 1280, image::imageops::FilterType::Triangle).to_rgb8();
+        
         let mut input = Array4::<f32>::zeros((1, 3, 1280, 1280));
 
+        // Center the resized image in the 1280x1280 canvas
+        let pad_x = (1280 - resized.width()) / 2;
+        let pad_y = (1280 - resized.height()) / 2;
+
         for (x, y, pixel) in resized.enumerate_pixels() {
-            for c in 0..3 {
-                input[[0, c, y as usize, x as usize]] = pixel[c] as f32 / 255.0;
+            let tx = x as usize + pad_x as usize;
+            let ty = y as usize + pad_y as usize;
+            if tx < 1280 && ty < 1280 {
+                for c in 0..3 {
+                    input[[0, c, ty, tx]] = pixel[c] as f32 / 255.0;
+                }
             }
         }
-
-        let scale_x = orig_w / 1280.0;
-        let scale_y = orig_h / 1280.0;
 
         let input_tensor = ort::value::Value::from_array(input)
             .map_err(|e| anyhow::anyhow!("YOLO input tensor error: {}", e))?;
@@ -141,22 +148,28 @@ impl YoloBubbleDetector {
                 let prob = view[[0, i, 4]];
                 let class_id = view[[0, i, 5]] as usize;
 
-                if prob > 0.25 {
-                    let box_w = x2 - x1;
-                    let box_h = y2 - y1;
-                    let pad_w = (box_w * 0.08).max(12.0);
-                    let pad_h = (box_h * 0.08).max(12.0);
+                if prob > 0.20 {
+                    // Map back from 1280x1280 padded tensor coordinates to original image coordinates
+                    let ox1 = ((x1 - pad_x as f32) / scale).clamp(0.0, orig_w);
+                    let oy1 = ((y1 - pad_y as f32) / scale).clamp(0.0, orig_h);
+                    let ox2 = ((x2 - pad_x as f32) / scale).clamp(0.0, orig_w);
+                    let oy2 = ((y2 - pad_y as f32) / scale).clamp(0.0, orig_h);
+
+                    let box_w = ox2 - ox1;
+                    let box_h = oy2 - oy1;
+                    let pad_w = (box_w * 0.08).max(8.0);
+                    let pad_h = (box_h * 0.08).max(8.0);
                     
-                    let ex1 = (x1 - pad_w).max(0.0);
-                    let ey1 = (y1 - pad_h).max(0.0);
-                    let ex2 = (x2 + pad_w).min(1280.0);
-                    let ey2 = (y2 + pad_h).min(1280.0);
+                    let ex1 = (ox1 - pad_w).max(0.0);
+                    let ey1 = (oy1 - pad_h).max(0.0);
+                    let ex2 = (ox2 + pad_w).min(orig_w);
+                    let ey2 = (oy2 + pad_h).min(orig_h);
 
                     boxes.push(BubbleBox {
-                        x1: ex1 * scale_x,
-                        y1: ey1 * scale_y,
-                        x2: ex2 * scale_x,
-                        y2: ey2 * scale_y,
+                        x1: ex1,
+                        y1: ey1,
+                        x2: ex2,
+                        y2: ey2,
                         prob,
                         class_id,
                     });
@@ -183,27 +196,33 @@ impl YoloBubbleDetector {
                     }
                 }
 
-                if max_conf > 0.25 {
+                if max_conf > 0.20 {
                     let x1 = cx - w / 2.0;
                     let y1 = cy - h / 2.0;
                     let x2 = cx + w / 2.0;
                     let y2 = cy + h / 2.0;
 
-                    let box_w = x2 - x1;
-                    let box_h = y2 - y1;
-                    let pad_w = (box_w * 0.08).max(12.0);
-                    let pad_h = (box_h * 0.08).max(12.0);
+                    // Map back from 1280x1280 padded tensor coordinates to original image coordinates
+                    let ox1 = ((x1 - pad_x as f32) / scale).clamp(0.0, orig_w);
+                    let oy1 = ((y1 - pad_y as f32) / scale).clamp(0.0, orig_h);
+                    let ox2 = ((x2 - pad_x as f32) / scale).clamp(0.0, orig_w);
+                    let oy2 = ((y2 - pad_y as f32) / scale).clamp(0.0, orig_h);
+
+                    let box_w = ox2 - ox1;
+                    let box_h = oy2 - oy1;
+                    let pad_w = (box_w * 0.08).max(8.0);
+                    let pad_h = (box_h * 0.08).max(8.0);
                     
-                    let ex1 = (x1 - pad_w).max(0.0);
-                    let ey1 = (y1 - pad_h).max(0.0);
-                    let ex2 = (x2 + pad_w).min(1280.0);
-                    let ey2 = (y2 + pad_h).min(1280.0);
+                    let ex1 = (ox1 - pad_w).max(0.0);
+                    let ey1 = (oy1 - pad_h).max(0.0);
+                    let ex2 = (ox2 + pad_w).min(orig_w);
+                    let ey2 = (oy2 + pad_h).min(orig_h);
 
                     boxes.push(BubbleBox {
-                        x1: ex1 * scale_x,
-                        y1: ey1 * scale_y,
-                        x2: ex2 * scale_x,
-                        y2: ey2 * scale_y,
+                        x1: ex1,
+                        y1: ey1,
+                        x2: ex2,
+                        y2: ey2,
                         prob: max_conf,
                         class_id: max_class,
                     });
