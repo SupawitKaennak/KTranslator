@@ -113,7 +113,6 @@ impl Translator for GroqTranslator {
             ],
             temperature: temp,
             max_tokens,
-            response_format: Some(GroqResponseFormat { format_type: "json_object".to_string() }),
         };
 
         let resp = self.client
@@ -144,14 +143,6 @@ struct GroqChatRequest {
     messages: Vec<GroqMessage>,
     temperature: f32,
     max_tokens: u32,
-    #[serde(rename = "response_format", skip_serializing_if = "Option::is_none")]
-    response_format: Option<GroqResponseFormat>,
-}
-
-#[derive(Serialize)]
-struct GroqResponseFormat {
-    #[serde(rename = "type")]
-    format_type: String, // "json_object"
 }
 
 #[derive(Serialize, Deserialize)]

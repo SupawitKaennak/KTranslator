@@ -132,7 +132,7 @@ impl Translator for GeminiTranslator {
             generation_config: Some(GenerationConfig {
                 temperature: Some(temp), // Dynamically mapped to Translation Creativity Slider
                 max_output_tokens: Some(max_tokens),
-                response_mime_type: Some("application/json".to_string()),
+                ..Default::default()
             }),
         };
 
@@ -185,8 +185,6 @@ struct GenerationConfig {
     temperature: Option<f32>,
     #[serde(rename = "maxOutputTokens")]
     max_output_tokens: Option<u32>,
-    #[serde(rename = "responseMimeType", skip_serializing_if = "Option::is_none")]
-    response_mime_type: Option<String>,
 }
 
 #[derive(Deserialize)]

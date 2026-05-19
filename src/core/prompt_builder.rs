@@ -84,18 +84,12 @@ pub fn build_translation_prompt(
         let user = lines.first().unwrap_or(&"").to_string();
         TranslationPrompt { system, user, line_count: lines.len() }
     } else {
-        let mut map = std::collections::BTreeMap::new();
+        // ── Multi-line batch mode (Numbered List protocol) ───────────────
+        // Use numbered lines which is much more robust for Llama/OpenAI models.
+        let mut joined_input = String::new();
         for (i, line) in lines.iter().enumerate() {
-            map.insert((i + 1).to_string(), line.to_string());
+            joined_input.push_str(&format!("{}. {}\n", i + 1, line));
         }
-        let joined_input = serde_json::to_string_pretty(&map).unwrap_or_else(|_| {
-            let mut s = String::from("{\n");
-            for (i, line) in lines.iter().enumerate() {
-                s.push_str(&format!("  \"{}\": \"{}\",\n", i + 1, line.replace('"', "\\\"")));
-            }
-            s.push_str("}");
-            s
-        });
 
         let mut extra_rules = String::new();
         if target.0 == "th" {
@@ -103,44 +97,29 @@ pub fn build_translation_prompt(
         }
 
         let system = format!(
-            "You are a strict professional i18n manga/game translator.\n\
-             Task: Translate the values of the input JSON object to {target_name}.\n\
-             \n\
-             CRITICAL RULE FOR PERFECT ALIGNMENT:\n\
-             - Each key in the input JSON is a completely independent text segment from a different part of the screen. They are NOT part of the same sentence.\n\
-             - You MUST translate each key completely in isolation. Do NOT merge, combine, or contextually link different keys under any circumstances.\n\
-             - Merging different keys will break the application user interface (UI) layout completely.\n\
+            "You are an expert professional manga/game translator.\n\
+             Input: A numbered list of {count} text segments.\n\
+             Task: Translate EACH segment to {target_name}.\n\
              \n\
              STRICT RULES:\n\
-             1. Output a JSON object with the EXACT same keys as the input.\n\
-             2. Translate each value INDIVIDUALLY. Never combine values.\n\
-             3. Do NOT add any notes, explanations, or meta-talk.\n\
-             4. If a value is empty, keep it empty.\n\
-             5. Translate ONLY what is written in the values.\n\
-             6. Maintain professional grammar, correct capitalization, and punctuation.\n\
-             7. Output ONLY the raw JSON object.\n\
+             1. Output EXACTLY {count} translated lines.\n\
+             2. Use the same numbering format (1. Translation).\n\
+             3. Do NOT merge segments or summarize the content.\n\
+             4. Do NOT add any notes, explanations, or meta-talk.\n\
+             5. If a segment is empty, output the number and an empty translation (e.g. \"5. \").\n\
+             6. Prevent hallucinations: translate ONLY what is written.\n\
+             7. Maintain professional grammar, correct capitalization, and punctuation.\n\
+             8. Output ONLY the numbered list in {target_name}.\n\
 {extra_rules}",
+            count = lines.len(),
             target_name = target_name,
             extra_rules = extra_rules,
         );
 
         let user = if source.is_some() {
-            format!(
-                "SYSTEM INSTRUCTIONS:\n{system}\n\n\
-                 Translate the values of this JSON object from {source_name} to {target_name}, preserving all keys:\n\n{joined_input}",
-                system = system,
-                source_name = source_name,
-                target_name = target_name,
-                joined_input = joined_input
-            )
+            format!("Translate these {count} segments from {source_name} to {target_name}:\n\n{joined_input}", count = lines.len())
         } else {
-            format!(
-                "SYSTEM INSTRUCTIONS:\n{system}\n\n\
-                 Translate the values of this JSON object to {target_name}, preserving all keys:\n\n{joined_input}",
-                system = system,
-                target_name = target_name,
-                joined_input = joined_input
-            )
+            format!("Translate these {count} segments to {target_name}:\n\n{joined_input}", count = lines.len())
         };
 
         TranslationPrompt { system, user, line_count: lines.len() }
@@ -268,73 +247,6 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     }
 
     let trimmed = raw.trim();
-
-    // ── Strategy 0: JSON object parsing (Strongly preferred for perfect box alignment) ────
-    let mut parsed_json = false;
-    let mut result = vec![String::new(); expected_count];
-    
-    // Attempt standard serde_json parsing first by finding the boundaries of the JSON block
-    let json_str = if let Some(start_idx) = trimmed.find('{') {
-        if let Some(end_idx) = trimmed.rfind('}') {
-            Some(&trimmed[start_idx..=end_idx])
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    if let Some(json_content) = json_str {
-        if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(json_content) {
-            for i in 0..expected_count {
-                let key = (i + 1).to_string();
-                if let Some(val) = map.get(&key) {
-                    let val_str = match val {
-                        serde_json::Value::String(s) => s.clone(),
-                        serde_json::Value::Number(n) => n.to_string(),
-                        serde_json::Value::Bool(b) => b.to_string(),
-                        other => other.to_string(),
-                    };
-                    result[i] = val_str.trim().to_string();
-                }
-            }
-            let matched_keys = result.iter().filter(|s| !s.is_empty()).count();
-            if matched_keys > 0 {
-                parsed_json = true;
-            }
-        }
-    }
-    
-    // If standard JSON parsing failed but it looks like a JSON block, use our robust regex extractor
-    if !parsed_json && (trimmed.contains(':') || trimmed.contains('{')) {
-        static RE_JSON_PAIR: LazyLock<regex::Regex> = LazyLock::new(|| {
-            regex::Regex::new(r#""?(\d+)"?\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)""#).unwrap()
-        });
-        
-        let mut matched_keys = 0;
-        for caps in RE_JSON_PAIR.captures_iter(trimmed) {
-            if let Ok(num) = caps[1].parse::<usize>() {
-                if num > 0 && num <= expected_count {
-                    let raw_val = caps[2].to_string();
-                    // Clean up standard JSON escape sequences (like \" or \n)
-                    let decoded_val = raw_val
-                        .replace("\\\"", "\"")
-                        .replace("\\\\", "\\")
-                        .replace("\\n", "\n")
-                        .replace("\\t", "\t");
-                    result[num - 1] = decoded_val.trim().to_string();
-                    matched_keys += 1;
-                }
-            }
-        }
-        if matched_keys > 0 {
-            parsed_json = true;
-        }
-    }
-    
-    if parsed_json {
-        return result;
-    }
 
     // ── Strategy 1: ||| separator ────────────────────────────────────────
     if trimmed.contains(LINE_SEPARATOR) {
