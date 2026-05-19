@@ -157,7 +157,7 @@ impl YoloLayoutOcrWrapper {
                 }
             }
             
-            if max_conf > 0.25 {
+            if max_conf > 0.40 {
                 let x1 = cx - w / 2.0;
                 let y1 = cy - h / 2.0;
                 let x2 = cx + w / 2.0;
@@ -179,8 +179,8 @@ impl YoloLayoutOcrWrapper {
             let box_w = b.x2 - b.x1;
             let box_h = b.y2 - b.y1;
             let is_bubble_size = box_w > 15.0 && box_h > 15.0
-                && box_w < (orig_w * 0.40)
-                && box_h < (orig_h * 0.50);
+                && box_w < (orig_w * 0.35).min(450.0)
+                && box_h < (orig_h * 0.45).min(500.0);
             b.class_id == text_class_id && is_bubble_size
         });
         
