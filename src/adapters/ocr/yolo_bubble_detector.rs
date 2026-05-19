@@ -19,32 +19,35 @@ pub struct BubbleBox {
     pub class_id: usize,
 }
 
-fn iou(a: &BubbleBox, b: &BubbleBox) -> f32 {
-    let x_left = a.x1.max(b.x1);
-    let y_top = a.y1.max(b.y1);
-    let x_right = a.x2.min(b.x2);
-    let y_bottom = a.y2.min(b.y2);
-
-    if x_right < x_left || y_bottom < y_top {
-        return 0.0;
-    }
-
-    let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-    let a_area = (a.x2 - a.x1) * (a.y2 - a.y1);
-    let b_area = (b.x2 - b.x1) * (b.y2 - b.y1);
-
-    intersection_area / (a_area + b_area - intersection_area)
-}
 
 fn nms(mut boxes: Vec<BubbleBox>, iou_threshold: f32) -> Vec<BubbleBox> {
     boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
-    let mut result = Vec::new();
+    let mut result: Vec<BubbleBox> = Vec::new();
     for i in 0..boxes.len() {
         let mut keep = true;
         for res in &result {
-            if iou(&boxes[i], res) > iou_threshold {
-                keep = false;
-                break;
+            // Calculate Intersection
+            let x_left = boxes[i].x1.max(res.x1);
+            let y_top = boxes[i].y1.max(res.y1);
+            let x_right = boxes[i].x2.min(res.x2);
+            let y_bottom = boxes[i].y2.min(res.y2);
+
+            if x_right > x_left && y_bottom > y_top {
+                let intersection_area = (x_right - x_left) * (y_bottom - y_top);
+                let a_area = (boxes[i].x2 - boxes[i].x1) * (boxes[i].y2 - boxes[i].y1);
+                let b_area = (res.x2 - res.x1) * (res.y2 - res.y1);
+
+                let iou = intersection_area / (a_area + b_area - intersection_area);
+                
+                // Containment: how much of the smaller box is inside the larger box
+                let smaller_area = a_area.min(b_area);
+                let containment = if smaller_area > 0.0 { intersection_area / smaller_area } else { 0.0 };
+
+                // If IoU overlaps too much, or if one box is mostly contained within the other
+                if iou > iou_threshold || containment > 0.75 {
+                    keep = false;
+                    break;
+                }
             }
         }
         if keep {
@@ -228,11 +231,12 @@ impl YoloBubbleDetector {
                     });
                 }
             }
-            // YOLOv8 requires NMS post-processing
-            boxes = nms(boxes, 0.45);
         } else {
             anyhow::bail!("Unsupported YOLO output tensor shape: {:?}", shape);
         }
+
+        // Run NMS globally on all detected boxes to eliminate duplicate and heavily overlapping boxes
+        boxes = nms(boxes, 0.40);
 
         // Apply spatial dimension filtering to prevent oversized or microscopic boxes
         boxes.retain(|b| {
