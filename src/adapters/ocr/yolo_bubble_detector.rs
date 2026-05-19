@@ -142,11 +142,21 @@ impl YoloBubbleDetector {
                 let class_id = view[[0, i, 5]] as usize;
 
                 if prob > 0.25 {
+                    let box_w = x2 - x1;
+                    let box_h = y2 - y1;
+                    let pad_w = (box_w * 0.08).max(12.0);
+                    let pad_h = (box_h * 0.08).max(12.0);
+                    
+                    let ex1 = (x1 - pad_w).max(0.0);
+                    let ey1 = (y1 - pad_h).max(0.0);
+                    let ex2 = (x2 + pad_w).min(1280.0);
+                    let ey2 = (y2 + pad_h).min(1280.0);
+
                     boxes.push(BubbleBox {
-                        x1: x1 * scale_x,
-                        y1: y1 * scale_y,
-                        x2: x2 * scale_x,
-                        y2: y2 * scale_y,
+                        x1: ex1 * scale_x,
+                        y1: ey1 * scale_y,
+                        x2: ex2 * scale_x,
+                        y2: ey2 * scale_y,
                         prob,
                         class_id,
                     });
@@ -179,11 +189,21 @@ impl YoloBubbleDetector {
                     let x2 = cx + w / 2.0;
                     let y2 = cy + h / 2.0;
 
+                    let box_w = x2 - x1;
+                    let box_h = y2 - y1;
+                    let pad_w = (box_w * 0.08).max(12.0);
+                    let pad_h = (box_h * 0.08).max(12.0);
+                    
+                    let ex1 = (x1 - pad_w).max(0.0);
+                    let ey1 = (y1 - pad_h).max(0.0);
+                    let ex2 = (x2 + pad_w).min(1280.0);
+                    let ey2 = (y2 + pad_h).min(1280.0);
+
                     boxes.push(BubbleBox {
-                        x1: x1 * scale_x,
-                        y1: y1 * scale_y,
-                        x2: x2 * scale_x,
-                        y2: y2 * scale_y,
+                        x1: ex1 * scale_x,
+                        y1: ey1 * scale_y,
+                        x2: ex2 * scale_x,
+                        y2: ey2 * scale_y,
                         prob: max_conf,
                         class_id: max_class,
                     });
