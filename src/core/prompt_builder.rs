@@ -75,7 +75,12 @@ pub fn build_translation_prompt(
     if lines.len() <= 1 {
         // ── Single-line mode ─────────────────────────────────────────────
         // Use extremely compact instructions to save maximum input tokens per request.
-        let system = format!("Translate to {target_name}. Output translation ONLY.");
+        let extra_rules = if target.0 == "th" {
+            " Space Thai words."
+        } else {
+            ""
+        };
+        let system = format!("Translate to {target_name}. Output translation ONLY.{extra_rules}");
         let user = lines.first().unwrap_or(&"").to_string();
         TranslationPrompt { system, user, line_count: lines.len() }
     } else {
@@ -86,7 +91,10 @@ pub fn build_translation_prompt(
             joined_input.push_str(&format!("{}. {}\n", i + 1, line));
         }
 
-        let extra_rules = String::new();
+        let mut extra_rules = String::new();
+        if target.0 == "th" {
+            extra_rules.push_str("             8. IMPORTANT: Add spaces between words in Thai to allow proper line wrapping (e.g., 'วัน นี้ ผม ไป ตลาด').\n");
+        }
 
         let system = format!(
             "You are an expert professional manga/game translator.\n\
@@ -94,17 +102,16 @@ pub fn build_translation_prompt(
              Task: Translate EACH segment to {target_name}.\n\
              \n\
              STRICT RULES:\n\
-             1. Output EXACTLY {count} translated lines.\n\
-             2. Use the same numbering format (1. Translation).\n\
-             3. Do NOT merge segments or summarize the content.\n\
-             4. Do NOT add any notes, explanations, or meta-talk.\n\
-             5. If a segment is empty, output the number and an empty translation (e.g. \"5. \").\n\
-             6. Prevent hallucinations: translate ONLY what is written.\n\
-             7. Maintain professional grammar, correct capitalization, and punctuation.\n\
-             8. Output ONLY the numbered list in {target_name}.\n\
-             9. DO NOT double-number the output (e.g., never output \"1. 1. Translation\" or \"1. 1.เน่ย\"). Output exactly one number prefix per line.\n\
+             1. Output a JSON object mapping each input number as a string key to its translation (e.g., {{\"{count_example}\": \"translation\"}}).\n\
+             2. Do NOT merge segments or summarize the content.\n\
+             3. Do NOT add any notes, explanations, or meta-talk.\n\
+             4. If a segment is empty, output an empty translation (e.g. \"\").\n\
+             5. Translate ONLY what is written.\n\
+             6. Maintain professional grammar, correct capitalization, and punctuation.\n\
+             7. Output ONLY the raw JSON object.\n\
 {extra_rules}",
             count = lines.len(),
+            count_example = "1",
             target_name = target_name,
             extra_rules = extra_rules,
         );
@@ -241,6 +248,33 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
 
     let trimmed = raw.trim();
 
+    // ── Strategy 0: JSON object parsing (Strongly preferred for perfect box alignment) ────
+    if (trimmed.starts_with('{') && trimmed.ends_with('}')) || trimmed.contains("{\n") || trimmed.contains("{\"") {
+        let json_str = if let Some(start_idx) = trimmed.find('{') {
+            if let Some(end_idx) = trimmed.rfind('}') {
+                &trimmed[start_idx..=end_idx]
+            } else {
+                trimmed
+            }
+        } else {
+            trimmed
+        };
+        
+        if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, String>>(json_str) {
+            let mut result = vec![String::new(); expected_count];
+            for i in 0..expected_count {
+                let key = (i + 1).to_string();
+                if let Some(val) = map.get(&key) {
+                    result[i] = val.trim().to_string();
+                }
+            }
+            let matched_keys = result.iter().filter(|s| !s.is_empty()).count();
+            if matched_keys > 0 {
+                return result;
+            }
+        }
+    }
+
     // ── Strategy 1: ||| separator ────────────────────────────────────────
     if trimmed.contains(LINE_SEPARATOR) {
         let parts: Vec<String> = trimmed
@@ -268,16 +302,7 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     for caps in RE_NUMBERED.captures_iter(trimmed) {
         if let Ok(num) = caps[1].parse::<usize>() {
             if num > 0 && num <= expected_count {
-                let mut content = caps[2].trim().to_string();
-
-                // If the model double-numbered (e.g. "1.เน่ย" or "1. เน่ย"), strip the inner one!
-                static RE_INNER_NUM: LazyLock<regex::Regex> = LazyLock::new(|| {
-                    regex::Regex::new(r"^(\d+)\s*[\.\:\-\s]+\s*(.*)$").unwrap()
-                });
-                if let Some(inner_caps) = RE_INNER_NUM.captures(&content) {
-                    content = inner_caps[2].trim().to_string();
-                }
-
+                let content = caps[2].trim().to_string();
                 if numbered_result[num - 1].len() < content.len() {
                     numbered_result[num - 1] = content;
                     matched_indices.insert(num - 1);
@@ -286,48 +311,33 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    let mut final_result = if matched_indices.len() >= (expected_count + 1) / 2 {
-        numbered_result
-    } else {
-        // ── Strategy 3: Plain newline split ──────────────────────────────────
-        let lines: Vec<String> = trimmed
-            .lines()
-            .map(|l| l.trim().to_string())
-            .filter(|l| !l.is_empty())
-            .collect();
-
-        if lines.len() == expected_count {
-            lines
-        } else {
-            // ── Strategy 4: Best-effort pad/truncate ─────────────────────────────
-            let mut result = if lines.len() > expected_count {
-                lines[..expected_count].to_vec()
-            } else {
-                lines
-            };
-
-            // Pad with empty strings to reach expected count
-            while result.len() < expected_count {
-                result.push(String::new());
-            }
-            result
-        }
-    };
-
-    // Unified prefix-stripping pass to remove list markers (e.g. "1. ", "1)", "1.เน่ย")
-    static RE_STRIP_PREFIX: LazyLock<regex::Regex> = LazyLock::new(|| {
-        regex::Regex::new(r"^[\s\*\-]*[\[\(]?\s*\d+\s*[\]\)]?[\s\.\:\->\*]+\s*(.*)$").unwrap()
-    });
-    for s in final_result.iter_mut() {
-        if let Some(caps) = RE_STRIP_PREFIX.captures(s) {
-            *s = caps[1].trim().to_string();
-        }
-        // Run a second pass in case the model double-numbered! E.g. "1. 1.เน่ย" -> "1.เน่ย" -> "เน่ย"
-        if let Some(caps) = RE_STRIP_PREFIX.captures(s) {
-            *s = caps[1].trim().to_string();
-        }
+    if matched_indices.len() >= (expected_count + 1) / 2 {
+        return numbered_result;
     }
 
-    final_result
+    // ── Strategy 3: Plain newline split ──────────────────────────────────
+    let lines: Vec<String> = trimmed
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    if lines.len() == expected_count {
+        return lines;
+    }
+
+    // ── Strategy 4: Best-effort pad/truncate ─────────────────────────────
+    let mut result = if lines.len() > expected_count {
+        lines[..expected_count].to_vec()
+    } else {
+        lines
+    };
+
+    // Pad with empty strings to reach expected count
+    while result.len() < expected_count {
+        result.push(String::new());
+    }
+
+    result
 }
 
