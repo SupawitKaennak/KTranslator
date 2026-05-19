@@ -173,15 +173,13 @@ pub fn render_overlay_viewport(
                                     }
 
                                     if let Some(bg_rect) = union_rect {
-                                        let padded_bg = bg_rect.expand(overlay_padding);
-                                        painter.rect_filled(padded_bg, overlay_corner_radius, overlay_bg_color);
-                                        last_bottom_y = last_bottom_y.max(padded_bg.max.y);
-
                                         // Render the whole joined text inside the union rect
                                         let raw_text = chunks.join("\n");
                                         let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&raw_text);
                                         let font_size = overlay_settings.overlay_font_size;
-                                        let wrap_width = bg_rect.width().max(50.0);
+                                        
+                                        // Allow generous wrap width (especially for English-to-Thai)
+                                        let wrap_width = (bg_rect.width() * 1.35).max(100.0);
 
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(
@@ -199,13 +197,24 @@ pub fn render_overlay_viewport(
                                             f.layout_job(job)
                                         });
 
+                                        // Compute background dimensions based on galley size, symmetrically centered on original union rect
+                                        let bg_w = bg_rect.width().max(galley.size().x + overlay_padding * 2.0);
+                                        let bg_h = bg_rect.height().max(galley.size().y + overlay_padding * 2.0);
+                                        let padded_bg = egui::Rect::from_center_size(
+                                            bg_rect.center(),
+                                            egui::vec2(bg_w, bg_h)
+                                        );
+
+                                        painter.rect_filled(padded_bg, overlay_corner_radius, overlay_bg_color);
+                                        last_bottom_y = last_bottom_y.max(padded_bg.max.y);
+
                                         let text_x = match overlay_settings.overlay_text_align {
-                                            crate::infrastructure::settings::TextAlign::Left => bg_rect.left() + overlay_padding,
-                                            crate::infrastructure::settings::TextAlign::Center => bg_rect.center().x,
-                                            crate::infrastructure::settings::TextAlign::Right => bg_rect.right() - overlay_padding,
+                                            crate::infrastructure::settings::TextAlign::Left => padded_bg.left() + overlay_padding,
+                                            crate::infrastructure::settings::TextAlign::Center => padded_bg.center().x,
+                                            crate::infrastructure::settings::TextAlign::Right => padded_bg.right() - overlay_padding,
                                         };
 
-                                        let text_pos = egui::pos2(text_x, bg_rect.top() + overlay_padding);
+                                        let text_pos = egui::pos2(text_x, padded_bg.top() + overlay_padding);
                                         painter.galley(text_pos, galley, overlay_text_color);
                                     }
                                 } else {
@@ -213,7 +222,9 @@ pub fn render_overlay_viewport(
                                     for (i, line) in block_lines.iter().enumerate() {
                                         let line_h_points = line.h / ppp;
                                         let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-                                        let wrap_width = (line.w / ppp).max(30.0); 
+                                        
+                                        // Allow generous wrap width (especially for English-to-Thai)
+                                        let wrap_width = (line.w / ppp * 1.35).max(100.0);
 
                                         let chunk_text = chunks.get(i).cloned().unwrap_or_default();
                                         let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&chunk_text);
@@ -235,23 +246,26 @@ pub fn render_overlay_viewport(
                                         });
 
                                         let start_y = line.y / ppp;
-                                        let bg_w = (line.w / ppp).max(galley.size().x + (overlay_padding * 2.0)).min(wrap_width + (overlay_padding * 2.0));
-                                        let bg_h = (line.h / ppp).max(galley.size().y + overlay_padding);
-                                        let bg = egui::Rect::from_min_size(
-                                            egui::pos2((line.x / ppp) - overlay_padding/2.0, start_y - overlay_padding/4.0),
-                                            egui::vec2(bg_w + overlay_padding, bg_h + overlay_padding/2.0),
+                                        let line_center_x = (line.x + line.w / 2.0) / ppp;
+                                        
+                                        let bg_w = (line.w / ppp).max(galley.size().x + overlay_padding * 2.0);
+                                        let bg_h = (line.h / ppp).max(galley.size().y + overlay_padding * 1.5);
+                                        
+                                        let bg = egui::Rect::from_center_size(
+                                            egui::pos2(line_center_x, start_y + (line.h / ppp) / 2.0),
+                                            egui::vec2(bg_w, bg_h)
                                         );
                                         
                                         last_bottom_y = last_bottom_y.max(bg.max.y);
                                         painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
                                         
                                         if !galley.rows.is_empty() {
-                                            let text_y = start_y + (bg_h - galley.size().y) / 2.0;
+                                            let text_y = bg.center().y - galley.size().y / 2.0;
                                             
                                             let text_x = match overlay_settings.overlay_text_align {
-                                                crate::infrastructure::settings::TextAlign::Left => bg.left() + overlay_padding/2.0,
+                                                crate::infrastructure::settings::TextAlign::Left => bg.left() + overlay_padding,
                                                 crate::infrastructure::settings::TextAlign::Center => bg.center().x,
-                                                crate::infrastructure::settings::TextAlign::Right => bg.right() - overlay_padding/2.0,
+                                                crate::infrastructure::settings::TextAlign::Right => bg.right() - overlay_padding,
                                             };
 
                                             let text_pos = egui::pos2(text_x, text_y);
