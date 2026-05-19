@@ -249,6 +249,9 @@ impl App {
                     crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
                         let _ = crate::infrastructure::asset_manager::download_ppocr_models(tx).await;
                     }
+                    crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
+                        let _ = crate::infrastructure::asset_manager::download_bubble_yolo_model(tx).await;
+                    }
                     _ => {}
                 }
             });

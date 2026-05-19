@@ -88,6 +88,7 @@ pub fn render_overlay_viewport(
                     let ocr_lines    = slot.last_ocr_lines.clone();
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
+                    let yolo_bubbles = slot.last_yolo_bubbles.clone();
                     drop(m);
 
                     if show_overlay {
@@ -353,6 +354,33 @@ pub fn render_overlay_viewport(
                                 painter.galley(pos, galley, overlay_text_color);
                                 y += line_h + 4.0;
                             }
+                        }
+                    }
+
+                    if overlay_settings.show_yolo_debug_borders {
+                        for bubble in &yolo_bubbles {
+                            let rect = egui::Rect::from_min_size(
+                                egui::pos2(bubble.x / ppp, bubble.y / ppp),
+                                egui::vec2(bubble.w / ppp, bubble.h / ppp)
+                            );
+                            let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 0, 0));
+                            painter.rect_stroke(rect, 4.0, stroke, egui::StrokeKind::Outside);
+                            
+                            let text_pos = egui::pos2(rect.min.x + 2.0, rect.min.y + 2.0);
+                            let galley = ctx.fonts(|f| {
+                                f.layout(
+                                    "Bubble".to_string(),
+                                    egui::FontId::proportional(10.0),
+                                    egui::Color32::from_rgb(255, 0, 0),
+                                    100.0,
+                                )
+                            });
+                            let bg_rect = egui::Rect::from_min_size(
+                                text_pos - egui::vec2(2.0, 1.0),
+                                galley.size() + egui::vec2(4.0, 2.0)
+                            );
+                            painter.rect_filled(bg_rect, 2.0, egui::Color32::from_black_alpha(180));
+                            painter.galley(text_pos, galley, egui::Color32::from_rgb(255, 255, 0));
                         }
                     }
 

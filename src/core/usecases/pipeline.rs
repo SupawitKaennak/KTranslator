@@ -5,7 +5,7 @@ use parking_lot::Mutex;
 use eframe::egui;
 
 use crate::core::{
-    ports::{FrameSource, OcrEngine, Translator},
+    ports::{FrameSource, OcrEngine, Translator, FrameRgba, OcrTextLine},
     types::{LanguageTag, Rect},
     worker::{BgResult, smart_hash},
     text_cleaner::TextCleaner,
@@ -71,8 +71,9 @@ impl TranslationPipeline {
         context_window_size: u32,
         th_segmentation: crate::infrastructure::settings::ThaiSegmentationMode,
         jp_merge_vertical: bool,
+        yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>,
     ) -> anyhow::Result<BgResult> {
-        let mut frame = capture.capture_rect(rect, display_id)?;
+        let frame = capture.capture_rect(rect, display_id)?;
         
         *last_frame_arc.lock() = Some(frame.clone());
         ctx.request_repaint();
@@ -114,7 +115,7 @@ impl TranslationPipeline {
                 tracing::debug!(slot = slot_idx, hash = %hash, "Cache hit for whole frame");
                 return Ok(BgResult::CacheHit {
                     slot_idx, language_version, ocr_text: cached_ocr.clone(), translated: cached_trans.clone(), frame_hash: hash,
-                    ocr_lines: Vec::new(), trans_lines: vec![cached_trans.clone()]
+                    ocr_lines: Vec::new(), trans_lines: vec![cached_trans.clone()], yolo_bubbles: Vec::new()
                 });
             }
         }
@@ -123,30 +124,109 @@ impl TranslationPipeline {
         let _ = status_tx.send(BgResult::StatusUpdate { slot_idx, status: "Scanning Text...".to_string() });
         ctx.request_repaint();
 
-        // Perform Image pre-processing IN-PLACE on frame
-        let (proc_data, proc_w, proc_h) = crate::core::usecases::image_processor::process_image_for_ocr(
-            &frame.data, frame.width, frame.height, &img_proc_cfg
-        );
-        frame.data = proc_data;
-        frame.width = proc_w;
-        frame.height = proc_h;
+        let mut yolo_bubbles = Vec::new();
+        let mut raw_ocr_lines = Vec::new();
+        let mut bubble_detection_successful = false;
 
-        tracing::info!("Executing OCR for slot {} with tag: {:?}", slot_idx, source_lang);
-        let mut raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
+        if let Some(ref detector) = yolo_detector {
+            if let Some(rgba_img) = image::RgbaImage::from_raw(frame.width, frame.height, frame.data.clone()) {
+                let dynamic_img = image::DynamicImage::ImageRgba8(rgba_img);
+                if let Ok(mut bubbles) = detector.detect_bubbles(&dynamic_img) {
+                    if !bubbles.is_empty() {
+                        // Sort bubbles in natural reading order (Right-to-Left for CJK, Left-to-Right otherwise)
+                        bubbles.sort_by(|a, b| {
+                            let a_h = a.y2 - a.y1;
+                            let b_h = b.y2 - b.y1;
+                            let tolerance = a_h.min(b_h) * 0.4;
+                            let y_diff = (a.y1 - b.y1).abs();
+
+                            if y_diff > tolerance {
+                                a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
+                            } else {
+                                if jp_merge_vertical {
+                                    b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
+                                } else {
+                                    a.x1.partial_cmp(&b.x1).unwrap_or(std::cmp::Ordering::Equal)
+                                }
+                            }
+                        });
+
+                        bubble_detection_successful = true;
+                        for b in &bubbles {
+                            yolo_bubbles.push(OcrTextLine {
+                                text: String::new(),
+                                x: b.x1,
+                                y: b.y1,
+                                w: b.x2 - b.x1,
+                                h: b.y2 - b.y1,
+                            });
+
+                            // Add a small 6px padding to prevent boundaries clipping
+                            let pad = 6;
+                            let crop_x = (b.x1 - pad as f32).max(0.0) as u32;
+                            let crop_y = (b.y1 - pad as f32).max(0.0) as u32;
+                            let crop_w = ((b.x2 + pad as f32).min(frame.width as f32) as u32).saturating_sub(crop_x);
+                            let crop_h = ((b.y2 + pad as f32).min(frame.height as f32) as u32).saturating_sub(crop_y);
+
+                            if crop_w >= 5 && crop_h >= 5 {
+                                let cropped_frame = crop_frame(&frame, crop_x, crop_y, crop_w, crop_h);
+                                
+                                // Perform full image pre-processing on the cropped speech bubble
+                                let (proc_data, proc_w, proc_h) = crate::core::usecases::image_processor::process_image_for_ocr(
+                                    &cropped_frame.data, cropped_frame.width, cropped_frame.height, &img_proc_cfg
+                                );
+                                let mut processed_crop = cropped_frame.clone();
+                                processed_crop.data = proc_data;
+                                processed_crop.width = proc_w;
+                                processed_crop.height = proc_h;
+
+                                if let Ok(mut lines) = ocr_engine.recognize_lines(processed_crop, source_lang.as_ref()) {
+                                    let scale = img_proc_cfg.resize_scale;
+                                    for line in &mut lines {
+                                        if (scale - 1.0).abs() > 0.01 {
+                                            line.x /= scale;
+                                            line.y /= scale;
+                                            line.w /= scale;
+                                            line.h /= scale;
+                                        }
+                                        line.x += crop_x as f32;
+                                        line.y += crop_y as f32;
+                                        raw_ocr_lines.push(line.clone());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if !bubble_detection_successful {
+            // Fallback: Perform Image pre-processing IN-PLACE on frame
+            let (proc_data, proc_w, proc_h) = crate::core::usecases::image_processor::process_image_for_ocr(
+                &frame.data, frame.width, frame.height, &img_proc_cfg
+            );
+            let mut processed_frame = frame.clone();
+            processed_frame.data = proc_data;
+            processed_frame.width = proc_w;
+            processed_frame.height = proc_h;
+
+            if let Ok(mut lines) = ocr_engine.recognize_lines(processed_frame, source_lang.as_ref()) {
+                if (img_proc_cfg.resize_scale - 1.0).abs() > 0.01 {
+                    let scale = img_proc_cfg.resize_scale;
+                    for line in &mut lines {
+                        line.x /= scale;
+                        line.y /= scale;
+                        line.w /= scale;
+                        line.h /= scale;
+                    }
+                }
+                raw_ocr_lines = lines;
+            }
+        }
 
         // Line-level Garbage Filtering
         raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
-        
-        // Rescale bounding boxes back to screen resolution coordinates if scaled
-        if (img_proc_cfg.resize_scale - 1.0).abs() > 0.01 {
-            let scale = img_proc_cfg.resize_scale;
-            for line in &mut raw_ocr_lines {
-                line.x /= scale;
-                line.y /= scale;
-                line.w /= scale;
-                line.h /= scale;
-            }
-        }
         
         let blocks = crate::core::layout::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
         
@@ -173,7 +253,7 @@ impl TranslationPipeline {
                 for _ in 1..*size { trans_lines.push(String::new()); }
             }
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: ocr_text_base, translated: memory_trans, frame_hash: hash, ocr_lines, trans_lines
+                slot_idx, language_version, ocr_text: ocr_text_base, translated: memory_trans, frame_hash: hash, ocr_lines, trans_lines, yolo_bubbles: yolo_bubbles.clone()
             });
         }
         
@@ -231,7 +311,7 @@ impl TranslationPipeline {
 
         if ocr_text.is_empty() {
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(), trans_lines: Vec::new(),
+                slot_idx, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(), trans_lines: Vec::new(), yolo_bubbles: yolo_bubbles.clone(),
             });
         }
 
@@ -252,7 +332,7 @@ impl TranslationPipeline {
 
                 let trans_lines = build_trans_lines(&cached_trans);
                 return Ok(BgResult::Done {
-                    slot_idx, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines
+                    slot_idx, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines, yolo_bubbles: yolo_bubbles.clone()
                 });
             }
         }
@@ -263,7 +343,7 @@ impl TranslationPipeline {
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
+                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines, yolo_bubbles: yolo_bubbles.clone()
             });
         }
 
@@ -276,7 +356,7 @@ impl TranslationPipeline {
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
+                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines, yolo_bubbles: yolo_bubbles.clone()
             });
         }
 
@@ -328,7 +408,7 @@ impl TranslationPipeline {
             enforce_cache_limit(&mut text_cache, max_cache_entries);
             text_cache.insert(text_cache_key, translated.clone());
         }
-        Ok(BgResult::Done { slot_idx, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines })
+        Ok(BgResult::Done { slot_idx, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines, yolo_bubbles })
     }
 
     fn parse_numbered_lines(raw: &str, ocr_count: usize, config: &crate::infrastructure::settings::TextProcessingSettings) -> Vec<String> {
@@ -337,5 +417,23 @@ impl TranslationPipeline {
             *s = TextCleaner::clean(s, config);
         }
         result
+    }
+}
+
+fn crop_frame(frame: &FrameRgba, x: u32, y: u32, w: u32, h: u32) -> FrameRgba {
+    let mut data = Vec::with_capacity((w * h * 4) as usize);
+    for row in y..(y + h) {
+        let src_idx = (row * frame.width + x) as usize * 4;
+        let length = (w * 4) as usize;
+        if src_idx + length <= frame.data.len() {
+            data.extend_from_slice(&frame.data[src_idx..(src_idx + length)]);
+        } else {
+            data.resize(data.len() + length, 0);
+        }
+    }
+    FrameRgba {
+        width: w,
+        height: h,
+        data,
     }
 }
