@@ -184,28 +184,18 @@ impl YoloBubbleDetector {
                 let prob = view[[0, i, 4]];
                 let class_id = view[[0, i, 5]] as usize;
 
-                if prob > 0.20 {
+                if prob > 0.15 {
                     // Map back from 1280x1280 padded tensor coordinates to original image coordinates
                     let ox1 = ((x1 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy1 = ((y1 - pad_y as f32) / scale).clamp(0.0, orig_h);
                     let ox2 = ((x2 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy2 = ((y2 - pad_y as f32) / scale).clamp(0.0, orig_h);
 
-                    let box_w = ox2 - ox1;
-                    let box_h = oy2 - oy1;
-                    let pad_w = (box_w * 0.08).max(8.0);
-                    let pad_h = (box_h * 0.08).max(8.0);
-                    
-                    let ex1 = (ox1 - pad_w).max(0.0);
-                    let ey1 = (oy1 - pad_h).max(0.0);
-                    let ex2 = (ox2 + pad_w).min(orig_w);
-                    let ey2 = (oy2 + pad_h).min(orig_h);
-
                     boxes.push(BubbleBox {
-                        x1: ex1,
-                        y1: ey1,
-                        x2: ex2,
-                        y2: ey2,
+                        x1: ox1,
+                        y1: oy1,
+                        x2: ox2,
+                        y2: oy2,
                         prob,
                         class_id,
                     });
@@ -232,7 +222,7 @@ impl YoloBubbleDetector {
                     }
                 }
 
-                if max_conf > 0.20 {
+                if max_conf > 0.15 {
                     let x1 = cx - w / 2.0;
                     let y1 = cy - h / 2.0;
                     let x2 = cx + w / 2.0;
@@ -244,21 +234,11 @@ impl YoloBubbleDetector {
                     let ox2 = ((x2 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy2 = ((y2 - pad_y as f32) / scale).clamp(0.0, orig_h);
 
-                    let box_w = ox2 - ox1;
-                    let box_h = oy2 - oy1;
-                    let pad_w = (box_w * 0.08).max(8.0);
-                    let pad_h = (box_h * 0.08).max(8.0);
-                    
-                    let ex1 = (ox1 - pad_w).max(0.0);
-                    let ey1 = (oy1 - pad_h).max(0.0);
-                    let ex2 = (ox2 + pad_w).min(orig_w);
-                    let ey2 = (oy2 + pad_h).min(orig_h);
-
                     boxes.push(BubbleBox {
-                        x1: ex1,
-                        y1: ey1,
-                        x2: ex2,
-                        y2: ey2,
+                        x1: ox1,
+                        y1: oy1,
+                        x2: ox2,
+                        y2: oy2,
                         prob: max_conf,
                         class_id: max_class,
                     });
@@ -277,6 +257,21 @@ impl YoloBubbleDetector {
             let box_h = b.y2 - b.y1;
             box_w > 10.0 && box_h > 10.0 && box_w < orig_w && box_h < orig_h
         });
+
+        // Apply padding post-NMS to ensure boundaries are not clipped and NMS overlap calculations are not affected
+        for b in &mut boxes {
+            let box_w = b.x2 - b.x1;
+            let box_h = b.y2 - b.y1;
+            
+            // Generous padding: 10% of width/height, minimum 12px for width and 16px for height
+            let pad_w = (box_w * 0.10).max(12.0);
+            let pad_h = (box_h * 0.10).max(16.0);
+            
+            b.x1 = (b.x1 - pad_w).max(0.0);
+            b.y1 = (b.y1 - pad_h).max(0.0);
+            b.x2 = (b.x2 + pad_w).min(orig_w);
+            b.y2 = (b.y2 + pad_h).min(orig_h);
+        }
 
         Ok(boxes)
     }
