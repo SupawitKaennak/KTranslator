@@ -249,30 +249,70 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     let trimmed = raw.trim();
 
     // ── Strategy 0: JSON object parsing (Strongly preferred for perfect box alignment) ────
-    if (trimmed.starts_with('{') && trimmed.ends_with('}')) || trimmed.contains("{\n") || trimmed.contains("{\"") {
-        let json_str = if let Some(start_idx) = trimmed.find('{') {
-            if let Some(end_idx) = trimmed.rfind('}') {
-                &trimmed[start_idx..=end_idx]
-            } else {
-                trimmed
-            }
+    let mut parsed_json = false;
+    let mut result = vec![String::new(); expected_count];
+    
+    // Attempt standard serde_json parsing first by finding the boundaries of the JSON block
+    let json_str = if let Some(start_idx) = trimmed.find('{') {
+        if let Some(end_idx) = trimmed.rfind('}') {
+            Some(&trimmed[start_idx..=end_idx])
         } else {
-            trimmed
-        };
-        
-        if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, String>>(json_str) {
-            let mut result = vec![String::new(); expected_count];
+            None
+        }
+    } else {
+        None
+    };
+
+    if let Some(json_content) = json_str {
+        if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, serde_json::Value>>(json_content) {
             for i in 0..expected_count {
                 let key = (i + 1).to_string();
                 if let Some(val) = map.get(&key) {
-                    result[i] = val.trim().to_string();
+                    let val_str = match val {
+                        serde_json::Value::String(s) => s.clone(),
+                        serde_json::Value::Number(n) => n.to_string(),
+                        serde_json::Value::Bool(b) => b.to_string(),
+                        other => other.to_string(),
+                    };
+                    result[i] = val_str.trim().to_string();
                 }
             }
             let matched_keys = result.iter().filter(|s| !s.is_empty()).count();
             if matched_keys > 0 {
-                return result;
+                parsed_json = true;
             }
         }
+    }
+    
+    // If standard JSON parsing failed but it looks like a JSON block, use our robust regex extractor
+    if !parsed_json && (trimmed.contains(':') || trimmed.contains('{')) {
+        static RE_JSON_PAIR: LazyLock<regex::Regex> = LazyLock::new(|| {
+            regex::Regex::new(r#""?(\d+)"?\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)""#).unwrap()
+        });
+        
+        let mut matched_keys = 0;
+        for caps in RE_JSON_PAIR.captures_iter(trimmed) {
+            if let Ok(num) = caps[1].parse::<usize>() {
+                if num > 0 && num <= expected_count {
+                    let raw_val = caps[2].to_string();
+                    // Clean up standard JSON escape sequences (like \" or \n)
+                    let decoded_val = raw_val
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\")
+                        .replace("\\n", "\n")
+                        .replace("\\t", "\t");
+                    result[num - 1] = decoded_val.trim().to_string();
+                    matched_keys += 1;
+                }
+            }
+        }
+        if matched_keys > 0 {
+            parsed_json = true;
+        }
+    }
+    
+    if parsed_json {
+        return result;
     }
 
     // ── Strategy 1: ||| separator ────────────────────────────────────────
