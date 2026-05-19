@@ -131,8 +131,26 @@ impl TranslationPipeline {
         if let Some(ref detector) = yolo_detector {
             if let Some(rgba_img) = image::RgbaImage::from_raw(frame.width, frame.height, frame.data.clone()) {
                 let dynamic_img = image::DynamicImage::ImageRgba8(rgba_img);
-                if let Ok(bubbles) = detector.detect_bubbles(&dynamic_img) {
+                if let Ok(mut bubbles) = detector.detect_bubbles(&dynamic_img) {
                     if !bubbles.is_empty() {
+                        // Sort bubbles in natural reading order (Right-to-Left for CJK, Left-to-Right otherwise)
+                        bubbles.sort_by(|a, b| {
+                            let a_h = a.y2 - a.y1;
+                            let b_h = b.y2 - b.y1;
+                            let tolerance = a_h.min(b_h) * 0.4;
+                            let y_diff = (a.y1 - b.y1).abs();
+
+                            if y_diff > tolerance {
+                                a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
+                            } else {
+                                if jp_merge_vertical {
+                                    b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
+                                } else {
+                                    a.x1.partial_cmp(&b.x1).unwrap_or(std::cmp::Ordering::Equal)
+                                }
+                            }
+                        });
+
                         bubble_detection_successful = true;
                         for b in &bubbles {
                             yolo_bubbles.push(OcrTextLine {
@@ -143,15 +161,34 @@ impl TranslationPipeline {
                                 h: b.y2 - b.y1,
                             });
 
-                            let crop_x = (b.x1.max(0.0) as u32).min(frame.width);
-                            let crop_y = (b.y1.max(0.0) as u32).min(frame.height);
-                            let crop_w = ((b.x2 - b.x1).max(0.0) as u32).min(frame.width - crop_x);
-                            let crop_h = ((b.y2 - b.y1).max(0.0) as u32).min(frame.height - crop_y);
+                            // Add a small 6px padding to prevent boundaries clipping
+                            let pad = 6;
+                            let crop_x = (b.x1 - pad as f32).max(0.0) as u32;
+                            let crop_y = (b.y1 - pad as f32).max(0.0) as u32;
+                            let crop_w = ((b.x2 + pad as f32).min(frame.width as f32) as u32).saturating_sub(crop_x);
+                            let crop_h = ((b.y2 + pad as f32).min(frame.height as f32) as u32).saturating_sub(crop_y);
 
                             if crop_w >= 5 && crop_h >= 5 {
                                 let cropped_frame = crop_frame(&frame, crop_x, crop_y, crop_w, crop_h);
-                                if let Ok(mut lines) = ocr_engine.recognize_lines(cropped_frame, source_lang.as_ref()) {
+                                
+                                // Perform full image pre-processing on the cropped speech bubble
+                                let (proc_data, proc_w, proc_h) = crate::core::usecases::image_processor::process_image_for_ocr(
+                                    &cropped_frame.data, cropped_frame.width, cropped_frame.height, &img_proc_cfg
+                                );
+                                let mut processed_crop = cropped_frame.clone();
+                                processed_crop.data = proc_data;
+                                processed_crop.width = proc_w;
+                                processed_crop.height = proc_h;
+
+                                if let Ok(mut lines) = ocr_engine.recognize_lines(processed_crop, source_lang.as_ref()) {
+                                    let scale = img_proc_cfg.resize_scale;
                                     for line in &mut lines {
+                                        if (scale - 1.0).abs() > 0.01 {
+                                            line.x /= scale;
+                                            line.y /= scale;
+                                            line.w /= scale;
+                                            line.h /= scale;
+                                        }
                                         line.x += crop_x as f32;
                                         line.y += crop_y as f32;
                                         raw_ocr_lines.push(line.clone());
