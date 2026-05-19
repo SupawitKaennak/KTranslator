@@ -84,12 +84,18 @@ pub fn build_translation_prompt(
         let user = lines.first().unwrap_or(&"").to_string();
         TranslationPrompt { system, user, line_count: lines.len() }
     } else {
-        // ── Multi-line batch mode (Numbered List protocol) ───────────────
-        // Use numbered lines which is much more robust for Llama/OpenAI models.
-        let mut joined_input = String::new();
+        let mut map = std::collections::BTreeMap::new();
         for (i, line) in lines.iter().enumerate() {
-            joined_input.push_str(&format!("{}. {}\n", i + 1, line));
+            map.insert((i + 1).to_string(), line.to_string());
         }
+        let joined_input = serde_json::to_string_pretty(&map).unwrap_or_else(|_| {
+            let mut s = String::from("{\n");
+            for (i, line) in lines.iter().enumerate() {
+                s.push_str(&format!("  \"{}\": \"{}\",\n", i + 1, line.replace('"', "\\\"")));
+            }
+            s.push_str("}");
+            s
+        });
 
         let mut extra_rules = String::new();
         if target.0 == "th" {
@@ -97,29 +103,26 @@ pub fn build_translation_prompt(
         }
 
         let system = format!(
-            "You are an expert professional manga/game translator.\n\
-             Input: A numbered list of {count} text segments.\n\
-             Task: Translate EACH segment to {target_name}.\n\
+            "You are an expert professional i18n manga/game translator.\n\
+             Task: Translate the values of the input JSON object to {target_name}.\n\
              \n\
              STRICT RULES:\n\
-             1. Output a JSON object mapping each input number as a string key to its translation (e.g., {{\"{count_example}\": \"translation\"}}).\n\
-             2. Do NOT merge segments or summarize the content.\n\
+             1. Output a JSON object with the EXACT same keys as the input.\n\
+             2. Translate each value INDIVIDUALLY. Do NOT merge different keys or summarize them.\n\
              3. Do NOT add any notes, explanations, or meta-talk.\n\
-             4. If a segment is empty, output an empty translation (e.g. \"\").\n\
-             5. Translate ONLY what is written.\n\
+             4. If a value is empty, keep it empty.\n\
+             5. Translate ONLY what is written in the values.\n\
              6. Maintain professional grammar, correct capitalization, and punctuation.\n\
              7. Output ONLY the raw JSON object.\n\
 {extra_rules}",
-            count = lines.len(),
-            count_example = "1",
             target_name = target_name,
             extra_rules = extra_rules,
         );
 
         let user = if source.is_some() {
-            format!("Translate these {count} segments from {source_name} to {target_name}:\n\n{joined_input}", count = lines.len())
+            format!("Translate the values of this JSON object from {source_name} to {target_name}, preserving all keys:\n\n{joined_input}")
         } else {
-            format!("Translate these {count} segments to {target_name}:\n\n{joined_input}", count = lines.len())
+            format!("Translate the values of this JSON object to {target_name}, preserving all keys:\n\n{joined_input}")
         };
 
         TranslationPrompt { system, user, line_count: lines.len() }
