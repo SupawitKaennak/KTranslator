@@ -114,7 +114,7 @@ impl TranslationPipeline {
                 tracing::debug!(slot = slot_idx, hash = %hash, "Cache hit for whole frame");
                 return Ok(BgResult::CacheHit {
                     slot_idx, language_version, ocr_text: cached_ocr.clone(), translated: cached_trans.clone(), frame_hash: hash,
-                    ocr_lines: Vec::new(), trans_lines: vec![cached_trans.clone()]
+                    ocr_lines: Vec::new(), trans_lines: vec![cached_trans.clone()], yolo_boxes: Vec::new()
                 });
             }
         }
@@ -133,6 +133,7 @@ impl TranslationPipeline {
 
         tracing::info!("Executing OCR for slot {} with tag: {:?}", slot_idx, source_lang);
         let mut raw_ocr_lines = ocr_engine.recognize_lines(frame, source_lang.as_ref())?;
+        let yolo_boxes = ocr_engine.get_last_yolo_boxes();
 
         // Line-level Garbage Filtering
         raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
@@ -173,7 +174,7 @@ impl TranslationPipeline {
                 for _ in 1..*size { trans_lines.push(String::new()); }
             }
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: ocr_text_base, translated: memory_trans, frame_hash: hash, ocr_lines, trans_lines
+                slot_idx, language_version, ocr_text: ocr_text_base, translated: memory_trans, frame_hash: hash, ocr_lines, trans_lines, yolo_boxes
             });
         }
         
@@ -231,7 +232,7 @@ impl TranslationPipeline {
 
         if ocr_text.is_empty() {
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(), trans_lines: Vec::new(),
+                slot_idx, language_version, ocr_text: String::new(), translated: String::new(), frame_hash: hash, ocr_lines: Vec::new(), trans_lines: Vec::new(), yolo_boxes: Vec::new(),
             });
         }
 
@@ -252,7 +253,7 @@ impl TranslationPipeline {
 
                 let trans_lines = build_trans_lines(&cached_trans);
                 return Ok(BgResult::Done {
-                    slot_idx, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines
+                    slot_idx, language_version, ocr_text, translated: cached_trans, frame_hash: hash, ocr_lines, trans_lines, yolo_boxes: yolo_boxes.clone()
                 });
             }
         }
@@ -263,7 +264,7 @@ impl TranslationPipeline {
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
+                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines, yolo_boxes: yolo_boxes.clone()
             });
         }
 
@@ -276,7 +277,7 @@ impl TranslationPipeline {
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
-                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines
+                slot_idx, language_version, ocr_text: ocr_text.clone(), translated: ocr_text, frame_hash: hash, ocr_lines, trans_lines, yolo_boxes: yolo_boxes.clone()
             });
         }
 
@@ -328,7 +329,7 @@ impl TranslationPipeline {
             enforce_cache_limit(&mut text_cache, max_cache_entries);
             text_cache.insert(text_cache_key, translated.clone());
         }
-        Ok(BgResult::Done { slot_idx, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines })
+        Ok(BgResult::Done { slot_idx, language_version, ocr_text, translated, frame_hash: hash, ocr_lines, trans_lines, yolo_boxes })
     }
 
     fn parse_numbered_lines(raw: &str, ocr_count: usize, config: &crate::infrastructure::settings::TextProcessingSettings) -> Vec<String> {

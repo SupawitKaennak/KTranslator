@@ -46,6 +46,7 @@ impl BackgroundCoordinator {
                     frame_hash,
                     ocr_lines,
                     trans_lines,
+                    yolo_boxes,
                 } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         let mut model = model_arc.lock();
@@ -70,6 +71,7 @@ impl BackgroundCoordinator {
 
                         let now = Self::now_ms();
                         slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(500));
+                        slot.last_yolo_boxes = yolo_boxes;
 
                         let new_ocr = ocr_text.trim();
                         let old_ocr = slot.last_ocr_text.trim();
@@ -212,7 +214,7 @@ impl BackgroundCoordinator {
                         slot.next_tick_at_ms = Self::now_ms() + 16; // 60fps responsive polling (16ms)
                     }
                 }
-                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines } => {
+                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines, yolo_boxes } => {
                     if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
                         let mut model = model_arc.lock();
                         let slot = match model.slots.get_mut(slot_idx) {
@@ -236,6 +238,7 @@ impl BackgroundCoordinator {
                         slot.last_ocr_text = ocr_text;
                         slot.last_translation = translated.clone();
                         slot.last_ocr_lines = ocr_lines; // Update positions!
+                        slot.last_yolo_boxes = yolo_boxes;
                         
                         // Re-align cached translation to the current OCR lines
                         slot.last_trans_lines = trans_lines;

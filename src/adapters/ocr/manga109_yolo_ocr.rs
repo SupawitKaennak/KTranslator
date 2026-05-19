@@ -7,7 +7,7 @@ use ndarray::{Array2, Array4};
 use tokenizers::Tokenizer;
 
 use crate::core::ports::{OcrEngine, FrameRgba, OcrTextLine};
-use crate::core::types::LanguageTag;
+use crate::core::types::{LanguageTag, Rect};
 use crate::infrastructure::settings::GpuBackend;
 use std::cmp::Ordering;
 
@@ -66,6 +66,7 @@ pub struct OnnxMangaRecognizer {
     gpu_backend: GpuBackend,
     decoder_start_token_id: i64,
     eos_token_id: i64,
+    last_boxes: Mutex<Vec<Rect>>,
 }
 
 impl OnnxMangaRecognizer {
@@ -79,6 +80,7 @@ impl OnnxMangaRecognizer {
             gpu_backend,
             decoder_start_token_id: 2, 
             eos_token_id: 3, 
+            last_boxes: Mutex::new(Vec::new()),
         }
     }
 
@@ -219,8 +221,8 @@ impl OnnxMangaRecognizer {
             let box_h = b.y2 - b.y1;
             // Text bubbles in manga are relatively small. Filter out oversized detections.
             let is_bubble_size = box_w > 15.0 && box_h > 15.0
-                && box_w < (orig_w * 0.95)
-                && box_h < (orig_h * 0.95);
+                && box_w < (orig_w * 0.40)
+                && box_h < (orig_h * 0.50);
             b.class_id == text_class_id && is_bubble_size
         });
         tracing::debug!("YOLO final text boxes: {}", nms_boxes.len());
@@ -354,6 +356,17 @@ impl OcrEngine for OnnxMangaRecognizer {
         // Step 4: Flatten columns back to a sorted vector
         let sorted_boxes: Vec<BoundingBox> = columns.into_iter().flatten().collect();
 
+        let mut rect_boxes = Vec::new();
+        for bbox in &sorted_boxes {
+            rect_boxes.push(Rect {
+                x: bbox.x1,
+                y: bbox.y1,
+                w: bbox.x2 - bbox.x1,
+                h: bbox.y2 - bbox.y1,
+            });
+        }
+        *self.last_boxes.lock() = rect_boxes;
+
         for bbox in sorted_boxes {
             let pad = 10.0;
             let x1 = (bbox.x1 - pad).max(0.0) as u32;
@@ -387,5 +400,9 @@ impl OcrEngine for OnnxMangaRecognizer {
         }
         
         Ok(result)
+    }
+
+    fn get_last_yolo_boxes(&self) -> Vec<Rect> {
+        self.last_boxes.lock().clone()
     }
 }

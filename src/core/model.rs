@@ -28,6 +28,9 @@ pub struct RegionSlot {
     /// Translation split by newline, matched index-for-index with last_ocr_lines.
     #[serde(skip)]
     pub last_trans_lines: Vec<String>,
+    /// Last detected speech bubbles / layout regions from YOLO
+    #[serde(skip)]
+    pub last_yolo_boxes: Vec<Rect>,
     pub pending_text: String,
     pub next_tick_at_ms: u64,
     pub translate_backoff_ms: u64,
@@ -64,6 +67,7 @@ impl AppModel {
             last_translation: String::new(),
             last_ocr_lines: Vec::new(),
             last_trans_lines: Vec::new(),
+            last_yolo_boxes: Vec::new(),
             pending_text: String::new(),
             next_tick_at_ms: 0,
             translate_backoff_ms: 0,
@@ -95,6 +99,7 @@ impl AppModel {
             last_translation: String::new(),
             last_ocr_lines: Vec::new(),
             last_trans_lines: Vec::new(),
+            last_yolo_boxes: Vec::new(),
             pending_text: String::new(),
             next_tick_at_ms: 0,
             translate_backoff_ms: 0,

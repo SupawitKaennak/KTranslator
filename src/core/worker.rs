@@ -1,4 +1,5 @@
 use crate::core::ports::OcrTextLine;
+use crate::core::types::Rect;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::AtomicIsize;
@@ -17,6 +18,8 @@ pub enum BgResult {
         ocr_lines: Vec<OcrTextLine>,
         /// Translation split by newline, matching ocr_lines length.
         trans_lines: Vec<String>,
+        /// Bounding boxes of detected speech bubbles
+        yolo_boxes: Vec<Rect>,
     },
     /// The captured frame is identical to the previous one — skip API call.
     Unchanged {
@@ -40,6 +43,7 @@ pub enum BgResult {
         frame_hash: u64,
         ocr_lines: Vec<OcrTextLine>,
         trans_lines: Vec<String>,
+        yolo_boxes: Vec<Rect>,
     },
     /// Direct status update for the UI spinner/label
     StatusUpdate {

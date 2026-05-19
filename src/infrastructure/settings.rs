@@ -465,9 +465,12 @@ pub struct Settings {
 
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
-    pub show_yolo_boxes: bool,
-    pub use_yolo_layout: bool,
     
+    #[serde(default)]
+    pub ocr_use_yolo: bool,
+    #[serde(default)]
+    pub yolo_draw_boxes: bool,
+
     pub img_proc: ImageProcessingSettings,
     pub txt_proc: TextProcessingSettings,
     pub regex_rules: Vec<RegexRule>,
@@ -507,8 +510,8 @@ impl Default for Settings {
             overlay_text_align: TextAlign::Center,
             ui_language: UiLanguage::System,
             hide_from_capture: true,
-            show_yolo_boxes: false,
-            use_yolo_layout: false,
+            ocr_use_yolo: false,
+            yolo_draw_boxes: false,
             img_proc: ImageProcessingSettings::default(),
             txt_proc: TextProcessingSettings::default(),
             regex_rules: vec![],
