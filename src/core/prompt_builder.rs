@@ -103,12 +103,17 @@ pub fn build_translation_prompt(
         }
 
         let system = format!(
-            "You are an expert professional i18n manga/game translator.\n\
+            "You are a strict professional i18n manga/game translator.\n\
              Task: Translate the values of the input JSON object to {target_name}.\n\
+             \n\
+             CRITICAL RULE FOR PERFECT ALIGNMENT:\n\
+             - Each key in the input JSON is a completely independent text segment from a different part of the screen. They are NOT part of the same sentence.\n\
+             - You MUST translate each key completely in isolation. Do NOT merge, combine, or contextually link different keys under any circumstances.\n\
+             - Merging different keys will break the application user interface (UI) layout completely.\n\
              \n\
              STRICT RULES:\n\
              1. Output a JSON object with the EXACT same keys as the input.\n\
-             2. Translate each value INDIVIDUALLY. Do NOT merge different keys or summarize them.\n\
+             2. Translate each value INDIVIDUALLY. Never combine values.\n\
              3. Do NOT add any notes, explanations, or meta-talk.\n\
              4. If a value is empty, keep it empty.\n\
              5. Translate ONLY what is written in the values.\n\
@@ -120,9 +125,22 @@ pub fn build_translation_prompt(
         );
 
         let user = if source.is_some() {
-            format!("Translate the values of this JSON object from {source_name} to {target_name}, preserving all keys:\n\n{joined_input}")
+            format!(
+                "SYSTEM INSTRUCTIONS:\n{system}\n\n\
+                 Translate the values of this JSON object from {source_name} to {target_name}, preserving all keys:\n\n{joined_input}",
+                system = system,
+                source_name = source_name,
+                target_name = target_name,
+                joined_input = joined_input
+            )
         } else {
-            format!("Translate the values of this JSON object to {target_name}, preserving all keys:\n\n{joined_input}")
+            format!(
+                "SYSTEM INSTRUCTIONS:\n{system}\n\n\
+                 Translate the values of this JSON object to {target_name}, preserving all keys:\n\n{joined_input}",
+                system = system,
+                target_name = target_name,
+                joined_input = joined_input
+            )
         };
 
         TranslationPrompt { system, user, line_count: lines.len() }
