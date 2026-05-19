@@ -22,11 +22,51 @@ pub struct BubbleBox {
 
 fn nms(mut boxes: Vec<BubbleBox>, iou_threshold: f32) -> Vec<BubbleBox> {
     boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
+    
+    let mut suppressed = vec![false; boxes.len()];
+    let areas: Vec<f32> = boxes.iter()
+        .map(|b| (b.x2 - b.x1) * (b.y2 - b.y1))
+        .collect();
+        
+    // 1. Container/Merged Box Suppression:
+    // If box i is significantly larger than box j, and box j is mostly inside box i,
+    // then box i is a merged container box and should be suppressed.
+    for i in 0..boxes.len() {
+        for j in 0..boxes.len() {
+            if i == j || suppressed[i] || suppressed[j] {
+                continue;
+            }
+            
+            let x_left = boxes[i].x1.max(boxes[j].x1);
+            let y_top = boxes[i].y1.max(boxes[j].y1);
+            let x_right = boxes[i].x2.min(boxes[j].x2);
+            let y_bottom = boxes[i].y2.min(boxes[j].y2);
+            
+            if x_right > x_left && y_bottom > y_top {
+                let intersection_area = (x_right - x_left) * (y_bottom - y_top);
+                let area_i = areas[i];
+                let area_j = areas[j];
+                
+                if area_i > area_j * 1.3 && area_j > 0.0 {
+                    let containment = intersection_area / area_j;
+                    if containment > 0.80 {
+                        suppressed[i] = true;
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Standard NMS on remaining non-suppressed boxes
     let mut result: Vec<BubbleBox> = Vec::new();
     for i in 0..boxes.len() {
+        if suppressed[i] {
+            continue;
+        }
         let mut keep = true;
+        let area_i = areas[i];
+        
         for res in &result {
-            // Calculate Intersection
             let x_left = boxes[i].x1.max(res.x1);
             let y_top = boxes[i].y1.max(res.y1);
             let x_right = boxes[i].x2.min(res.x2);
@@ -34,17 +74,10 @@ fn nms(mut boxes: Vec<BubbleBox>, iou_threshold: f32) -> Vec<BubbleBox> {
 
             if x_right > x_left && y_bottom > y_top {
                 let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-                let a_area = (boxes[i].x2 - boxes[i].x1) * (boxes[i].y2 - boxes[i].y1);
-                let b_area = (res.x2 - res.x1) * (res.y2 - res.y1);
-
-                let iou = intersection_area / (a_area + b_area - intersection_area);
+                let area_res = (res.x2 - res.x1) * (res.y2 - res.y1);
+                let iou = intersection_area / (area_i + area_res - intersection_area);
                 
-                // Containment: how much of the smaller box is inside the larger box
-                let smaller_area = a_area.min(b_area);
-                let containment = if smaller_area > 0.0 { intersection_area / smaller_area } else { 0.0 };
-
-                // If IoU overlaps too much, or if one box is mostly contained within the other
-                if iou > iou_threshold || containment > 0.75 {
+                if iou > iou_threshold {
                     keep = false;
                     break;
                 }
