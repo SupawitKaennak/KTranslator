@@ -19,68 +19,32 @@ pub struct BubbleBox {
     pub class_id: usize,
 }
 
+fn iou(a: &BubbleBox, b: &BubbleBox) -> f32 {
+    let x_left = a.x1.max(b.x1);
+    let y_top = a.y1.max(b.y1);
+    let x_right = a.x2.min(b.x2);
+    let y_bottom = a.y2.min(b.y2);
+
+    if x_right < x_left || y_bottom < y_top {
+        return 0.0;
+    }
+
+    let intersection_area = (x_right - x_left) * (y_bottom - y_top);
+    let a_area = (a.x2 - a.x1) * (a.y2 - a.y1);
+    let b_area = (b.x2 - b.x1) * (b.y2 - b.y1);
+
+    intersection_area / (a_area + b_area - intersection_area)
+}
 
 fn nms(mut boxes: Vec<BubbleBox>, iou_threshold: f32) -> Vec<BubbleBox> {
     boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
-    
-    let mut suppressed = vec![false; boxes.len()];
-    let areas: Vec<f32> = boxes.iter()
-        .map(|b| (b.x2 - b.x1) * (b.y2 - b.y1))
-        .collect();
-        
-    // 1. Container/Merged Box Suppression:
-    // If box i is significantly larger than box j, and box j is mostly inside box i,
-    // then box i is a merged container box and should be suppressed.
+    let mut result = Vec::new();
     for i in 0..boxes.len() {
-        for j in 0..boxes.len() {
-            if i == j || suppressed[i] || suppressed[j] {
-                continue;
-            }
-            
-            let x_left = boxes[i].x1.max(boxes[j].x1);
-            let y_top = boxes[i].y1.max(boxes[j].y1);
-            let x_right = boxes[i].x2.min(boxes[j].x2);
-            let y_bottom = boxes[i].y2.min(boxes[j].y2);
-            
-            if x_right > x_left && y_bottom > y_top {
-                let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-                let area_i = areas[i];
-                let area_j = areas[j];
-                
-                if area_i > area_j * 1.3 && area_j > 0.0 {
-                    let containment = intersection_area / area_j;
-                    if containment > 0.80 {
-                        suppressed[i] = true;
-                    }
-                }
-            }
-        }
-    }
-
-    // 2. Standard NMS on remaining non-suppressed boxes
-    let mut result: Vec<BubbleBox> = Vec::new();
-    for i in 0..boxes.len() {
-        if suppressed[i] {
-            continue;
-        }
         let mut keep = true;
-        let area_i = areas[i];
-        
         for res in &result {
-            let x_left = boxes[i].x1.max(res.x1);
-            let y_top = boxes[i].y1.max(res.y1);
-            let x_right = boxes[i].x2.min(res.x2);
-            let y_bottom = boxes[i].y2.min(res.y2);
-
-            if x_right > x_left && y_bottom > y_top {
-                let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-                let area_res = (res.x2 - res.x1) * (res.y2 - res.y1);
-                let iou = intersection_area / (area_i + area_res - intersection_area);
-                
-                if iou > iou_threshold {
-                    keep = false;
-                    break;
-                }
+            if iou(&boxes[i], res) > iou_threshold {
+                keep = false;
+                break;
             }
         }
         if keep {
@@ -184,18 +148,28 @@ impl YoloBubbleDetector {
                 let prob = view[[0, i, 4]];
                 let class_id = view[[0, i, 5]] as usize;
 
-                if prob > 0.15 {
+                if prob > 0.20 {
                     // Map back from 1280x1280 padded tensor coordinates to original image coordinates
                     let ox1 = ((x1 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy1 = ((y1 - pad_y as f32) / scale).clamp(0.0, orig_h);
                     let ox2 = ((x2 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy2 = ((y2 - pad_y as f32) / scale).clamp(0.0, orig_h);
 
+                    let box_w = ox2 - ox1;
+                    let box_h = oy2 - oy1;
+                    let pad_w = (box_w * 0.08).max(8.0);
+                    let pad_h = (box_h * 0.08).max(8.0);
+                    
+                    let ex1 = (ox1 - pad_w).max(0.0);
+                    let ey1 = (oy1 - pad_h).max(0.0);
+                    let ex2 = (ox2 + pad_w).min(orig_w);
+                    let ey2 = (oy2 + pad_h).min(orig_h);
+
                     boxes.push(BubbleBox {
-                        x1: ox1,
-                        y1: oy1,
-                        x2: ox2,
-                        y2: oy2,
+                        x1: ex1,
+                        y1: ey1,
+                        x2: ex2,
+                        y2: ey2,
                         prob,
                         class_id,
                     });
@@ -222,7 +196,7 @@ impl YoloBubbleDetector {
                     }
                 }
 
-                if max_conf > 0.15 {
+                if max_conf > 0.20 {
                     let x1 = cx - w / 2.0;
                     let y1 = cy - h / 2.0;
                     let x2 = cx + w / 2.0;
@@ -234,22 +208,31 @@ impl YoloBubbleDetector {
                     let ox2 = ((x2 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy2 = ((y2 - pad_y as f32) / scale).clamp(0.0, orig_h);
 
+                    let box_w = ox2 - ox1;
+                    let box_h = oy2 - oy1;
+                    let pad_w = (box_w * 0.08).max(8.0);
+                    let pad_h = (box_h * 0.08).max(8.0);
+                    
+                    let ex1 = (ox1 - pad_w).max(0.0);
+                    let ey1 = (oy1 - pad_h).max(0.0);
+                    let ex2 = (ox2 + pad_w).min(orig_w);
+                    let ey2 = (oy2 + pad_h).min(orig_h);
+
                     boxes.push(BubbleBox {
-                        x1: ox1,
-                        y1: oy1,
-                        x2: ox2,
-                        y2: oy2,
+                        x1: ex1,
+                        y1: ey1,
+                        x2: ex2,
+                        y2: ey2,
                         prob: max_conf,
                         class_id: max_class,
                     });
                 }
             }
+            // YOLOv8 requires NMS post-processing
+            boxes = nms(boxes, 0.45);
         } else {
             anyhow::bail!("Unsupported YOLO output tensor shape: {:?}", shape);
         }
-
-        // Run NMS globally on all detected boxes to eliminate duplicate and heavily overlapping boxes
-        boxes = nms(boxes, 0.40);
 
         // Apply spatial dimension filtering to prevent oversized or microscopic boxes
         boxes.retain(|b| {
@@ -257,21 +240,6 @@ impl YoloBubbleDetector {
             let box_h = b.y2 - b.y1;
             box_w > 10.0 && box_h > 10.0 && box_w < orig_w && box_h < orig_h
         });
-
-        // Apply padding post-NMS to ensure boundaries are not clipped and NMS overlap calculations are not affected
-        for b in &mut boxes {
-            let box_w = b.x2 - b.x1;
-            let box_h = b.y2 - b.y1;
-            
-            // Generous padding: 10% of width/height, minimum 12px for width and 16px for height
-            let pad_w = (box_w * 0.10).max(12.0);
-            let pad_h = (box_h * 0.10).max(16.0);
-            
-            b.x1 = (b.x1 - pad_w).max(0.0);
-            b.y1 = (b.y1 - pad_h).max(0.0);
-            b.x2 = (b.x2 + pad_w).min(orig_w);
-            b.y2 = (b.y2 + pad_h).min(orig_h);
-        }
 
         Ok(boxes)
     }
