@@ -73,11 +73,11 @@ impl YoloBubbleDetector {
             return Ok(());
         }
 
-        let mut resolved_path = PathBuf::from("models/bubble-yolo/YOLO26n.onnx");
+        let mut resolved_path = PathBuf::from("models/bubble-yolo/yolo26n.onnx");
         if !resolved_path.exists() {
             if let Ok(exe_path) = std::env::current_exe() {
                 if let Some(exe_dir) = exe_path.parent() {
-                    let exe_relative = exe_dir.join("models/bubble-yolo/YOLO26n.onnx");
+                    let exe_relative = exe_dir.join("models/bubble-yolo/yolo26n.onnx");
                     if exe_relative.exists() {
                         resolved_path = exe_relative;
                     }

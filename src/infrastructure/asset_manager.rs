@@ -130,8 +130,8 @@ pub const PPOCR_DICT_CYRILLIC: ModelAsset = ModelAsset {
 
 pub const BUBBLE_YOLO_MODEL: ModelAsset = ModelAsset {
     name: "YOLO Bubble Detector (Manga-Bubble-YOLO)",
-    url: "https://huggingface.co/Kiuyha/Manga-Bubble-YOLO/resolve/main/onnx/YOLO26n.onnx",
-    path: "models/bubble-yolo/YOLO26n.onnx",
+    url: "https://huggingface.co/Kiuyha/Manga-Bubble-YOLO/resolve/main/onnx/yolo26n.onnx",
+    path: "models/bubble-yolo/yolo26n.onnx",
 };
 
 pub fn check_bubble_yolo_exists() -> bool {
