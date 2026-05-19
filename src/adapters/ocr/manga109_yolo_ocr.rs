@@ -193,7 +193,7 @@ impl OnnxMangaRecognizer {
                 }
             }
             
-            if max_conf > 0.40 {
+            if max_conf > 0.25 {
                 let x1 = cx - w / 2.0;
                 let y1 = cy - h / 2.0;
                 let x2 = cx + w / 2.0;
@@ -219,8 +219,8 @@ impl OnnxMangaRecognizer {
             let box_h = b.y2 - b.y1;
             // Text bubbles in manga are relatively small. Filter out oversized detections.
             let is_bubble_size = box_w > 15.0 && box_h > 15.0
-                && box_w < (orig_w * 0.35).min(450.0)
-                && box_h < (orig_h * 0.45).min(500.0);
+                && box_w < (orig_w * 0.95)
+                && box_h < (orig_h * 0.95);
             b.class_id == text_class_id && is_bubble_size
         });
         tracing::debug!("YOLO final text boxes: {}", nms_boxes.len());
