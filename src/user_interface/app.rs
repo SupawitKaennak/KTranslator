@@ -1,4 +1,4 @@
-﻿use std::sync::{mpsc, Arc};
+use std::sync::{mpsc, Arc};
 
 use eframe::egui;
 use parking_lot::Mutex;
@@ -31,6 +31,26 @@ use crate::{
 type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
 type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
 
+pub struct PipelineServices {
+    pub capture: Arc<dyn FrameSource>,
+    pub platform: Arc<dyn PlatformServices>,
+    pub ocr_engine: Arc<dyn OcrEngine>,
+    pub translator: Option<Arc<dyn Translator + Send + Sync>>,
+}
+
+pub struct AppCaches {
+    pub translation: Arc<Mutex<TranslationCache>>,
+    pub text_translation: Arc<Mutex<TextTranslationCache>>,
+    pub last_cleanup_time: Arc<Mutex<u64>>,
+}
+
+pub struct DownloadManager {
+    pub trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
+    pub trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
+    pub progress_rx: tokio::sync::mpsc::Receiver<crate::core::types::DownloadProgress>,
+    pub progress_tx: tokio::sync::mpsc::Sender<crate::core::types::DownloadProgress>,
+}
+
 pub struct App {
     model: Arc<Mutex<AppModel>>,
     settings: Settings,
@@ -44,16 +64,7 @@ pub struct App {
     region_session: Option<Arc<Mutex<RegionOverlayState>>>,
     region_finish: Arc<Mutex<Option<RegionOutcome>>>,
 
-    capture: Arc<dyn FrameSource>,
-
-    /// Platform-specific services (overlay transparency, process priority)
-    platform: Arc<dyn PlatformServices>,
-
-    /// Active OCR engine (selected based on settings)
-    ocr_engine: Arc<dyn OcrEngine>,
-
-    /// Text-only translator via selected provider (Gemini/Groq/Ollama)
-    translator: Option<Arc<dyn Translator + Send + Sync>>,
+    services: PipelineServices,
 
     // Background processing
     coordinator: BackgroundCoordinator,
@@ -62,26 +73,13 @@ pub struct App {
     /// Available displays for capturing (ID, Label)
     available_screens: Vec<(u32, String)>,
 
-    /// Cache for (smart_hash, source_lang, target_lang) → (ocr_text, translated_text)
-    translation_cache: Arc<Mutex<TranslationCache>>,
-
-    /// Cache for OCR text hash → translated_text.
-    /// Catches cases where the same text appears with different pixel content
-    /// (e.g., cursor blink, slight background variation) without re-calling the API.
-    text_translation_cache: Arc<Mutex<TextTranslationCache>>,
+    caches: AppCaches,
 
     /// Channel to signal error dismissal from the error viewport
     error_dismiss_tx: mpsc::Sender<()>,
     error_dismiss_rx: mpsc::Receiver<()>,
 
-    /// Model download channels
-    download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
-    download_trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
-    download_progress_rx: tokio::sync::mpsc::Receiver<crate::core::types::DownloadProgress>,
-    download_progress_tx: tokio::sync::mpsc::Sender<crate::core::types::DownloadProgress>,
-
-    /// Timestamp of last cache cleanup for periodic memory management
-    last_cleanup_time: Arc<Mutex<u64>>,
+    downloads: DownloadManager,
 }
 
 impl App {
@@ -132,6 +130,26 @@ impl App {
         let (dt_tx, dt_rx) = std::sync::mpsc::channel();
         let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
 
+        let caches = AppCaches {
+            translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
+            text_translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
+            last_cleanup_time: Arc::new(Mutex::new(BackgroundCoordinator::now_ms())),
+        };
+
+        let downloads = DownloadManager {
+            trigger_tx: dt_tx,
+            trigger_rx: dt_rx,
+            progress_tx: dp_tx,
+            progress_rx: dp_rx,
+        };
+
+        let services = PipelineServices {
+            capture: Arc::new(ScreenshotsCapture::new()),
+            platform: platform.clone(),
+            ocr_engine,
+            translator,
+        };
+
         Self {
             model: Arc::new(Mutex::new(AppModel::new_default())),
             settings,
@@ -141,10 +159,7 @@ impl App {
             settings_ctrl: crate::core::usecases::settings_controller::SettingsController::new(),
             region_session: None,
             region_finish: Arc::new(Mutex::new(None)),
-            capture: Arc::new(ScreenshotsCapture::new()),
-            platform: platform.clone(),
-            ocr_engine,
-            translator,
+            services,
             coordinator,
             slots_runtime: vec![SlotRuntimeState::new()],
             available_screens: screenshots::Screen::all()
@@ -161,15 +176,10 @@ impl App {
                     (s.display_info.id, label)
                 })
                 .collect(),
-            translation_cache: Arc::new(Mutex::new(indexmap::IndexMap::new())),
-            text_translation_cache: Arc::new(Mutex::new(indexmap::IndexMap::new())),
+            caches,
             error_dismiss_tx: err_tx,
             error_dismiss_rx: err_rx,
-            download_trigger_tx: dt_tx,
-            download_trigger_rx: dt_rx,
-            download_progress_tx: dp_tx,
-            download_progress_rx: dp_rx,
-            last_cleanup_time: Arc::new(Mutex::new(BackgroundCoordinator::now_ms())),
+            downloads,
         }
     }
 
@@ -199,7 +209,7 @@ impl App {
                 &self.model,
                 &self.slots_runtime[i],
                 &self.settings,
-                &self.platform,
+                &self.services.platform,
             );
 
             live_frame::render_live_frame_viewport(
@@ -208,7 +218,7 @@ impl App {
                 &self.model,
                 &self.slots_runtime[i],
                 &self.settings,
-                &self.platform,
+                &self.services.platform,
             );
         }
     }
@@ -225,17 +235,17 @@ impl App {
 
         // 1a. Periodic cache cleanup based on memory_cleanup_interval_secs
         let now = BackgroundCoordinator::now_ms();
-        let last_cleanup = *self.last_cleanup_time.lock();
+        let last_cleanup = *self.caches.last_cleanup_time.lock();
         let cleanup_interval_ms = self.settings.perf.memory_cleanup_interval_secs * 1000;
         if now.saturating_sub(last_cleanup) >= cleanup_interval_ms {
             self.enforce_cache_limits();
-            *self.last_cleanup_time.lock() = now;
+            *self.caches.last_cleanup_time.lock() = now;
             tracing::info!("Periodic cache cleanup completed");
         }
 
         // 1b. Handle Download Trigger
-        while let Ok(engine_type) = self.download_trigger_rx.try_recv() {
-            let tx = self.download_progress_tx.clone();
+        while let Ok(engine_type) = self.downloads.trigger_rx.try_recv() {
+            let tx = self.downloads.progress_tx.clone();
             tokio::spawn(async move {
                 match engine_type {
                     crate::infrastructure::settings::OcrEngineType::MangaOCR => {
@@ -256,7 +266,7 @@ impl App {
         }
 
         // 1c. Handle Download Progress
-        while let Ok(prog) = self.download_progress_rx.try_recv() {
+        while let Ok(prog) = self.downloads.progress_rx.try_recv() {
             let was_downloading = self.model.lock().download_progress.is_downloading;
             self.model.lock().download_progress = prog.clone();
 
@@ -273,7 +283,7 @@ impl App {
                         crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(
                             &self.settings,
                         );
-                    self.ocr_engine = new_engine;
+                    self.services.ocr_engine = new_engine;
                     if let Some(err) = err_opt {
                         self.err_handler.report_simple(err);
                     } else {
@@ -323,20 +333,20 @@ impl App {
             &self.model,
             &mut self.slots_runtime,
             &self.err_handler,
-            &self.translation_cache,
+            &self.caches.translation,
             &self.settings,
         );
 
         self.coordinator.tick(
             &self.model,
             &mut self.slots_runtime,
-            &self.capture,
-            &self.ocr_engine,
-            &self.translator,
-            &self.translation_cache,
-            &self.text_translation_cache,
+            &self.services.capture,
+            &self.services.ocr_engine,
+            &self.services.translator,
+            &self.caches.translation,
+            &self.caches.text_translation,
             &self.settings,
-            &self.platform,
+            &self.services.platform,
             ctx.clone(),
         );
     }
@@ -353,7 +363,7 @@ impl App {
             settings_arc.clone(),
             &self.settings_ctrl,
             self.model.lock().download_progress.clone(),
-            self.download_trigger_tx.clone(),
+            self.downloads.trigger_tx.clone(),
             &self.slots_runtime,
         );
 
@@ -390,18 +400,18 @@ impl App {
                 self.err_handler.report_simple(format!("{e:#}"));
             } else {
                 if rebuild_trans {
-                    self.translator = create_translator(&self.settings);
+                    self.services.translator = create_translator(&self.settings);
                     if trans_behavior_changed {
-                        self.translation_cache.lock().clear();
-                        self.text_translation_cache.lock().clear();
+                        self.caches.translation.lock().clear();
+                        self.caches.text_translation.lock().clear();
                     }
                 }
                 if realtime_changed || txt_proc_changed {
                     for rt in &mut self.slots_runtime {
                         rt.recent_translations.clear();
                     }
-                    self.translation_cache.lock().clear();
-                    self.text_translation_cache.lock().clear();
+                    self.caches.translation.lock().clear();
+                    self.caches.text_translation.lock().clear();
                 }
 
                 if rebuild_ocr {
@@ -409,7 +419,7 @@ impl App {
                         crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(
                             &self.settings,
                         );
-                    self.ocr_engine = new_engine;
+                    self.services.ocr_engine = new_engine;
                     if let Some(err) = err_opt {
                         self.err_handler.report_simple(err);
                     }
@@ -491,7 +501,7 @@ impl App {
 
         // Trim translation cache
         {
-            let mut cache = self.translation_cache.lock();
+            let mut cache = self.caches.translation.lock();
             if cache.len() > max_entries {
                 let to_remove = cache.len() - max_entries;
                 for _ in 0..to_remove {
@@ -506,7 +516,7 @@ impl App {
 
         // Trim text translation cache
         {
-            let mut cache = self.text_translation_cache.lock();
+            let mut cache = self.caches.text_translation.lock();
             if cache.len() > max_entries {
                 let to_remove = cache.len() - max_entries;
                 for _ in 0..to_remove {
@@ -648,8 +658,8 @@ impl eframe::App for App {
                                 runtime.last_hash = 0;
                                 runtime.first_unstable_at = 0;
                             }
-                            self.translation_cache.lock().clear();
-                            self.text_translation_cache.lock().clear();
+                            self.caches.translation.lock().clear();
+                            self.caches.text_translation.lock().clear();
                             self.settings_ctrl.reset_models_cache();
                         }
                     });
