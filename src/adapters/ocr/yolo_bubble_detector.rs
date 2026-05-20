@@ -1,58 +1,16 @@
+﻿use crate::infrastructure::settings::GpuBackend;
 use anyhow::Result;
+use image::DynamicImage;
+use ndarray::Array4;
 use ort::session::Session;
+use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
-use parking_lot::Mutex;
-use ndarray::Array4;
-use image::DynamicImage;
-use std::cmp::Ordering;
-use crate::infrastructure::settings::GpuBackend;
 
-#[derive(Debug, Clone)]
-pub struct BubbleBox {
-    pub x1: f32,
-    pub y1: f32,
-    pub x2: f32,
-    pub y2: f32,
-    pub prob: f32,
-    #[allow(dead_code)]
-    pub class_id: usize,
-}
+use super::nms_utils::{nms, DetectionBox};
 
-fn iou(a: &BubbleBox, b: &BubbleBox) -> f32 {
-    let x_left = a.x1.max(b.x1);
-    let y_top = a.y1.max(b.y1);
-    let x_right = a.x2.min(b.x2);
-    let y_bottom = a.y2.min(b.y2);
-
-    if x_right < x_left || y_bottom < y_top {
-        return 0.0;
-    }
-
-    let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-    let a_area = (a.x2 - a.x1) * (a.y2 - a.y1);
-    let b_area = (b.x2 - b.x1) * (b.y2 - b.y1);
-
-    intersection_area / (a_area + b_area - intersection_area)
-}
-
-fn nms(mut boxes: Vec<BubbleBox>, iou_threshold: f32) -> Vec<BubbleBox> {
-    boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
-    let mut result = Vec::new();
-    for i in 0..boxes.len() {
-        let mut keep = true;
-        for res in &result {
-            if iou(&boxes[i], res) > iou_threshold {
-                keep = false;
-                break;
-            }
-        }
-        if keep {
-            result.push(boxes[i].clone());
-        }
-    }
-    result
-}
+/// Type alias for backwards compatibility with callers expecting BubbleBox
+pub type BubbleBox = DetectionBox;
 
 pub struct YoloBubbleDetector {
     session: Arc<Mutex<Option<Session>>>,
@@ -89,7 +47,8 @@ impl YoloBubbleDetector {
             anyhow::bail!("YOLO Speech Bubble detector model not found at {}. Please download it in settings first.", resolved_path.display());
         }
 
-        let session = super::onnx_engine::OnnxEngine::create_session(&resolved_path, self.gpu_backend)?;
+        let session =
+            super::onnx_engine::OnnxEngine::create_session(&resolved_path, self.gpu_backend)?;
         *session_guard = Some(session);
         Ok(())
     }
@@ -102,8 +61,10 @@ impl YoloBubbleDetector {
 
         // Calculate letterbox scaling factor to preserve aspect ratio (crucial for ultrawide screens)
         let scale = (1280.0 / orig_w).min(1280.0 / orig_h);
-        let resized = img.resize(1280, 1280, image::imageops::FilterType::Triangle).to_rgb8();
-        
+        let resized = img
+            .resize(1280, 1280, image::imageops::FilterType::Triangle)
+            .to_rgb8();
+
         let mut input = Array4::<f32>::zeros((1, 3, 1280, 1280));
 
         // Center the resized image in the 1280x1280 canvas
@@ -124,17 +85,21 @@ impl YoloBubbleDetector {
             .map_err(|e| anyhow::anyhow!("YOLO input tensor error: {}", e))?;
 
         let mut session_guard = self.session.lock();
-        let session = session_guard.as_mut().ok_or_else(|| anyhow::anyhow!("YOLO session not initialized"))?;
-        
-        let outputs = session.run(ort::inputs![input_tensor])
+        let session = session_guard
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("YOLO session not initialized"))?;
+
+        let outputs = session
+            .run(ort::inputs![input_tensor])
             .map_err(|e| anyhow::anyhow!("YOLO inference error: {}", e))?;
 
-        let out = outputs[0].try_extract_array::<f32>()
+        let out = outputs[0]
+            .try_extract_array::<f32>()
             .map_err(|e| anyhow::anyhow!("YOLO output extract error: {}", e))?;
 
         let view = out.view();
         let shape = view.shape();
-        
+
         let mut boxes = Vec::new();
 
         // 1. Check if End-to-End Head (e.g. YOLOv10/YOLO26 output shape: [1, 300, 6])
@@ -159,7 +124,7 @@ impl YoloBubbleDetector {
                     let box_h = oy2 - oy1;
                     let pad_w = (box_w * 0.08).max(8.0);
                     let pad_h = (box_h * 0.08).max(8.0);
-                    
+
                     let ex1 = (ox1 - pad_w).max(0.0);
                     let ey1 = (oy1 - pad_h).max(0.0);
                     let ex2 = (ox2 + pad_w).min(orig_w);
@@ -179,7 +144,7 @@ impl YoloBubbleDetector {
             // 2. Check if standard YOLOv8 output shape: [1, 4 + classes, anchors] (e.g. [1, 5, 8400])
             let num_anchors = shape[2];
             let num_classes = shape[1] - 4;
-            
+
             for i in 0..num_anchors {
                 let cx = view[[0, 0, i]];
                 let cy = view[[0, 1, i]];
@@ -212,7 +177,7 @@ impl YoloBubbleDetector {
                     let box_h = oy2 - oy1;
                     let pad_w = (box_w * 0.08).max(8.0);
                     let pad_h = (box_h * 0.08).max(8.0);
-                    
+
                     let ex1 = (ox1 - pad_w).max(0.0);
                     let ey1 = (oy1 - pad_h).max(0.0);
                     let ex2 = (ox2 + pad_w).min(orig_w);

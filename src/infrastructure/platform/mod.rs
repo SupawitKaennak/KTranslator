@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------------------
+﻿// ---------------------------------------------------------------------------
 // Platform abstraction layer
 //
 // Provides a trait `PlatformServices` that encapsulates all OS-specific
@@ -23,7 +23,6 @@ pub trait PlatformServices: Send + Sync {
     /// Find a window by its exact title. Returns an OS-specific handle.
     fn find_window_by_title(&self, title: &str) -> Option<isize>;
 
-
     /// Boost the current process priority for better responsiveness during gaming.
     fn boost_process_priority(&self);
 
@@ -38,10 +37,14 @@ pub trait PlatformServices: Send + Sync {
 /// Create the platform services implementation for the current OS.
 pub fn create_platform() -> Box<dyn PlatformServices> {
     #[cfg(target_os = "windows")]
-    { Box::new(NativePlatform) }
+    {
+        Box::new(NativePlatform)
+    }
 
     #[cfg(not(target_os = "windows"))]
-    { Box::new(StubPlatform) }
+    {
+        Box::new(StubPlatform)
+    }
 }
 
 /// Stub implementation for unsupported platforms — all operations are no-ops.
@@ -50,7 +53,9 @@ struct StubPlatform;
 
 #[cfg(not(target_os = "windows"))]
 impl PlatformServices for StubPlatform {
-    fn find_window_by_title(&self, _title: &str) -> Option<isize> { None }
+    fn find_window_by_title(&self, _title: &str) -> Option<isize> {
+        None
+    }
     fn boost_process_priority(&self) {}
     fn segment_thai(
         &self,

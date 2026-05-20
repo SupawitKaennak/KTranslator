@@ -1,12 +1,10 @@
-use anyhow::{bail, Context, Result};
+﻿use anyhow::{bail, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::core::{
-    ports::Translator,
-    prompt_builder,
-    types::LanguageTag,
-};
+use crate::core::{ports::Translator, types::LanguageTag};
+
+use super::llm_common;
 
 #[derive(Clone)]
 pub struct OpenAiTranslator {
@@ -19,20 +17,14 @@ pub struct OpenAiTranslator {
 
 impl OpenAiTranslator {
     pub fn new(
-        base_url: String, 
-        api_key: String, 
+        base_url: String,
+        api_key: String,
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .pool_idle_timeout(std::time::Duration::from_secs(120))
-            .build()
-            .context("build http client")?;
-            
+        let client = llm_common::build_client(llm_common::DEFAULT_TIMEOUT_SECS)?;
         let base_url = base_url.trim_end_matches('/').to_string();
-        
+
         Ok(Self {
             client,
             base_url,
@@ -43,7 +35,9 @@ impl OpenAiTranslator {
     }
 
     pub fn list_models(base_url: &str, api_key: &str) -> Result<Vec<String>> {
-        let client = Client::builder().timeout(std::time::Duration::from_secs(10)).build()?;
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()?;
         let endpoint = format!("{}/models", base_url.trim_end_matches('/'));
         let mut req = client.get(&endpoint);
         if !api_key.trim().is_empty() {
@@ -52,9 +46,13 @@ impl OpenAiTranslator {
         let resp = req.send()?;
         if resp.status().is_success() {
             #[derive(serde::Deserialize)]
-            struct ModelsResp { data: Vec<ModelItem> }
+            struct ModelsResp {
+                data: Vec<ModelItem>,
+            }
             #[derive(serde::Deserialize)]
-            struct ModelItem { id: String }
+            struct ModelItem {
+                id: String,
+            }
 
             let parsed: ModelsResp = serde_json::from_str(&resp.text().unwrap_or_default())?;
             let mut m_list: Vec<String> = parsed.data.into_iter().map(|i| i.id).collect();
@@ -73,26 +71,17 @@ impl Translator for OpenAiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String> {
+    ) -> Result<String, crate::core::error::KError> {
         if self.base_url.is_empty() {
-            bail!("Custom OpenAI Base URL is empty");
+            return Err(crate::core::error::KError::Translation(
+                "Custom OpenAI Base URL is empty".to_string(),
+            ));
         }
 
-        let lines: Vec<&str> = text.lines().collect();
-        let ctx = if self.behavior.as_ref().map(|b| b.contextual_translation).unwrap_or(false) {
-            context_hint
-        } else {
-            None
-        };
-        let prompt = prompt_builder::build_translation_prompt_with_behavior(
-            &lines, source, target, self.behavior.as_ref(), ctx,
-        );
-        
-        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.3);
-
-        // Dynamically calculate budget for output tokens based on actual input length.
-        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
-        let max_tokens = estimated_tokens.clamp(128, 2048);
+        let prompt =
+            llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_common::get_temperature(self.behavior.as_ref(), 0.3);
+        let max_tokens = llm_common::estimate_max_tokens(text);
 
         let req_body = OpenAiRequest {
             model: self.model.clone(),
@@ -111,26 +100,35 @@ impl Translator for OpenAiTranslator {
         };
 
         let endpoint = format!("{}/chat/completions", self.base_url);
-        
+
         let mut req = self.client.post(&endpoint);
         if !self.api_key.trim().is_empty() {
             req = req.bearer_auth(self.api_key.trim());
         }
 
-        let res = req
-            .json(&req_body)
-            .send()
-            .context("OpenAI compatible request failed")?;
+        let res = req.json(&req_body).send().map_err(|e| {
+            crate::core::error::KError::Translation(format!(
+                "OpenAI compatible request failed: {:?}",
+                e
+            ))
+        })?;
 
         let status = res.status();
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            bail!("OpenAI API error {}: {}", status, body_text);
+            return Err(crate::core::error::KError::Translation(format!(
+                "OpenAI API error {}: {}",
+                status, body_text
+            )));
         }
 
-        let resp: OpenAiResponse = serde_json::from_str(&body_text)
-            .with_context(|| format!("Failed to parse OpenAI API response: {}", body_text))?;
+        let resp: OpenAiResponse = serde_json::from_str(&body_text).map_err(|e| {
+            crate::core::error::KError::Translation(format!(
+                "Failed to parse OpenAI API response: {}, response was: {}",
+                e, body_text
+            ))
+        })?;
 
         let translated = resp
             .choices

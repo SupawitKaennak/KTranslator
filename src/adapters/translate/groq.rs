@@ -1,12 +1,10 @@
-use anyhow::{bail, Context, Result};
+﻿use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::core::{
-    ports::Translator,
-    prompt_builder,
-    types::LanguageTag,
-};
+use crate::core::{ports::Translator, types::LanguageTag};
+
+use super::llm_common;
 
 #[derive(Clone)]
 pub struct GroqTranslator {
@@ -18,16 +16,11 @@ pub struct GroqTranslator {
 
 impl GroqTranslator {
     pub fn new(
-        api_key: String, 
+        api_key: String,
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .pool_idle_timeout(std::time::Duration::from_secs(120))
-            .build()
-            .context("build http client")?;
+        let client = llm_common::build_client(llm_common::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -78,26 +71,17 @@ impl Translator for GroqTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String> {
+    ) -> Result<String, crate::core::error::KError> {
         if self.api_key.trim().is_empty() {
-            bail!("Groq API key is empty (obtain it from console.groq.com)");
+            return Err(crate::core::error::KError::Translation(
+                "Groq API key is empty (obtain it from console.groq.com)".to_string(),
+            ));
         }
 
-        let lines: Vec<&str> = text.lines().collect();
-        let ctx = if self.behavior.as_ref().map(|b| b.contextual_translation).unwrap_or(false) {
-            context_hint
-        } else {
-            None
-        };
-        let prompt = prompt_builder::build_translation_prompt_with_behavior(
-            &lines, source, target, self.behavior.as_ref(), ctx,
-        );
-        
-        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.2);
-
-        // Dynamically calculate budget for output tokens based on actual input length.
-        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
-        let max_tokens = estimated_tokens.clamp(128, 2048);
+        let prompt =
+            llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_common::get_temperature(self.behavior.as_ref(), 0.2);
+        let max_tokens = llm_common::estimate_max_tokens(text);
 
         let req = GroqChatRequest {
             model: self.model.clone(),
@@ -115,21 +99,31 @@ impl Translator for GroqTranslator {
             max_tokens,
         };
 
-        let resp = self.client
+        let resp = self
+            .client
             .post("https://api.groq.com/openai/v1/chat/completions")
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
             .send()
-            .context("send groq request")?;
+            .map_err(|e| {
+                crate::core::error::KError::Translation(format!("send groq request: {:?}", e))
+            })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            bail!("Groq error: {status} {body}");
+            return Err(crate::core::error::KError::Translation(format!(
+                "Groq error: {status} {body}"
+            )));
         }
 
-        let data: GroqChatResponse = resp.json().context("parse groq response")?;
-        let out = data.choices.into_iter().next()
+        let data: GroqChatResponse = resp.json().map_err(|e| {
+            crate::core::error::KError::Translation(format!("parse groq response: {:?}", e))
+        })?;
+        let out = data
+            .choices
+            .into_iter()
+            .next()
             .map(|c| c.message.content)
             .unwrap_or_default();
 

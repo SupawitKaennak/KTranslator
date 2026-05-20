@@ -4,12 +4,7 @@ use eframe::egui;
 use parking_lot::Mutex;
 
 use crate::{
-    adapters::{
-        capture::screenshots_capture::ScreenshotsCapture,
-        translate::{
-            create_translator,
-        },
-    },
+    adapters::{capture::screenshots_capture::ScreenshotsCapture, translate::create_translator},
     core::{
         coordinator::BackgroundCoordinator,
         model::AppModel,
@@ -17,26 +12,44 @@ use crate::{
         worker::SlotRuntimeState,
     },
     infrastructure::{
-        settings::{load_settings, save_settings, Settings},
         platform::{self, PlatformServices},
+        settings::{load_settings, save_settings, Settings},
     },
     user_interface::{
-        components::{
-            settings_ui::show_settings_window,
-            slot_ui::render_slot_item,
-        },
+        components::{settings_ui::show_settings_window, slot_ui::render_slot_item},
         font_loader,
-        live_frame,
-        region_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
         i18n::get_i18n,
-        overlay_renderer,
+        live_frame, overlay_renderer,
+        region_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
     },
 };
-
 
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
+
+type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
+type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
+
+pub struct PipelineServices {
+    pub capture: Arc<dyn FrameSource>,
+    pub platform: Arc<dyn PlatformServices>,
+    pub ocr_engine: Arc<dyn OcrEngine>,
+    pub translator: Option<Arc<dyn Translator + Send + Sync>>,
+}
+
+pub struct AppCaches {
+    pub translation: Arc<Mutex<TranslationCache>>,
+    pub text_translation: Arc<Mutex<TextTranslationCache>>,
+    pub last_cleanup_time: Arc<Mutex<u64>>,
+}
+
+pub struct DownloadManager {
+    pub trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
+    pub trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
+    pub progress_rx: tokio::sync::mpsc::Receiver<crate::core::types::DownloadProgress>,
+    pub progress_tx: tokio::sync::mpsc::Sender<crate::core::types::DownloadProgress>,
+}
 
 pub struct App {
     model: Arc<Mutex<AppModel>>,
@@ -51,16 +64,7 @@ pub struct App {
     region_session: Option<Arc<Mutex<RegionOverlayState>>>,
     region_finish: Arc<Mutex<Option<RegionOutcome>>>,
 
-    capture: Arc<dyn FrameSource>,
-
-    /// Platform-specific services (overlay transparency, process priority)
-    platform: Arc<dyn PlatformServices>,
-
-    /// Active OCR engine (selected based on settings)
-    ocr_engine: Arc<dyn OcrEngine>,
-
-    /// Text-only translator via selected provider (Gemini/Groq/Ollama)
-    translator: Option<Arc<dyn Translator + Send + Sync>>,
+    services: PipelineServices,
 
     // Background processing
     coordinator: BackgroundCoordinator,
@@ -69,26 +73,13 @@ pub struct App {
     /// Available displays for capturing (ID, Label)
     available_screens: Vec<(u32, String)>,
 
-    /// Cache for (smart_hash, source_lang, target_lang) → (ocr_text, translated_text)
-    translation_cache: Arc<Mutex<std::collections::HashMap<(u64, Option<String>, String), (String, String)>>>,
-
-    /// Cache for OCR text hash → translated_text.
-    /// Catches cases where the same text appears with different pixel content
-    /// (e.g., cursor blink, slight background variation) without re-calling the API.
-    text_translation_cache: Arc<Mutex<std::collections::HashMap<(u64, Option<String>, String), String>>>,
+    caches: AppCaches,
 
     /// Channel to signal error dismissal from the error viewport
     error_dismiss_tx: mpsc::Sender<()>,
     error_dismiss_rx: mpsc::Receiver<()>,
 
-    /// Model download channels
-    download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
-    download_trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
-    download_progress_rx: tokio::sync::mpsc::Receiver<crate::infrastructure::asset_manager::DownloadProgress>,
-    download_progress_tx: tokio::sync::mpsc::Sender<crate::infrastructure::asset_manager::DownloadProgress>,
-
-    /// Timestamp of last cache cleanup for periodic memory management
-    last_cleanup_time: Arc<Mutex<u64>>,
+    downloads: DownloadManager,
 }
 
 impl App {
@@ -133,10 +124,31 @@ impl App {
         let coordinator = BackgroundCoordinator::new();
 
         let err_handler = crate::core::usecases::error_handler::ErrorHandler::new();
-        let (ocr_engine, _) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&settings);
+        let (ocr_engine, _) =
+            crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&settings);
 
         let (dt_tx, dt_rx) = std::sync::mpsc::channel();
         let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
+
+        let caches = AppCaches {
+            translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
+            text_translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
+            last_cleanup_time: Arc::new(Mutex::new(BackgroundCoordinator::now_ms())),
+        };
+
+        let downloads = DownloadManager {
+            trigger_tx: dt_tx,
+            trigger_rx: dt_rx,
+            progress_tx: dp_tx,
+            progress_rx: dp_rx,
+        };
+
+        let services = PipelineServices {
+            capture: Arc::new(ScreenshotsCapture::new()),
+            platform: platform.clone(),
+            ocr_engine,
+            translator,
+        };
 
         Self {
             model: Arc::new(Mutex::new(AppModel::new_default())),
@@ -147,10 +159,7 @@ impl App {
             settings_ctrl: crate::core::usecases::settings_controller::SettingsController::new(),
             region_session: None,
             region_finish: Arc::new(Mutex::new(None)),
-            capture: Arc::new(ScreenshotsCapture::new()),
-            platform: platform.clone(),
-            ocr_engine,
-            translator,
+            services,
             coordinator,
             slots_runtime: vec![SlotRuntimeState::new()],
             available_screens: screenshots::Screen::all()
@@ -167,22 +176,19 @@ impl App {
                     (s.display_info.id, label)
                 })
                 .collect(),
-            translation_cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
-            text_translation_cache: Arc::new(Mutex::new(std::collections::HashMap::new())),
+            caches,
             error_dismiss_tx: err_tx,
             error_dismiss_rx: err_rx,
-            download_trigger_tx: dt_tx,
-            download_trigger_rx: dt_rx,
-            download_progress_tx: dp_tx,
-            download_progress_rx: dp_rx,
-            last_cleanup_time: Arc::new(Mutex::new(BackgroundCoordinator::now_ms())),
+            downloads,
         }
     }
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
         let snapshot = { self.model.lock().clone() };
         for (i, slot) in snapshot.slots.iter().enumerate() {
-            if !slot.popup_open { continue; }
+            if !slot.popup_open {
+                continue;
+            }
             overlay_renderer::render_popup_viewport(ctx, i, &self.model);
         }
     }
@@ -190,18 +196,20 @@ impl App {
     fn ui_frames(&mut self, ctx: &egui::Context) {
         let snapshot = { self.model.lock().clone() };
         for (i, slot) in snapshot.slots.iter().enumerate() {
-            if !slot.enabled { continue; }
+            if !slot.enabled {
+                continue;
+            }
             if self.slots_runtime.len() <= i {
                 self.slots_runtime.push(SlotRuntimeState::new());
             }
-            
+
             overlay_renderer::render_overlay_viewport(
                 ctx,
                 i,
                 &self.model,
                 &self.slots_runtime[i],
                 &self.settings,
-                &self.platform,
+                &self.services.platform,
             );
 
             live_frame::render_live_frame_viewport(
@@ -210,47 +218,47 @@ impl App {
                 &self.model,
                 &self.slots_runtime[i],
                 &self.settings,
-                &self.platform,
+                &self.services.platform,
             );
         }
     }
-
 
     // -----------------------------------------------------------------------
     // Background processing: capture → compare → OCR+Translate (if changed)
     // -----------------------------------------------------------------------
 
-
-
     fn tick_background(&mut self, ctx: &egui::Context) {
         // 1. Process pending signals from popups/error window
-        while let Ok(_) = self.error_dismiss_rx.try_recv() {
+        while self.error_dismiss_rx.try_recv().is_ok() {
             self.err_handler.clear_all();
         }
 
         // 1a. Periodic cache cleanup based on memory_cleanup_interval_secs
         let now = BackgroundCoordinator::now_ms();
-        let last_cleanup = *self.last_cleanup_time.lock();
+        let last_cleanup = *self.caches.last_cleanup_time.lock();
         let cleanup_interval_ms = self.settings.perf.memory_cleanup_interval_secs * 1000;
         if now.saturating_sub(last_cleanup) >= cleanup_interval_ms {
             self.enforce_cache_limits();
-            *self.last_cleanup_time.lock() = now;
+            *self.caches.last_cleanup_time.lock() = now;
             tracing::info!("Periodic cache cleanup completed");
         }
 
         // 1b. Handle Download Trigger
-        while let Ok(engine_type) = self.download_trigger_rx.try_recv() {
-            let tx = self.download_progress_tx.clone();
+        while let Ok(engine_type) = self.downloads.trigger_rx.try_recv() {
+            let tx = self.downloads.progress_tx.clone();
             tokio::spawn(async move {
                 match engine_type {
                     crate::infrastructure::settings::OcrEngineType::MangaOCR => {
                         let _ = crate::infrastructure::asset_manager::download_models(tx).await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
-                        let _ = crate::infrastructure::asset_manager::download_ppocr_models(tx).await;
+                        let _ =
+                            crate::infrastructure::asset_manager::download_ppocr_models(tx).await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
-                        let _ = crate::infrastructure::asset_manager::download_bubble_yolo_model(tx).await;
+                        let _ =
+                            crate::infrastructure::asset_manager::download_bubble_yolo_model(tx)
+                                .await;
                     }
                     _ => {}
                 }
@@ -258,16 +266,24 @@ impl App {
         }
 
         // 1c. Handle Download Progress
-        while let Ok(prog) = self.download_progress_rx.try_recv() {
+        while let Ok(prog) = self.downloads.progress_rx.try_recv() {
             let was_downloading = self.model.lock().download_progress.is_downloading;
             self.model.lock().download_progress = prog.clone();
-            
+
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
-                let factory_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
-                if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR || factory_type == crate::infrastructure::settings::OcrEngineType::BuiltinPaddle {
-                    let (new_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&self.settings);
-                    self.ocr_engine = new_engine;
+                let factory_type =
+                    crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(
+                        &self.settings,
+                    );
+                if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR
+                    || factory_type == crate::infrastructure::settings::OcrEngineType::BuiltinPaddle
+                {
+                    let (new_engine, err_opt) =
+                        crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(
+                            &self.settings,
+                        );
+                    self.services.ocr_engine = new_engine;
                     if let Some(err) = err_opt {
                         self.err_handler.report_simple(err);
                     } else {
@@ -275,7 +291,7 @@ impl App {
                     }
                 }
             }
-            
+
             ctx.request_repaint();
         }
 
@@ -285,19 +301,21 @@ impl App {
                 if rt.last_overlay_fade_ms == 0 {
                     rt.last_overlay_fade_ms = now;
                 }
-                
+
                 let diff = (rt.overlay_fade_target - rt.overlay_fade_alpha).abs();
                 if diff > 0.005 {
                     // Calculate precise delta time in seconds
-                    let dt = (now.saturating_sub(rt.last_overlay_fade_ms) as f32 / 1000.0).clamp(0.0, 0.1);
+                    let dt = (now.saturating_sub(rt.last_overlay_fade_ms) as f32 / 1000.0)
+                        .clamp(0.0, 0.1);
                     rt.last_overlay_fade_ms = now;
-                    
+
                     if dt > 0.0 {
                         // Premium Cinematic Exponential Interpolation (Independent of FPS)
                         // Speed constant 8.5 provides an elegant ~300ms buttery smooth fade transition.
                         let speed = 8.5;
                         let t = 1.0 - (-speed * dt).exp();
-                        rt.overlay_fade_alpha += (rt.overlay_fade_target - rt.overlay_fade_alpha) * t;
+                        rt.overlay_fade_alpha +=
+                            (rt.overlay_fade_target - rt.overlay_fade_alpha) * t;
                         requires_repaint = true;
                     }
                 } else {
@@ -315,20 +333,20 @@ impl App {
             &self.model,
             &mut self.slots_runtime,
             &self.err_handler,
-            &self.translation_cache,
+            &self.caches.translation,
             &self.settings,
         );
 
         self.coordinator.tick(
             &self.model,
             &mut self.slots_runtime,
-            &self.capture,
-            &self.ocr_engine,
-            &self.translator,
-            &self.translation_cache,
-            &self.text_translation_cache,
+            &self.services.capture,
+            &self.services.ocr_engine,
+            &self.services.translator,
+            &self.caches.translation,
+            &self.caches.text_translation,
             &self.settings,
-            &self.platform,
+            &self.services.platform,
             ctx.clone(),
         );
     }
@@ -339,27 +357,33 @@ impl App {
         }
 
         let settings_arc = self.settings_ctrl.begin_edit(&self.settings);
-        
+
         let resp = show_settings_window(
-            ctx, 
-            settings_arc.clone(), 
+            ctx,
+            settings_arc.clone(),
             &self.settings_ctrl,
             self.model.lock().download_progress.clone(),
-            self.download_trigger_tx.clone(),
+            self.downloads.trigger_tx.clone(),
             &self.slots_runtime,
         );
 
         let updated = settings_arc.lock().clone();
         if updated != self.settings {
-            let current_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&updated);
-            let old_engine_type = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(&self.settings);
-            let rebuild_ocr = current_engine_type != old_engine_type 
+            let current_engine_type =
+                crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(
+                    &updated,
+                );
+            let old_engine_type =
+                crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(
+                    &self.settings,
+                );
+            let rebuild_ocr = current_engine_type != old_engine_type
                 || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
-            
+
             let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
             let realtime_changed = updated.realtime != self.settings.realtime;
             let txt_proc_changed = updated.txt_proc != self.settings.txt_proc;
-            let rebuild_trans = updated.provider != self.settings.provider 
+            let rebuild_trans = updated.provider != self.settings.provider
                 || updated.gemini_api_key != self.settings.gemini_api_key
                 || updated.gemini_model != self.settings.gemini_model
                 || updated.groq_api_key != self.settings.groq_api_key
@@ -376,29 +400,32 @@ impl App {
                 self.err_handler.report_simple(format!("{e:#}"));
             } else {
                 if rebuild_trans {
-                    self.translator = create_translator(&self.settings);
+                    self.services.translator = create_translator(&self.settings);
                     if trans_behavior_changed {
-                        self.translation_cache.lock().clear();
-                        self.text_translation_cache.lock().clear();
+                        self.caches.translation.lock().clear();
+                        self.caches.text_translation.lock().clear();
                     }
                 }
                 if realtime_changed || txt_proc_changed {
                     for rt in &mut self.slots_runtime {
                         rt.recent_translations.clear();
                     }
-                    self.translation_cache.lock().clear();
-                    self.text_translation_cache.lock().clear();
+                    self.caches.translation.lock().clear();
+                    self.caches.text_translation.lock().clear();
                 }
-                
+
                 if rebuild_ocr {
-                    let (new_engine, err_opt) = crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&self.settings);
-                    self.ocr_engine = new_engine;
+                    let (new_engine, err_opt) =
+                        crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(
+                            &self.settings,
+                        );
+                    self.services.ocr_engine = new_engine;
                     if let Some(err) = err_opt {
                         self.err_handler.report_simple(err);
                     }
                 }
             }
-            
+
             // Request immediate repaint to show live update results on screen
             ctx.request_repaint();
         }
@@ -410,11 +437,18 @@ impl App {
     }
 
     fn ui_error_popup(&mut self, ctx: &egui::Context) {
-        if !self.err_handler.has_errors() { return; }
+        if !self.err_handler.has_errors() {
+            return;
+        }
 
         let viewport_id = egui::ViewportId::from_hash_of("error_popup");
         let tx = self.error_dismiss_tx.clone();
-        let errors: Vec<String> = self.err_handler.get_all_errors().into_iter().map(|e| e.message).collect();
+        let errors: Vec<String> = self
+            .err_handler
+            .get_all_errors()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
 
         ctx.show_viewport_immediate(
             viewport_id,
@@ -435,24 +469,29 @@ impl App {
                         ui.heading(
                             egui::RichText::new("[!] System Error")
                                 .color(egui::Color32::from_rgb(255, 80, 80))
-                                .strong()
+                                .strong(),
                         );
                         ui.add_space(10.0);
 
-                        egui::ScrollArea::vertical().max_height(120.0).show(ui, |ui| {
-                            for err in &errors {
-                                ui.label(egui::RichText::new(err).size(14.0));
-                                ui.add_space(4.0);
-                            }
-                        });
+                        egui::ScrollArea::vertical()
+                            .max_height(120.0)
+                            .show(ui, |ui| {
+                                for err in &errors {
+                                    ui.label(egui::RichText::new(err).size(14.0));
+                                    ui.add_space(4.0);
+                                }
+                            });
 
                         ui.add_space(15.0);
-                        if ui.button(egui::RichText::new(" Dismiss All Errors ").size(16.0)).clicked() {
+                        if ui
+                            .button(egui::RichText::new(" Dismiss All Errors ").size(16.0))
+                            .clicked()
+                        {
                             let _ = tx.send(());
                         }
                     });
                 });
-            }
+            },
         );
     }
 
@@ -462,31 +501,28 @@ impl App {
 
         // Trim translation cache
         {
-            let cache = self.translation_cache.lock();
+            let mut cache = self.caches.translation.lock();
             if cache.len() > max_entries {
-                drop(cache);
-                let mut cache = self.translation_cache.lock();
                 let to_remove = cache.len() - max_entries;
-                let keys: Vec<_> = cache.keys().take(to_remove).cloned().collect();
-                for key in keys {
-                    cache.remove(&key);
+                for _ in 0..to_remove {
+                    cache.shift_remove_index(0);
                 }
-                tracing::info!("Trimmed translation cache: removed {} entries", to_remove);
+                tracing::info!(
+                    "Trimmed translation cache: removed {} oldest entries",
+                    to_remove
+                );
             }
         }
 
         // Trim text translation cache
         {
-            let cache = self.text_translation_cache.lock();
+            let mut cache = self.caches.text_translation.lock();
             if cache.len() > max_entries {
-                drop(cache);
-                let mut cache = self.text_translation_cache.lock();
                 let to_remove = cache.len() - max_entries;
-                let keys: Vec<_> = cache.keys().take(to_remove).cloned().collect();
-                for key in keys {
-                    cache.remove(&key);
+                for _ in 0..to_remove {
+                    cache.shift_remove_index(0);
                 }
-                tracing::info!("Trimmed text cache: removed {} entries", to_remove);
+                tracing::info!("Trimmed text cache: removed {} oldest entries", to_remove);
             }
         }
     }
@@ -494,7 +530,7 @@ impl App {
 
 impl eframe::App for App {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // Essential for transparent viewports: 
+        // Essential for transparent viewports:
         // Force the GPU background clear color to be fully transparent.
         [0.0, 0.0, 0.0, 0.0]
     }
@@ -505,7 +541,12 @@ impl eframe::App for App {
         self.ui_error_popup(ctx);
 
         if let Some(sess) = &self.region_session {
-            run_region_viewport(ctx, sess.clone(), self.region_finish.clone(), self.settings.ui_language);
+            run_region_viewport(
+                ctx,
+                sess.clone(),
+                self.region_finish.clone(),
+                self.settings.ui_language,
+            );
         }
         if let Some(out) = self.region_finish.lock().take() {
             match out {
@@ -528,20 +569,24 @@ impl eframe::App for App {
                 ui.horizontal(|ui| {
                     ui.heading("KTranslator");
                     ui.add_space(12.0);
-                    
+
                     let mut model = self.model.lock();
                     let running = &mut model.running;
-                    
-                    let (btn_text, btn_color) = if *running { 
-                        (i18n.stop_capture, egui::Color32::from_rgb(200, 50, 50)) 
-                    } else { 
-                        (i18n.start_capture, egui::Color32::from_rgb(50, 150, 50)) 
+
+                    let (btn_text, btn_color) = if *running {
+                        (i18n.stop_capture, egui::Color32::from_rgb(200, 50, 50))
+                    } else {
+                        (i18n.start_capture, egui::Color32::from_rgb(50, 150, 50))
                     };
 
-                    let button = egui::Button::new(egui::RichText::new(btn_text).color(egui::Color32::WHITE).strong())
-                        .fill(btn_color)
-                        .min_size(egui::vec2(100.0, 24.0));
-                        
+                    let button = egui::Button::new(
+                        egui::RichText::new(btn_text)
+                            .color(egui::Color32::WHITE)
+                            .strong(),
+                    )
+                    .fill(btn_color)
+                    .min_size(egui::vec2(100.0, 24.0));
+
                     if ui.add(button).clicked() {
                         *running = !*running;
                         if *running {
@@ -553,20 +598,28 @@ impl eframe::App for App {
                             self.err_handler.clear_all();
                         }
                     }
-                    
+
                     ui.add_space(8.0);
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let theme_icon = if self.settings.dark_mode { "🌙" } else { "🔆" };
-                        if ui.button(theme_icon).on_hover_text(i18n.toggle_dark_mode).clicked() {
+                        let theme_icon = if self.settings.dark_mode {
+                            "🌙"
+                        } else {
+                            "🔆"
+                        };
+                        if ui
+                            .button(theme_icon)
+                            .on_hover_text(i18n.toggle_dark_mode)
+                            .clicked()
+                        {
                             self.settings.dark_mode = !self.settings.dark_mode;
                             if let Some(edit_arc) = &self.settings_ctrl.settings_edit {
                                 edit_arc.lock().dark_mode = self.settings.dark_mode;
                             }
-                            let mut visuals = if self.settings.dark_mode { 
-                                egui::Visuals::dark() 
-                            } else { 
-                                egui::Visuals::light() 
+                            let mut visuals = if self.settings.dark_mode {
+                                egui::Visuals::dark()
+                            } else {
+                                egui::Visuals::light()
                             };
                             // Re-apply common rounding
                             visuals.window_corner_radius = 6.0.into();
@@ -579,13 +632,21 @@ impl eframe::App for App {
                             let _ = save_settings(&self.settings);
                         }
 
-                        if ui.button("⚙").on_hover_text(i18n.open_settings_desc).clicked() {
+                        if ui
+                            .button("⚙")
+                            .on_hover_text(i18n.open_settings_desc)
+                            .clicked()
+                        {
                             self.show_settings = true;
                             self.settings_fetch_models_pending = true;
                             let _ = self.settings_ctrl.begin_edit(&self.settings);
                         }
 
-                        if ui.button("🔄").on_hover_text(i18n.clear_cache_desc).clicked() {
+                        if ui
+                            .button("🔄")
+                            .on_hover_text(i18n.clear_cache_desc)
+                            .clicked()
+                        {
                             for slot in &mut model.slots {
                                 slot.last_ocr_text.clear();
                                 slot.last_translation.clear();
@@ -597,8 +658,8 @@ impl eframe::App for App {
                                 runtime.last_hash = 0;
                                 runtime.first_unstable_at = 0;
                             }
-                            self.translation_cache.lock().clear();
-                            self.text_translation_cache.lock().clear();
+                            self.caches.translation.lock().clear();
+                            self.caches.text_translation.lock().clear();
                             self.settings_ctrl.reset_models_cache();
                         }
                     });
@@ -608,12 +669,19 @@ impl eframe::App for App {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             let slot_count = self.model.lock().slots.len();
-            
+
             let mut remove_idx = None;
             let content_resp = ui.vertical(|ui| {
                 for i in 0..slot_count {
                     let mut model = self.model.lock();
-                    let resp = render_slot_item(ui, i, &mut model, &self.slots_runtime[i], &self.available_screens, self.settings.ui_language);
+                    let resp = render_slot_item(
+                        ui,
+                        i,
+                        &mut model,
+                        &self.slots_runtime[i],
+                        &self.available_screens,
+                        self.settings.ui_language,
+                    );
                     if resp.should_remove {
                         remove_idx = Some(i);
                     }
@@ -671,7 +739,9 @@ impl eframe::App for App {
 
         // Request resize if the current window height is different
         let current_size = ctx.screen_rect().size();
-        if (current_size.y - required_height).abs() > 2.0 || (current_size.x - required_width).abs() > 2.0 {
+        if (current_size.y - required_height).abs() > 2.0
+            || (current_size.x - required_width).abs() > 2.0
+        {
             ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
                 required_width,
                 required_height,

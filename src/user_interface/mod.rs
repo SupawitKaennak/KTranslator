@@ -1,10 +1,9 @@
-mod app;
+﻿mod app;
+pub mod components;
 mod font_loader;
+pub mod i18n;
 mod live_frame;
 mod overlay_renderer;
 mod region_overlay;
-pub mod i18n;
-pub mod components;
 
 pub use app::App;
-

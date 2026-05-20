@@ -1,7 +1,7 @@
-use anyhow::{Context, Result};
+﻿use anyhow::Result;
+use parking_lot::Mutex;
 use screenshots::Screen;
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::core::{
@@ -46,35 +46,57 @@ impl ScreenshotsCapture {
                 return 0;
             }
         }
-        let mut non_primary: Vec<_> = screens.iter().filter(|s| !s.display_info.is_primary).collect();
+        let mut non_primary: Vec<_> = screens
+            .iter()
+            .filter(|s| !s.display_info.is_primary)
+            .collect();
         non_primary.sort_by_key(|s| s.display_info.id);
-        if let Some(idx) = non_primary.iter().position(|s| s.display_info.id == target_id) {
+        if let Some(idx) = non_primary
+            .iter()
+            .position(|s| s.display_info.id == target_id)
+        {
             return idx + 1;
         }
         0
     }
 
     #[cfg(target_os = "windows")]
-    fn capture_windows(&self, rect: Rect, display_id: u32, screens: &[Screen]) -> Result<FrameRgba> {
+    fn capture_windows(
+        &self,
+        rect: Rect,
+        display_id: u32,
+        screens: &[Screen],
+    ) -> Result<FrameRgba, crate::core::error::KError> {
         let screen = screens
             .iter()
             .find(|s| s.display_info.id == display_id)
             .or_else(|| screens.iter().find(|s| s.display_info.is_primary))
             .or_else(|| screens.first())
-            .ok_or_else(|| anyhow::anyhow!("no display found"))?;
-            
+            .ok_or_else(|| crate::core::error::KError::Capture("no display found".to_string()))?;
+
         let dxgi_idx = Self::get_dxgi_index(screen.display_info.id, screens);
 
-        let mut dxgi_guard = self.dxgi_cache.lock().unwrap();
-        let safe_m = dxgi_guard.entry(display_id).or_insert_with(|| {
-            let mut m = dxgcap::DXGIManager::new(50).unwrap_or_else(|_| dxgcap::DXGIManager::new(500).unwrap());
-            m.set_capture_source_index(dxgi_idx);
-            SafeManager {
-                manager: m,
-                last_pixels: Vec::new(),
-                last_dims: (0, 0),
+        let mut dxgi_guard = self.dxgi_cache.lock();
+        let safe_m = match dxgi_guard.entry(display_id) {
+            std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let m = dxgcap::DXGIManager::new(50)
+                    .or_else(|_| dxgcap::DXGIManager::new(500))
+                    .map_err(|e| {
+                        crate::core::error::KError::Capture(format!(
+                            "Failed to initialize DXGI capture: {:?}",
+                            e
+                        ))
+                    })?;
+                let mut safe_m = SafeManager {
+                    manager: m,
+                    last_pixels: Vec::new(),
+                    last_dims: (0, 0),
+                };
+                safe_m.manager.set_capture_source_index(dxgi_idx);
+                entry.insert(safe_m)
             }
-        });
+        };
 
         match safe_m.manager.capture_frame() {
             Ok(res) => {
@@ -95,14 +117,21 @@ impl ScreenshotsCapture {
                         }
                     }
                 } else if safe_m.last_pixels.is_empty() {
-                    anyhow::bail!("DXGI capture failed: {:?}", e);
+                    return Err(crate::core::error::KError::Capture(format!(
+                        "DXGI capture failed: {:?}",
+                        e
+                    )));
                 }
             }
         }
 
         let pixels = &safe_m.last_pixels;
         let (img_w, img_h) = safe_m.last_dims;
-        if img_h == 0 || pixels.is_empty() { anyhow::bail!("Captured empty frame"); }
+        if img_h == 0 || pixels.is_empty() {
+            return Err(crate::core::error::KError::Capture(
+                "Captured empty frame".to_string(),
+            ));
+        }
 
         let rel_x = (rect.x - screen.display_info.x as f32).max(0.0) as u32;
         let rel_y = (rect.y - screen.display_info.y as f32).max(0.0) as u32;
@@ -134,49 +163,70 @@ impl ScreenshotsCapture {
             }
         }
 
-        Ok(FrameRgba { width: safe_w, height: safe_h, data: cropped_data })
+        Ok(FrameRgba {
+            width: safe_w,
+            height: safe_h,
+            data: std::sync::Arc::new(cropped_data),
+        })
     }
 
     #[allow(dead_code)]
-    fn capture_cross_platform(&self, rect: Rect, display_id: u32, screens: &[Screen]) -> Result<FrameRgba> {
+    fn capture_cross_platform(
+        &self,
+        rect: Rect,
+        display_id: u32,
+        screens: &[Screen],
+    ) -> Result<FrameRgba, crate::core::error::KError> {
         let screen = screens
             .iter()
             .find(|s| s.display_info.id == display_id)
             .or_else(|| screens.iter().find(|s| s.display_info.is_primary))
             .or_else(|| screens.first())
-            .ok_or_else(|| anyhow::anyhow!("no display found"))?;
+            .ok_or_else(|| crate::core::error::KError::Capture("no display found".to_string()))?;
 
         // Fallback to the 'screenshots' crate which is cross-platform but slower.
         let rel_x = (rect.x - screen.display_info.x as f32).max(0.0) as i32;
         let rel_y = (rect.y - screen.display_info.y as f32).max(0.0) as i32;
-        let image = screen.capture_area(rel_x, rel_y, rect.w as u32, rect.h as u32)
-            .context("cross-platform capture failed")?;
+        let image = screen
+            .capture_area(rel_x, rel_y, rect.w as u32, rect.h as u32)
+            .map_err(|e| {
+                crate::core::error::KError::Capture(format!(
+                    "cross-platform capture failed: {:?}",
+                    e
+                ))
+            })?;
 
         Ok(FrameRgba {
             width: image.width(),
             height: image.height(),
-            data: image.into_raw(),
+            data: std::sync::Arc::new(image.into_raw()),
         })
     }
 }
 
 impl FrameSource for ScreenshotsCapture {
-    fn capture_rect(&self, rect: Rect, display_id: u32) -> Result<FrameRgba> {
+    fn capture_rect(
+        &self,
+        rect: Rect,
+        display_id: u32,
+    ) -> Result<FrameRgba, crate::core::error::KError> {
         let now = Instant::now();
-        let mut screen_guard = self.screen_cache.lock().unwrap();
-        
-        let screens = if let Some((last_refresh, cached_screens)) = &*screen_guard {
+        let mut screen_guard = self.screen_cache.lock();
+
+        let screens = if let Some((last_refresh, cached_screens)) = &mut *screen_guard {
             if now.duration_since(*last_refresh) > Duration::from_secs(2) {
-                let fresh = Screen::all().context("enumerate screens")?;
-                *screen_guard = Some((now, fresh));
-                &screen_guard.as_ref().unwrap().1
-            } else {
-                cached_screens
+                if let Ok(fresh) = Screen::all() {
+                    *last_refresh = now;
+                    *cached_screens = fresh;
+                }
             }
+            cached_screens
         } else {
-            let fresh = Screen::all().context("enumerate screens")?;
-            *screen_guard = Some((now, fresh));
-            &screen_guard.as_ref().unwrap().1
+            let fresh = Screen::all().map_err(|e| {
+                crate::core::error::KError::Capture(format!("enumerate screens: {:?}", e))
+            })?;
+            let (_, cached) = screen_guard.insert((now, fresh));
+            cached
         };
 
         #[cfg(target_os = "windows")]
