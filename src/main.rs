@@ -1,9 +1,9 @@
-﻿// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod adapters;
 mod core;
 mod infrastructure;
-mod user_interface;
+mod ui;
 
 #[tokio::main]
 async fn main() -> eframe::Result<()> {
@@ -47,6 +47,6 @@ async fn main() -> eframe::Result<()> {
     eframe::run_native(
         "KTranslator",
         native_options,
-        Box::new(|cc| Ok(Box::new(user_interface::App::new(cc)))),
+        Box::new(|cc| Ok(Box::new(ui::App::new(cc)))),
     )
 }

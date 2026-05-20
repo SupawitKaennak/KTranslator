@@ -9,116 +9,116 @@
 <a name="thai"></a>
 ## ภาษาไทย (Thai)
 
-โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) ที่เขียนด้วยภาษา Rust โดยใช้เฟรมเวิร์ก egui สำหรับหน้าจอส่วนติดต่อผู้ใช้ และใช้ ONNX Runtime ในการประมวลผลโมเดลรู้จำอักขระ (OCR) 
+โปรแกรมแปลภาษาจากการจับภาพหน้าจอ (Screen Translator) เขียนด้วยภาษา Rust ใช้เฟรมเวิร์ก egui สำหรับหน้าจอติดต่อผู้ใช้ และใช้ ONNX Runtime ในการรันโมเดลปัญญาประดิษฐ์ (AI) 
 
-### สิ่งที่โปรแกรมทำได้
-- **การเลือกพื้นที่เพื่อจับภาพหน้าจอ**: รองรับการกำหนดขอบเขตพื้นที่จับภาพ (Capture Region) บนหน้าจอเพื่อแปลข้อความในจุดที่เลือก สามารถย้ายตำแหน่งหรือขยายขนาดกล่องเลือกได้ผ่าน UI และมีโหมดแสดงคำแปลทับตำแหน่งข้อความเดิม (Overlay Mode)
+### ความสามารถของโปรแกรม
+- **การเลือกพื้นที่เพื่อจับภาพหน้าจอ**: ผู้ใช้สามารถกำหนดขอบเขตพื้นที่หน้าจอเพื่อจับภาพข้อความ โดยสามารถย้ายตำแหน่ง ปรับขนาดกล่องเลือกได้แบบเรียลไทม์ และมีโหมดแสดงคำแปลทับตำแหน่งข้อความเดิม (Overlay Mode)
 - **ตัวเลือกเอนจิน OCR (ONNX Runtime)**:
-  - Manga-OCR: รันโมเดลปัญญาประดิษฐ์สแกนตัวอักษรภาษาญี่ปุ่นทั้งในแนวตั้งและแนวนอน เหมาะสำหรับการแปลหนังสือการ์ตูนมังงะ
-  - PaddleOCR v4 (Mobile): โมเดลสแกนตัวอักษรรุ่นขนาดเล็กเพื่อลดการใช้แรมและทรัพยากรคอมพิวเตอร์
-  - PaddleOCR v4 (Server): โมเดลรุ่นมาตรฐานเพื่อความละเอียดและความถูกต้องบนฟอนต์หรือหน้าเอกสารที่ซับซ้อน
-  - Windows OCR: เรียกใช้งานระบบรู้จำอักขระผ่าน API บิวท์อินของระบบปฏิบัติการ Windows ทันทีโดยไม่ต้องทำการดาวน์โหลดไฟล์โมเดลเพิ่มเติม
-- **การเร่งความเร็วประมวลผลด้วย GPU (Hardware Acceleration)**: รองรับการเชื่อมต่อกับไดรเวอร์การ์ดจอ NVIDIA CUDA, TensorRT และ DirectML บนระบบปฏิบัติการ Windows ช่วยสลับการรันโมเดล ONNX ไปยังหน่วยประมวลผลกราฟิก
+  - Manga-OCR: โมเดลสแกนตัวอักษรภาษาญี่ปุ่นที่ครอบคลุมการอ่านทั้งแนวตั้งและแนวนอน
+  - PaddleOCR v4 (Mobile): โมเดลสแกนตัวอักษรรุ่นขนาดเล็ก
+  - PaddleOCR v4 (Server): โมเดลรุ่นมาตรฐานสำหรับประมวลผลข้อความที่มีโครงสร้างและฟอนต์ที่ซับซ้อน
+  - Windows OCR: ระบบรู้จำอักขระผ่าน API บิวท์อินของระบบปฏิบัติการ Windows
+- **การประมวลผลด้วย GPU (Hardware Acceleration)**: รองรับการเชื่อมต่อกับไดรเวอร์การ์ดจอ NVIDIA CUDA, TensorRT และ DirectML บนระบบปฏิบัติการ Windows 
 - **การวิเคราะห์การจัดหน้า (Layout Analysis)**:
-  - การตรวจจับกรอบคำพูด (Speech Bubble Detection): ค้นหากรอบคำพูดของมังงะด้วยโมเดลตรวจจับวัตถุ YOLO
-  - การเรียงลำดับคำสแกน (Smart Sorting): จัดทิศทางของข้อความให้อ่านจากขวาไปซ้าย (RTL) หรือจากบนลงล่างให้สอดคล้องกับโครงสร้างหน้าหนังสือมังงะ
+  - การตรวจจับกรอบคำพูด (Speech Bubble Detection): ค้นหากรอบคำพูดด้วยโมเดลตรวจจับวัตถุ YOLO 
+  - การเรียงลำดับคำสแกน (Smart Sorting): จัดทิศทางของข้อความให้อ่านจากขวาไปซ้าย (RTL) หรือจากบนลงล่างตามพิกัดของข้อความ
 - **การประมวลผลข้อความ (Text Processing)**:
-  - ระบบคัดกรองขยะ (Garbage Filtering): ตรวจจับและลบตัวอักษรซ้ำ บรรทัดเปล่า หรือสัญลักษณ์พิเศษที่ไม่ต้องการออกก่อนนำไปแปล
-  - การแปลงภาษาญี่ปุ่น: ปรับรูปแบบอักขระคานะ ลบคำถอดเสียงอ่านฟูริกานะ (Furigana) และตั้งค่าให้คงเหลือคำลงท้ายแสดงความเคารพ (Honorifics)
-  - การตัดบรรทัดภาษาไทย: เพิ่มช่องว่างขนาดศูนย์ (Zero Width Space) เข้าในข้อความเพื่อช่วยให้ภาษาไทยแสดงผลล้นขอบหรือตัดบรรทัดได้เหมาะสม
-  - การแยกคำภาษาอังกฤษ: เชื่อมต่ออัลกอริทึม wordninja เพื่อแยกตัวอักษรที่ติดกันเป็นคำๆ ตามพจนานุกรมความถี่คำภาษาอังกฤษ
+  - ระบบคัดกรองขยะ (Garbage Filtering): ลบตัวอักษรที่ซ้ำซ้อน บรรทัดว่าง หรือกลุ่มสัญลักษณ์พิเศษก่อนส่งคำแปล
+  - การแปลงภาษาญี่ปุ่น: จัดการรูปแบบอักขระคานะ ลบคำอ่านฟูริกานะ (Furigana) 
+  - การตัดบรรทัดภาษาไทย: แทรกช่องว่างขนาดศูนย์ (Zero Width Space) ในผลลัพธ์ภาษาไทยเพื่อให้เบราว์เซอร์และ UI จัดการตัดบรรทัดได้
+  - การแยกคำภาษาอังกฤษ: ใช้อัลกอริทึม wordninja ในการแยกตัวอักษรภาษาอังกฤษที่ติดกันออกเป็นคำ
 - **ระบบแปลภาษา (Translation Providers)**:
-  - Google Translate: แปลภาษาผ่านเว็บฟรี ไม่จำเป็นต้องลงทะเบียนคีย์ใช้งาน
-  - Gemini API: เชื่อมต่อผ่านรหัสคีย์ที่ได้รับจาก Google AI Studio
-  - Groq API: ส่งคำแปลไปยังบริการของ Groq ผ่านโมเดลเช่น Llama หรือ Gemma
-  - Ollama: รองรับการติดต่อเซิร์ฟเวอร์ Ollama ภายในเครื่องคอมพิวเตอร์เพื่อแปลภาษาแบบออฟไลน์ 100%
-  - OpenAI / Custom: ส่งคำขอแปลด้วยโครงสร้างแบบ OpenAI API ไปยังเซิร์ฟเวอร์ส่วนตัว หรือผู้ให้บริการอื่นๆ เช่น OpenRouter และ DeepSeek
-- **การจัดการความจำชั่วคราวและการตกแต่งหน้าตา**:
-  - ระบบแคชข้อความ (Translation Cache): ทำการเก็บประวัติข้อความและผลลัพธ์แปลในหน่วยความจำระดับเฟรมและประโยค เพื่อลดการดึงข้อมูลแปลจาก API ซ้ำซ้อนเมื่อหน้าจอไม่เคลื่อนไหว
-  - การเปลี่ยนรูปแบบตัวอักษร: ปรับสีตัวอักษร ขนาดฟอนต์ สีพื้นหลัง และระดับความโปร่งแสงของพื้นหลังคำแปลในโหมด Overlay
+  - Google Translate: การแปลผ่านหน้าเว็บ
+  - Gemini API: เชื่อมต่อผ่านรหัส API Key จาก Google AI Studio
+  - Groq API: เชื่อมต่อผ่าน API ไปยังโมเดลเช่น Llama หรือ Gemma
+  - Ollama: เชื่อมต่อกับเซิร์ฟเวอร์ Ollama ในเครื่องเพื่อรันโมเดลภาษาในแบบออฟไลน์
+  - OpenAI / Custom: ส่งคำขอไปยัง API ที่มีโครงสร้างแบบ OpenAI เช่น OpenRouter หรือ DeepSeek
+- **การจัดการและการตั้งค่าโปรแกรม**:
+  - แคชข้อความ (Translation Cache): บันทึกผลการแปลและ OCR ในหน่วยความจำ เพื่อนำมาแสดงซ้ำหากภาพหน้าจอยังคงเป็นข้อความเดิม 
+  - การปรับแต่งสไตล์: ตั้งค่าสีตัวอักษร ขนาดฟอนต์ สีพื้นหลัง และความโปร่งแสงในโหมด Overlay
 
-### การเตรียมความพร้อมก่อนใช้งาน
-1. **การดาวน์โหลดและติดตั้งโมเดล**:
-   - เปิดโปรแกรมแล้วคลิกไปที่เมนู Settings (ไอคอนฟันเฟือง) จากนั้นเลือกแท็บ OCR
-   - ในส่วนการตั้งค่าของ MangaOCR หรือ Built-in PaddleOCR ระบบจะตรวจหาไฟล์โมเดลในเครื่อง หากไม่พบจะแสดงปุ่ม Download และคำแจ้งเตือนโมเดลสูญหาย
-   - ให้คลิกปุ่ม Download เพื่อให้ระบบดำเนินการดาวน์โหลดไฟล์และจัดวางลงในโฟลเดอร์ models/manga-ocr/ หรือ models/ppocr/ ในไดเรกทอรีทำงานโดยอัตโนมัติ
-2. **การติดตั้งโปรแกรมสนับสนุนการประมวลผล GPU**:
-   - ผู้ใช้การ์ดจอ NVIDIA ที่ต้องการเร่งความเร็วการประมวลผล ให้ติดตั้งไดรเวอร์กราฟิกล่าสุด ติดตั้ง [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) และตั้งค่าความเข้ากันได้ของ TensorRT ในส่วนของการตั้งค่าเครื่องรันไทม์ ONNX
-   - อุปกรณ์ทั่วไปสามารถประมวลผลผ่าน CPU หรือเรียกใช้ DirectML ของ Microsoft Windows ได้ทันที
-3. **การสมัครคีย์เชื่อมต่อบริการแปลภาษา (API Setup)**:
-   - นำคีย์หรือที่อยู่เซิร์ฟเวอร์ที่สมัครมาใส่ในหน้า Settings > Translation:
-     - Google Translate: พร้อมใช้งานทันที
-     - Gemini: ลงทะเบียนขอคีย์ที่ [Google AI Studio](https://aistudio.google.com/)
-     - Groq: สมัครสมาชิกและออกคีย์ที่ [Groq Console](https://console.groq.com/)
-     - Ollama: ดาวน์โหลดโปรแกรมและสั่งรันโมเดลโลคอลจากเว็บ [Ollama.com](https://ollama.com/)
-     - OpenAI / Custom: ขอสิทธิ์การใช้งานจาก [OpenAI Platform](https://platform.openai.com/) หรือ [OpenRouter](https://openrouter.ai/)
+### การติดตั้งและการเตรียมความพร้อม
+1. **การติดตั้งโมเดล (Model Installation)**:
+   - ไปที่เมนู Settings (ไอคอนฟันเฟือง) เลือกแท็บ OCR
+   - หากเลือกระบบ MangaOCR, Built-in PaddleOCR หรือ Bubble YOLO โปรแกรมจะตรวจสอบไฟล์โมเดลในเครื่อง หากไม่มีไฟล์ จะปรากฏปุ่ม "Download" 
+   - คลิกปุ่ม Download เพื่อโหลดและคลายซิปไฟล์ลงโฟลเดอร์ `models/` โดยอัตโนมัติ
+2. **การรันด้วย GPU**:
+   - หากต้องการรันผ่านการ์ดจอ NVIDIA ให้ติดตั้งไดรเวอร์กราฟิกล่าสุด และ [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads) 
+   - หากเลือกใช้ TensorRT จำเป็นต้องตั้งค่าความเข้ากันได้ของระบบในส่วน ONNX เพิ่มเติม
+   - หากไม่ใช้ CUDA โปรแกรมจะทำงานผ่าน CPU หรือ Microsoft DirectML
+3. **การรับคีย์เชื่อมต่อบริการแปลภาษา (API Setup)**:
+   - นำคีย์ API ใส่ในหน้า Settings > Translation:
+     - Google Translate: ใช้งานได้ทันทีโดยไม่ต้องใส่คีย์
+     - Gemini: ขอคีย์ที่ [Google AI Studio](https://aistudio.google.com/)
+     - Groq: ขอคีย์ที่ [Groq Console](https://console.groq.com/)
+     - Ollama: ดาวน์โหลดเซิร์ฟเวอร์และโมเดลจาก [Ollama.com](https://ollama.com/)
+     - OpenAI / Custom: ขอคีย์จาก [OpenAI Platform](https://platform.openai.com/) หรือ [OpenRouter](https://openrouter.ai/)
 
 ### วิธีใช้งาน
-1. เรียกใช้โปรแกรมโดยเปิดไฟล์ ktranslator.exe ในโฟลเดอร์โครงการ
-2. คลิกปุ่มตั้งค่ารูปฟันเฟืองบริเวณหน้าต่างหลักเพื่อกำหนดค่าเริ่มต้น
-3. เลือกแท็บ OCR เพื่อกำหนดภาษาเริ่มต้น สไตล์เนื้อหา (เช่น เกม มังงะ หรือเอกสาร) และเลือกเอนจินสแกนข้อความ
-4. เลือกแท็บ Translation เพื่อระบุบริการแปลภาษา คีย์ใช้งาน และภาษาต้นทางกับปลายทาง
-5. กลับมาที่หน้าต่างหลัก กดปุ่ม Add Region แล้วคลิกเมาส์ลากครอบพื้นที่หน้าต่างภาพหรือเกมที่ต้องการระบบแปล
-6. กดปุ่ม Start Translate เพื่อเปิดการตรวจจับและแปลงคำศัพท์
-7. หากต้องการให้ตัวหนังสือแสดงทับข้อความเดิม ให้กดเปิดใช้งาน Overlay Mode จากแผงควบคุมหน้าจอ และปรับแต่งสีและขนาดฟอนต์ตามต้องการ
+1. รันไฟล์ `ktranslator.exe` เพื่อเปิดโปรแกรม
+2. คลิกปุ่มตั้งค่า (ฟันเฟือง) เพื่อเลือกภาษาต้นทาง-ปลายทาง, เอนจิน OCR และตั้งค่าผู้ให้บริการแปลภาษา
+3. กดปุ่ม **Add Region** แล้วใช้เมาส์ลากครอบพื้นที่บนหน้าจอที่ต้องการ
+4. กดปุ่ม **Start Translate** เพื่อเริ่มรอบการจับภาพและประมวลผล
+5. หากต้องการให้ข้อความแสดงทับตำแหน่งเดิม ให้กดสวิตช์เปิดใช้งาน **Overlay Mode**
+6. ข้อความจะอัปเดตอัตโนมัติเมื่อเนื้อหาบนหน้าจอในกรอบมีการเปลี่ยนแปลง
 
 ---
 
 <a name="english"></a>
 ## English
 
-KTranslator V2 is a screen capture translation utility written in Rust. It utilizes the egui framework for its graphical interface and ONNX Runtime to execute artificial intelligence optical character recognition (OCR).
+KTranslator V2 is a screen capture translation utility written in Rust. It utilizes the egui framework for its graphical interface and ONNX Runtime to execute artificial intelligence models.
 
-### Key Features
-- **Region-Based Capture**: Allows users to select specific bounding boxes on the screen for target scanning. Bounding boxes can be scaled or moved via the user interface. Translations can be overlayed directly on top of the original text using Overlay Mode.
+### Capabilities
+- **Region-Based Capture**: Users can draw bounding boxes on the screen to specify the capture area. These boxes can be resized and moved in real time. The software includes an Overlay Mode to render translated text directly over the original screen contents.
 - **OCR Engine Selection (ONNX Runtime)**:
-  - Manga-OCR: Runs a neural network model to read both vertical and horizontal Japanese writing, optimized for manga books.
-  - PaddleOCR v4 (Mobile): A lightweight model variant designed to reduce system memory and computing footprint.
-  - PaddleOCR v4 (Server): A standard model variant providing higher accuracy for complex text structures and fonts.
-  - Windows OCR: Integrates with the built-in OCR library of the Windows operating system, running instantly without downloading additional model files.
-- **Hardware Acceleration**: Connects with NVIDIA CUDA, TensorRT, and DirectML APIs on Windows, allowing character recognition models to run on dedicated graphics processing units.
+  - Manga-OCR: A model for scanning Japanese text, covering both vertical and horizontal writing formats.
+  - PaddleOCR v4 (Mobile): A scaled-down model variant for lower memory footprint.
+  - PaddleOCR v4 (Server): A standard model variant for processing complex structures and fonts.
+  - Windows OCR: Text recognition utilizing the built-in Windows API.
+- **Hardware Acceleration**: Integrates with NVIDIA CUDA, TensorRT, and DirectML APIs on Windows to route ONNX computations through the GPU.
 - **Layout Analysis**:
-  - Speech Bubble Detection: Identifies speech bubbles inside manga layout boundaries using YOLO object detection.
-  - Smart Sorting: Orders text boxes in a column-major reading sequence (such as right-to-left for Japanese layouts).
+  - Speech Bubble Detection: Uses a YOLO object detection model to locate speech bubbles.
+  - Smart Sorting: Sorts recognized text boxes according to spatial coordinates (e.g., Right-to-Left or Top-to-Bottom).
 - **Text Processing**:
-  - Garbage Filtering: Identifies and removes repeated patterns, blank rows, and irregular symbol combinations before translation.
-  - Japanese Normalization: Formats kana text, removes furigana phonetic markings, and provides options to preserve or drop honorific markers.
-  - Thai Word Wrap: Inserts Zero Width Spaces into Thai translations to enable clean line breaks and prevent boundary overflow.
-  - English Word Segmentation: Utilizes the wordninja algorithm to separate merged English character runs into standard terms.
-- **Supported Translation Providers**:
-  - Google Translate: Free online translation provider that operates without requiring credential keys.
-  - Gemini API: Passes text to Google Gemini models using API keys obtained from Google AI Studio.
-  - Groq API: Sends requests to the Groq inference engine to run translation prompts via models like Llama or Gemma.
-  - Ollama: Targets a local Ollama server on your machine for 100% offline large language model translations.
-  - OpenAI / Custom: Sends OpenAI-compliant translation API requests to custom server endpoints, including OpenRouter or DeepSeek.
-- **Performance and Rendering Settings**:
-  - Caching Engine: Saves frame hashes and text segments inside local memory to prevent redundant API queries when static images are displayed.
-  - Custom Styles: Modifies font colors, text dimensions, background fills, and overlay alpha opacity levels from the control dashboard.
+  - Garbage Filtering: Removes repeating characters, empty lines, and excessive symbolic characters before passing text to the translator.
+  - Japanese Normalization: Formats kana characters and removes furigana phonetic guides.
+  - Thai Word Wrap: Inserts Zero Width Spaces into Thai strings to allow correct line breaking on UI rendering.
+  - English Word Segmentation: Uses the wordninja algorithm to split combined character sequences into distinct words.
+- **Translation Providers**:
+  - Google Translate: Web-based translation implementation.
+  - Gemini API: Connects using API keys from Google AI Studio.
+  - Groq API: Connects to Llama or Gemma inference endpoints via Groq.
+  - Ollama: Targets a locally hosted Ollama server for offline language model execution.
+  - OpenAI / Custom: Sends requests to APIs implementing the OpenAI interface format, such as OpenRouter or DeepSeek.
+- **Management and Configuration**:
+  - Translation Cache: Records OCR and translation outputs in memory, preventing duplicate API calls when the target screen content remains static.
+  - Styling Customization: Configuration of font colors, sizes, background colors, and overlay opacity.
 
-### Preparation
+### Installation and Setup
 1. **Model Installation**:
-   - Launch the application, click the Settings button, and go to the OCR tab.
-   - For MangaOCR or Built-in PaddleOCR, if the files are not detected locally, a download option and status prompt will be shown.
-   - Click the Download button to automatically download and extract files into the models/manga-ocr/ or models/ppocr/ folder.
-2. **GPU Optimization**:
-   - NVIDIA GPUs: Install the latest graphics drivers, download the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads), and enable TensorRT acceleration settings inside the ONNX configuration panel.
-   - Generic platforms run calculations via the CPU or Microsoft DirectML APIs on Windows.
+   - Go to Settings (gear icon) and select the OCR tab.
+   - If using MangaOCR, Built-in PaddleOCR, or Bubble YOLO, the program will check for local model files. If they are missing, a "Download" button is displayed.
+   - Click Download to automatically fetch and extract the files into the `models/` directory.
+2. **GPU Execution**:
+   - To utilize an NVIDIA GPU, install the latest graphics drivers and the [CUDA Toolkit](https://developer.nvidia.com/cuda-downloads).
+   - Using TensorRT requires additional dependency configurations in the ONNX environment.
+   - If CUDA is not used, the program defaults to the CPU or Microsoft DirectML.
 3. **API Credentials Setup**:
-   - Input API keys or custom server locations in the Settings > Translation panel:
-     - Google Translate: Available out of the box.
-     - Gemini: Obtain developer keys from [Google AI Studio](https://aistudio.google.com/).
-     - Groq: Generate keys at the [Groq Console](https://console.groq.com/).
-     - Ollama: Set up and run a local model node from [Ollama.com](https://ollama.com/).
-     - OpenAI / Custom: Register credentials at [OpenAI Platform](https://platform.openai.com/) or [OpenRouter](https://openrouter.ai/).
+   - Enter API credentials in Settings > Translation:
+     - Google Translate: Operates without a key.
+     - Gemini: Obtain an API key from [Google AI Studio](https://aistudio.google.com/).
+     - Groq: Obtain an API key from [Groq Console](https://console.groq.com/).
+     - Ollama: Download the server and models from [Ollama.com](https://ollama.com/).
+     - OpenAI / Custom: Obtain an API key from [OpenAI Platform](https://platform.openai.com/) or [OpenRouter](https://openrouter.ai/).
 
 ### Usage Instructions
-1. Run the ktranslator.exe executable to launch the application.
-2. Click the gear icon on the interface to access configuration panels.
-3. In the OCR tab, choose the source language, capture style (game, manga, or document), and the target character recognition engine.
-4. In the Translation tab, choose your target translation endpoint, enter API credentials, and select target language settings.
-5. Go back to the main layout, click Add Region, and draw a bounding box over the window or application screen you want to monitor.
-6. Click Start Translate to start frame acquisition and text processing.
-7. To project translated phrases directly over the image, enable Overlay Mode and customize colors and size variables.
+1. Run the `ktranslator.exe` executable.
+2. Click the Settings button (gear icon) to configure source and target languages, select the OCR engine, and choose the translation provider.
+3. Click **Add Region** and click-and-drag to define the target area on the screen.
+4. Click **Start Translate** to begin the capture loop.
+5. Toggle **Overlay Mode** to project the translated text directly onto the bounding box area.
+6. The translations will automatically update whenever the content within the bounding box changes.
 
 ---
 
@@ -130,22 +130,22 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
 - **NLP:** wordninja, Thai word segmentation logic
 
 ### โครงการและข้อมูลอ้างอิงที่ใช้งาน (References)
-โปรแกรม KTranslator V2 มีการใช้งานโมเดล รันไทม์ และชุดข้อมูลจากโครงการดังต่อไปนี้:
-- **egui / eframe**: เฟรมเวิร์กสำหรับสร้างอินเตอร์เฟซผู้ใช้แบบเนทีฟเขียนด้วยภาษา Rust พัฒนาโดย Emil Ernerfeldt
-- **ONNX Runtime (ort crate)**: รันไทม์ประสิทธิภาพสูงสำหรับโมเดลปัญญาประดิษฐ์ พัฒนาโดย Microsoft
-- **PaddleOCR**: ชุดโมเดลตรวจจับและจำแนกอักษร (OCR) ประสิทธิภาพสูง พัฒนาโดย PaddlePaddle (Baidu)
-- **oar-ocr**: ไลบรารีสำหรับรันโมเดล PaddleOCR และ Manga-OCR บน ONNX Runtime ในภาษา Rust
-- **Manga-OCR**: โมเดลสแกนตัวหนังสือภาษาญี่ปุ่นแนวตั้งสำหรับมังงะโดยเฉพาะ พัฒนาโดย Kha-Lai อ้างอิงชุดข้อมูลและรูปแบบจากโครงการ Manga109
-- **wordninja**: อัลกอริทึมแยกคำภาษาอังกฤษประมวลผลข้อมูลจากความถี่คำใน Wikipedia พัฒนาโดย Derek Anderson
-- **dxgcap / screenshots**: ไลบรารีสำหรับจับภาพหน้าจอคอมพิวเตอร์ผ่าน Windows Desktop Duplication API
+โปรแกรม KTranslator V2 มีการเรียกใช้ชุดข้อมูล เครื่องมือ และโมเดลจากโครงการต่อไปนี้:
+- **egui / eframe**: เฟรมเวิร์กสำหรับสร้างอินเตอร์เฟซผู้ใช้เขียนด้วยภาษา Rust พัฒนาโดย Emil Ernerfeldt
+- **ONNX Runtime (ort crate)**: รันไทม์ข้ามแพลตฟอร์มสำหรับรันโมเดลปัญญาประดิษฐ์ พัฒนาโดย Microsoft
+- **PaddleOCR**: ชุดโมเดลตรวจจับและจำแนกอักษร พัฒนาโดย PaddlePaddle (Baidu)
+- **oar-ocr**: ไลบรารีอ้างอิงและประมวลผลสำหรับนำโมเดล PaddleOCR และ Manga-OCR มารันบน ONNX ในภาษา Rust
+- **Manga-OCR**: โมเดลสแกนตัวหนังสือภาษาญี่ปุ่น พัฒนาโดย Kha-Lai อ้างอิงชุดข้อมูลโครงสร้างจากโครงการ Manga109
+- **wordninja**: โค้ดสำหรับแยกคำภาษาอังกฤษประมวลผลจากความถี่คำใน Wikipedia พัฒนาโดย Derek Anderson
+- **dxgcap / screenshots**: ไลบรารีสำหรับจับภาพหน้าจอผ่าน Windows Desktop Duplication API
 
 ### References and Acknowledgements
-KTranslator V2 utilizes models, runtimes, and libraries from the following projects:
+KTranslator V2 utilizes tools, models, and libraries from the following projects:
 - **egui / eframe**: Graphical user interface framework for Rust, created by Emil Ernerfeldt.
-- **ONNX Runtime (ort crate)**: A cross-platform machine learning model accelerator developed by Microsoft.
-- **PaddleOCR**: Deep learning optical character recognition toolkits and model suites developed by PaddlePaddle (Baidu).
+- **ONNX Runtime (ort crate)**: A cross-platform machine learning accelerator developed by Microsoft.
+- **PaddleOCR**: Deep learning optical character recognition toolkits developed by PaddlePaddle (Baidu).
 - **oar-ocr**: A Rust wrapper library enabling PaddleOCR and Manga-OCR execution via ONNX Runtime.
-- **Manga-OCR**: A specialized Japanese OCR engine developed by Kha-Lai, utilizing datasets from the Manga109 project.
+- **Manga-OCR**: A Japanese OCR model developed by Kha-Lai, utilizing datasets from the Manga109 project.
 - **wordninja**: An English text segmenter based on Wikipedia unigram frequencies, developed by Derek Anderson.
 - **dxgcap / screenshots**: Screen capturing libraries utilizing the Windows Desktop Duplication API.
 

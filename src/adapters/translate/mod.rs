@@ -1,9 +1,9 @@
-﻿pub mod gemini;
+pub mod gemini;
 pub mod google;
 pub mod groq;
-pub mod llm_common;
+pub mod llm_shared;
 pub mod ollama;
 pub mod openai;
-pub mod translator_factory;
+pub mod factory;
 
-pub use translator_factory::create_translator;
+pub use factory::create_translator;
