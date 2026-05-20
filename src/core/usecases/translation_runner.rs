@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 
 use crate::core::ports::Translator;
 use crate::core::types::LanguageTag;
@@ -35,7 +35,7 @@ pub fn translate_text(
     target: &LanguageTag,
     enable_batching: bool,
     context_hint: Option<&str>,
-) -> Result<String> {
+) -> Result<String, crate::core::error::KError> {
     let non_empty: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     if enable_batching || non_empty.len() <= 1 {
         return translator.translate(text, source, target, context_hint);

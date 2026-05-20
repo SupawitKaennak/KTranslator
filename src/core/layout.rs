@@ -1,7 +1,7 @@
-use crate::core::ports::{OcrTextBlock, OcrTextLine};
+﻿use crate::core::ports::{OcrTextBlock, OcrTextLine};
 
 fn get_char_size(line: &OcrTextLine) -> f32 {
-    // The height of a text line bounding box is generally the most reliable 
+    // The height of a text line bounding box is generally the most reliable
     // indicator of its font size, especially for vertical manga text and CJK/Thai.
     // Avoid area calculation because it gets heavily skewed by line-length differences.
     line.h.min(line.w).max(12.0)
@@ -11,7 +11,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
     let char_size_a = get_char_size(a);
     let char_size_b = get_char_size(b);
     let char_size = char_size_a.max(char_size_b);
-    
+
     // Check if the lines are likely part of vertical text (typical in Japanese Manga)
     let is_a_vertical = a.h > a.w * 1.2;
     let is_b_vertical = b.h > b.w * 1.2;
@@ -23,8 +23,14 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         let y_overlap_len = (a.y + a.h).min(b.y + b.h) - a.y.max(b.y);
         let shorter_h = a.h.min(b.h);
         let has_y_overlap = y_overlap_len > 0.0 && (y_overlap_len / shorter_h) > 0.4;
-        
-        let x_gap = if a.x + a.w < b.x { b.x - (a.x + a.w) } else if b.x + b.w < a.x { a.x - (b.x + b.w) } else { 0.0 };
+
+        let x_gap = if a.x + a.w < b.x {
+            b.x - (a.x + a.w)
+        } else if b.x + b.w < a.x {
+            a.x - (b.x + b.w)
+        } else {
+            0.0
+        };
         let close_horizontally = x_gap < char_size * 1.2;
 
         if has_y_overlap && close_horizontally {
@@ -41,7 +47,13 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         let narrower_w = a.w.min(b.w);
         let has_x_overlap = x_overlap_len > 0.0 && (x_overlap_len / narrower_w) > 0.6;
 
-        let y_gap = if a.y + a.h < b.y { b.y - (a.y + a.h) } else if b.y + b.h < a.y { a.y - (b.y + b.h) } else { 0.0 };
+        let y_gap = if a.y + a.h < b.y {
+            b.y - (a.y + a.h)
+        } else if b.y + b.h < a.y {
+            a.y - (b.y + b.h)
+        } else {
+            0.0
+        };
         let close_vertically = y_gap < char_size * 1.5;
 
         if has_x_overlap && close_vertically {
@@ -54,7 +66,13 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         let narrower_w = a.w.min(b.w);
         let has_x_overlap = x_overlap_len > 0.0 && (x_overlap_len / narrower_w) > 0.3; // Align horizontally
 
-        let y_gap = if a.y + a.h < b.y { b.y - (a.y + a.h) } else if b.y + b.h < a.y { a.y - (b.y + b.h) } else { 0.0 };
+        let y_gap = if a.y + a.h < b.y {
+            b.y - (a.y + a.h)
+        } else if b.y + b.h < a.y {
+            a.y - (b.y + b.h)
+        } else {
+            0.0
+        };
         let close_vertically = y_gap < char_size * 0.8; // Tight vertical space in standard text
 
         if has_x_overlap && close_vertically {
@@ -70,9 +88,15 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         let x_overlap_len = (a.x + a.w).min(b.x + b.w) - a.x.max(b.x);
         let has_x_overlap = x_overlap_len > 0.0;
 
-        let x_gap = if a.x + a.w < b.x { b.x - (a.x + a.w) } else if b.x + b.w < a.x { a.x - (b.x + b.w) } else { 0.0 };
-        
-        // Strict inline checking: 
+        let x_gap = if a.x + a.w < b.x {
+            b.x - (a.x + a.w)
+        } else if b.x + b.w < a.x {
+            a.x - (b.x + b.w)
+        } else {
+            0.0
+        };
+
+        // Strict inline checking:
         // 1. Must NOT have any horizontal overlap (if they overlap in X, they are separate overlapping columns/bubbles).
         // 2. The horizontal gap must be very small (less than 45% of the average character size).
         let close_horizontally = !has_x_overlap && x_gap > 0.0 && x_gap < char_size * 0.45;
@@ -81,7 +105,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
             return true;
         }
     }
-    
+
     false
 }
 
@@ -89,36 +113,38 @@ fn merge_text(lines: &[OcrTextLine]) -> String {
     let is_asian = lines.iter().any(|l| {
         l.text.chars().any(|c| {
             let u = c as u32;
-            (u >= 0x4E00 && u <= 0x9FFF) || // CJK Unified Ideographs
-            (u >= 0x3040 && u <= 0x309F) || // Hiragana
-            (u >= 0x30A0 && u <= 0x30FF)    // Katakana
+            (0x4E00..=0x9FFF).contains(&u) || // CJK Unified Ideographs
+            (0x3040..=0x309F).contains(&u) || // Hiragana
+            (0x30A0..=0x30FF).contains(&u) // Katakana
         })
     });
 
     let default_separator = if is_asian { "" } else { " " };
     let mut result = String::new();
-    
+
     for (i, line) in lines.iter().enumerate() {
         let trimmed = line.text.trim();
         if trimmed.is_empty() {
             continue;
         }
-        
+
         if result.is_empty() {
             result.push_str(trimmed);
         } else {
             // Check if the previous added line ended with a hyphen (Hyphenation Join Logic)
-            let prev_trimmed = lines[..i].iter().rev()
+            let prev_trimmed = lines[..i]
+                .iter()
+                .rev()
                 .map(|l| l.text.trim())
                 .find(|s| !s.is_empty());
-                
+
             let mut join_without_space = false;
             if let Some(prev) = prev_trimmed {
                 if prev.ends_with('-') {
                     join_without_space = true;
                 }
             }
-            
+
             if join_without_space {
                 // Keep the hyphen (e.g. ETOU-SAN, BLOOD-LUST) but join WITHOUT inserting a separator space.
                 // This preserves semantic suffixes and hyphenated words perfectly for the translation engine.
@@ -129,20 +155,27 @@ fn merge_text(lines: &[OcrTextLine]) -> String {
             }
         }
     }
-    
+
     result
 }
 
-pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool, jp_merge_vertical: bool) -> Vec<OcrTextBlock> {
+pub fn build_blocks(
+    lines: Vec<OcrTextLine>,
+    smart_merge: bool,
+    jp_merge_vertical: bool,
+) -> Vec<OcrTextBlock> {
     if lines.is_empty() {
         return vec![];
     }
 
     if !smart_merge {
-        return lines.into_iter().map(|l| OcrTextBlock {
-            source_text: l.text.clone(),
-            lines: vec![l],
-        }).collect();
+        return lines
+            .into_iter()
+            .map(|l| OcrTextBlock {
+                source_text: l.text.clone(),
+                lines: vec![l],
+            })
+            .collect();
     }
 
     let mut blocks: Vec<OcrTextBlock> = Vec::new();
@@ -150,7 +183,11 @@ pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool, jp_merge_vertica
     for line in lines {
         let mut matched_idx = None;
         for (i, block) in blocks.iter().enumerate() {
-            if block.lines.iter().any(|existing_line| is_close(&line, existing_line, jp_merge_vertical)) {
+            if block
+                .lines
+                .iter()
+                .any(|existing_line| is_close(&line, existing_line, jp_merge_vertical))
+            {
                 matched_idx = Some(i);
                 break;
             }
@@ -172,7 +209,7 @@ pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool, jp_merge_vertica
             let is_a_vertical = a.h > a.w * 1.2;
             let is_b_vertical = b.h > b.w * 1.2;
             let is_vertical = is_a_vertical || is_b_vertical;
-            
+
             if is_vertical {
                 // Vertical CJK reading order: Right-to-Left (x descending) primarily, then top-to-bottom
                 let char_size = get_char_size(a).max(get_char_size(b));
@@ -193,23 +230,43 @@ pub fn build_blocks(lines: Vec<OcrTextLine>, smart_merge: bool, jp_merge_vertica
                 }
             }
         });
-        
+
         block.source_text = merge_text(&block.lines);
     }
 
     // Sort blocks by reading order to preserve dialogue flow
     blocks.sort_by(|a, b| {
         let (a_x1, a_y1, _a_x2, a_y2) = a.lines.iter().fold(
-            (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+            (
+                f32::INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY,
+            ),
             |(min_x, min_y, max_x, max_y), l| {
-                (min_x.min(l.x), min_y.min(l.y), max_x.max(l.x + l.w), max_y.max(l.y + l.h))
-            }
+                (
+                    min_x.min(l.x),
+                    min_y.min(l.y),
+                    max_x.max(l.x + l.w),
+                    max_y.max(l.y + l.h),
+                )
+            },
         );
         let (b_x1, b_y1, _b_x2, b_y2) = b.lines.iter().fold(
-            (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+            (
+                f32::INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY,
+            ),
             |(min_x, min_y, max_x, max_y), l| {
-                (min_x.min(l.x), min_y.min(l.y), max_x.max(l.x + l.w), max_y.max(l.y + l.h))
-            }
+                (
+                    min_x.min(l.x),
+                    min_y.min(l.y),
+                    max_x.max(l.x + l.w),
+                    max_y.max(l.y + l.h),
+                )
+            },
         );
 
         let a_h = a_y2 - a_y1;

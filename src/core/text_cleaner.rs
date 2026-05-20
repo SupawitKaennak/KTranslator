@@ -5,9 +5,8 @@ use unicode_normalization::UnicodeNormalization;
 use crate::core::chinese_convert::convert_chinese;
 use crate::infrastructure::settings::TextProcessingSettings;
 
-static FURIGANA_PAREN_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"[（(][\p{Hiragana}\p{Katakana}・ー\s]+[）)]").unwrap()
-});
+static FURIGANA_PAREN_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[（(][\p{Hiragana}\p{Katakana}・ー\s]+[）)]").unwrap());
 
 pub struct TextCleaner;
 
@@ -20,8 +19,9 @@ impl TextCleaner {
         }
 
         // Allow standalone important question/exclamation marks regardless of length limit
-        let is_standalone_symbol = trimmed == "?" || trimmed == "!" || trimmed == "？" || trimmed == "！";
-        
+        let is_standalone_symbol =
+            trimmed == "?" || trimmed == "!" || trimmed == "？" || trimmed == "！";
+
         if !is_standalone_symbol && trimmed.chars().count() < config.min_text_length {
             return false;
         }
@@ -29,7 +29,8 @@ impl TextCleaner {
         if config.remove_garbage {
             let total_chars = trimmed.chars().count() as f32;
             let special_chars = trimmed.chars().filter(|c| !c.is_alphanumeric()).count() as f32;
-            if total_chars > 0.0 && (special_chars / total_chars) > config.special_char_ratio_limit {
+            if total_chars > 0.0 && (special_chars / total_chars) > config.special_char_ratio_limit
+            {
                 return false;
             }
         }
@@ -81,17 +82,15 @@ impl TextCleaner {
 
         // Punctuation Normalization
         if config.punctuation_normalization {
-            normalized = normalized.replace(",,", ",")
-                                   .replace("..", ".")
-                                   .replace("。。", "。")
-                                   .replace("！！", "！")
-                                   .replace("？？", "？");
+            normalized = normalized
+                .replace(",,", ",")
+                .replace("..", ".")
+                .replace("。。", "。")
+                .replace("！！", "！")
+                .replace("？？", "？");
         }
 
-        let mut lines: Vec<String> = normalized
-            .lines()
-            .map(|l| l.trim().to_string())
-            .collect();
+        let mut lines: Vec<String> = normalized.lines().map(|l| l.trim().to_string()).collect();
 
         if config.remove_duplicates {
             lines = Self::dedupe_consecutive_lines(lines);
@@ -131,7 +130,12 @@ impl TextCleaner {
 
     fn strip_zero_width(s: &str) -> String {
         s.chars()
-            .filter(|c| !matches!(c, '\u{200B}' | '\u{200C}' | '\u{200D}' | '\u{FEFF}' | '\u{2060}'))
+            .filter(|c| {
+                !matches!(
+                    c,
+                    '\u{200B}' | '\u{200C}' | '\u{200D}' | '\u{FEFF}' | '\u{2060}'
+                )
+            })
             .collect()
     }
 
@@ -201,7 +205,10 @@ impl TextCleaner {
                 continue;
             }
             let continues = !buf.ends_with(['.', '!', '?', '。', '！', '？', '…', ':', '：'])
-                && line.chars().next().is_some_and(|c| !c.is_uppercase() || line.len() <= 2);
+                && line
+                    .chars()
+                    .next()
+                    .is_some_and(|c| !c.is_uppercase() || line.len() <= 2);
             if continues {
                 let latin_join = buf.chars().last().is_some_and(|c| c.is_ascii_alphabetic())
                     && line.chars().next().is_some_and(|c| c.is_ascii_alphabetic());
@@ -269,19 +276,21 @@ impl TextCleaner {
         // --- OCR Fragment Merger ---
         // Windows OCR on manga fonts often splits words into isolated characters.
         // Merge single uppercase letters back into the previous word when both are uppercase.
-        if config.enable_wordninja {
+        if config.enable_ocr_merge {
             let tokens: Vec<&str> = s.split_whitespace().collect();
             if tokens.len() > 1 {
                 let mut merged: Vec<String> = Vec::new();
                 for token in &tokens {
-                    let is_short_upper = token.len() <= 2
-                        && token.chars().all(|c| c.is_ascii_uppercase());
+                    let is_short_upper =
+                        token.len() <= 2 && token.chars().all(|c| c.is_ascii_uppercase());
 
                     if is_short_upper {
                         if let Some(prev) = merged.last_mut() {
                             // Merge into previous if previous is also uppercase
                             let prev_is_upper = prev.len() >= 2
-                                && prev.chars().all(|c| c.is_ascii_uppercase() || !c.is_alphabetic());
+                                && prev
+                                    .chars()
+                                    .all(|c| c.is_ascii_uppercase() || !c.is_alphabetic());
                             if prev_is_upper {
                                 prev.push_str(token);
                                 continue;
@@ -302,13 +311,15 @@ impl TextCleaner {
                 // Wordninja's dictionary is lowercase-only, so we normalize before splitting.
                 let alpha_count = token.chars().filter(|c| c.is_ascii_alphabetic()).count();
                 if token.len() >= 7 && alpha_count >= 5 {
-                    let is_all_upper = token.chars().filter(|c| c.is_ascii_alphabetic()).all(|c| c.is_ascii_uppercase());
+                    let is_all_upper = token
+                        .chars()
+                        .filter(|c| c.is_ascii_alphabetic())
+                        .all(|c| c.is_ascii_uppercase());
                     let lower = token.to_lowercase();
                     let parts = wordninja::DEFAULT_MODEL.split(&lower);
                     // Only accept if the dictionary split it AND all parts are ≥2 chars
                     // (reject splits that produce single-letter fragments like "a", "i")
-                    let all_parts_valid = parts.len() > 1
-                        && parts.iter().all(|p| p.len() >= 2);
+                    let all_parts_valid = parts.len() > 1 && parts.iter().all(|p| p.len() >= 2);
                     if all_parts_valid {
                         for p in parts {
                             if is_all_upper {
@@ -328,13 +339,15 @@ impl TextCleaner {
         }
 
         s
-    } 
+    }
 
     fn collapse_repeated_chars(s: &str) -> String {
-        if s.len() < 2 { return s.to_string(); }
+        if s.len() < 2 {
+            return s.to_string();
+        }
         let chars: Vec<char> = s.chars().collect();
         let mut result = String::with_capacity(s.len());
-        
+
         let mut i = 0;
         while i < chars.len() {
             let c = chars[i];
@@ -343,10 +356,21 @@ impl TextCleaner {
                 count += 1;
             }
 
-            let limit = if c == '.' || c == '!' || c == '?' || c == '。' || c == '！' || c == '？' || c == '…' {
+            let limit = if c == '.'
+                || c == '!'
+                || c == '?'
+                || c == '。'
+                || c == '！'
+                || c == '？'
+                || c == '…'
+            {
                 3
             } else if c.is_alphanumeric() {
-                if count >= 3 { 1 } else { count } 
+                if count >= 3 {
+                    1
+                } else {
+                    count
+                }
             } else {
                 1
             };
@@ -360,47 +384,52 @@ impl TextCleaner {
     }
 
     fn collapse_repeated_phrases(s: &str) -> String {
-        if s.len() < 4 { return s.to_string(); }
-        
+        if s.len() < 4 {
+            return s.to_string();
+        }
+
         let result = s.to_string();
         let chars: Vec<char> = result.chars().collect();
         let len = chars.len();
-        
+
         for win_size in 2..=(len / 2) {
             let chunk1 = &chars[0..win_size];
-            let chunk2 = &chars[win_size..win_size*2];
-            
+            let chunk2 = &chars[win_size..win_size * 2];
+
             if chunk1 == chunk2 {
                 let mut matches = 2;
                 while (matches + 1) * win_size <= len {
-                    let next_chunk = &chars[matches * win_size .. (matches + 1) * win_size];
+                    let next_chunk = &chars[matches * win_size..(matches + 1) * win_size];
                     if next_chunk == chunk1 {
                         matches += 1;
                     } else {
                         break;
                     }
                 }
-                
+
                 if matches >= 2 && matches * win_size >= len - 1 {
                     return chunk1.iter().collect();
                 }
             }
         }
-        
+
         result
     }
 
     fn filter_stuttering(s: &str) -> String {
         let words: Vec<&str> = s.split_whitespace().collect();
         let mut result_words = Vec::new();
-        
+
         let mut i = 0;
         while i < words.len() {
             let current = words[i];
             if i + 1 < words.len() {
-                let next = words[i+1];
+                let next = words[i + 1];
                 let c_clean = current.trim_end_matches('-');
-                if current.ends_with('-') && !c_clean.is_empty() && next.to_lowercase().starts_with(&c_clean.to_lowercase()) {
+                if current.ends_with('-')
+                    && !c_clean.is_empty()
+                    && next.to_lowercase().starts_with(&c_clean.to_lowercase())
+                {
                     i += 1;
                     continue;
                 }
@@ -408,7 +437,178 @@ impl TextCleaner {
             result_words.push(current);
             i += 1;
         }
-        
+
         result_words.join(" ")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::infrastructure::settings::TextProcessingSettings;
+
+    fn default_config() -> TextProcessingSettings {
+        TextProcessingSettings::default()
+    }
+
+    // ===== is_line_valid =====
+
+    #[test]
+    fn valid_line_passes() {
+        let cfg = default_config();
+        assert!(TextCleaner::is_line_valid("Hello World", &cfg));
+    }
+
+    #[test]
+    fn empty_line_rejected() {
+        let cfg = default_config();
+        assert!(!TextCleaner::is_line_valid("", &cfg));
+        assert!(!TextCleaner::is_line_valid("   ", &cfg));
+    }
+
+    #[test]
+    fn standalone_symbols_pass() {
+        let mut cfg = default_config();
+        // Disable garbage filter to isolate the standalone symbol length-bypass behavior.
+        // The garbage filter would reject "?" (100% special chars) — that's separate logic.
+        cfg.remove_garbage = false;
+        assert!(TextCleaner::is_line_valid("?", &cfg));
+        assert!(TextCleaner::is_line_valid("!", &cfg));
+        assert!(TextCleaner::is_line_valid("？", &cfg));
+        assert!(TextCleaner::is_line_valid("！", &cfg));
+    }
+
+    #[test]
+    fn garbage_ratio_filtering() {
+        let mut cfg = default_config();
+        cfg.remove_garbage = true;
+        cfg.special_char_ratio_limit = 0.5;
+        // All special chars should fail
+        assert!(!TextCleaner::is_line_valid("###!@$%", &cfg));
+        // Mostly text should pass
+        assert!(TextCleaner::is_line_valid("Hello World!", &cfg));
+    }
+
+    #[test]
+    fn consonant_spam_filter() {
+        let mut cfg = default_config();
+        cfg.consonant_spam_filter = true;
+        assert!(!TextCleaner::is_line_valid("wwww", &cfg));
+        assert!(!TextCleaner::is_line_valid("ZZZZ", &cfg));
+        assert!(TextCleaner::is_line_valid("ww", &cfg)); // Too short to be spam
+    }
+
+    #[test]
+    fn kana_spam_filter() {
+        let mut cfg = default_config();
+        cfg.kana_spam_filter = true;
+        assert!(!TextCleaner::is_line_valid("ののの", &cfg));
+        assert!(TextCleaner::is_line_valid("のの", &cfg)); // Too short
+        assert!(TextCleaner::is_line_valid("のだ", &cfg)); // Mixed = valid
+    }
+
+    // ===== clean =====
+
+    #[test]
+    fn clean_empty() {
+        let cfg = default_config();
+        assert_eq!(TextCleaner::clean("", &cfg), "");
+    }
+
+    #[test]
+    fn clean_preserves_normal_text() {
+        let cfg = default_config();
+        let result = TextCleaner::clean("Hello World", &cfg);
+        assert_eq!(result, "Hello World");
+    }
+
+    // ===== collapse_repeated_chars =====
+
+    #[test]
+    fn collapse_repeated_chars_basic() {
+        assert_eq!(TextCleaner::collapse_repeated_chars("aaaa"), "a");
+        assert_eq!(TextCleaner::collapse_repeated_chars("ab"), "ab");
+    }
+
+    #[test]
+    fn collapse_preserves_punctuation_up_to_3() {
+        assert_eq!(TextCleaner::collapse_repeated_chars("!!!!"), "!!!");
+        assert_eq!(TextCleaner::collapse_repeated_chars("..."), "...");
+        assert_eq!(TextCleaner::collapse_repeated_chars("......"), "...");
+    }
+
+    // ===== collapse_repeated_phrases =====
+
+    #[test]
+    fn collapse_repeated_phrases() {
+        assert_eq!(TextCleaner::collapse_repeated_phrases("abab"), "ab");
+        assert_eq!(TextCleaner::collapse_repeated_phrases("abcabc"), "abc");
+    }
+
+    #[test]
+    fn collapse_no_repeat() {
+        assert_eq!(TextCleaner::collapse_repeated_phrases("hello"), "hello");
+    }
+
+    // ===== filter_stuttering =====
+
+    #[test]
+    fn filter_stuttering_removes_stutter() {
+        assert_eq!(
+            TextCleaner::filter_stuttering("I- I love you"),
+            "I love you"
+        );
+    }
+
+    #[test]
+    fn filter_stuttering_preserves_non_stutter() {
+        assert_eq!(TextCleaner::filter_stuttering("hello world"), "hello world");
+    }
+
+    // ===== dedupe_consecutive_lines =====
+
+    #[test]
+    fn dedupe_consecutive() {
+        let lines = vec!["A".to_string(), "A".to_string(), "B".to_string()];
+        let result = TextCleaner::dedupe_consecutive_lines(lines);
+        assert_eq!(result, vec!["A", "B"]);
+    }
+
+    #[test]
+    fn dedupe_preserves_non_consecutive() {
+        let lines = vec!["A".to_string(), "B".to_string(), "A".to_string()];
+        let result = TextCleaner::dedupe_consecutive_lines(lines);
+        assert_eq!(result, vec!["A", "B", "A"]);
+    }
+
+    // ===== OCR-merge & Wordninja independent toggles =====
+
+    #[test]
+    fn test_ocr_merge_only() {
+        let mut cfg = default_config();
+        cfg.enable_ocr_merge = true;
+        cfg.enable_wordninja = false;
+
+        // "HELLO W O R L D" should merge when enable_ocr_merge is true
+        assert_eq!(TextCleaner::clean("HELLO W O R L D", &cfg), "HELLOWORLD");
+
+        // Compound word "gamestart" should NOT split when wordninja is false
+        assert_eq!(TextCleaner::clean("gamestart", &cfg), "gamestart");
+    }
+
+    #[test]
+    fn test_wordninja_only() {
+        let mut cfg = default_config();
+        cfg.enable_ocr_merge = false;
+        cfg.enable_wordninja = true;
+
+        // "HELLO W O R L D" should NOT merge when enable_ocr_merge is false
+        assert_eq!(
+            TextCleaner::clean("HELLO W O R L D", &cfg),
+            "HELLO W O R L D"
+        );
+
+        // Compound word "gamestart" should split when wordninja is true
+        assert_eq!(TextCleaner::clean("gamestart", &cfg), "game start");
     }
 }

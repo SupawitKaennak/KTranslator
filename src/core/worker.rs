@@ -1,8 +1,8 @@
-use crate::core::ports::OcrTextLine;
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::sync::atomic::AtomicIsize;
+﻿use crate::core::ports::OcrTextLine;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
+use std::sync::atomic::AtomicIsize;
+use std::sync::Arc;
 
 /// Results from background worker threads sent back to the main UI loop.
 pub enum BgResult {
@@ -20,18 +20,11 @@ pub enum BgResult {
         yolo_bubbles: Vec<OcrTextLine>,
     },
     /// The captured frame is identical to the previous one — skip API call.
-    Unchanged {
-        slot_idx: usize,
-    },
+    Unchanged { slot_idx: usize },
     /// The screen is changing. Update the stable hash tracker and skip API.
-    HashChanged {
-        slot_idx: usize,
-        new_hash: u64,
-    },
+    HashChanged { slot_idx: usize, new_hash: u64 },
     /// The screen is stable but we are waiting for the debounce duration.
-    WaitingDebounce {
-        slot_idx: usize,
-    },
+    WaitingDebounce { slot_idx: usize },
     /// The frame matches a cached translation.
     CacheHit {
         slot_idx: usize,
@@ -44,10 +37,7 @@ pub enum BgResult {
         yolo_bubbles: Vec<OcrTextLine>,
     },
     /// Direct status update for the UI spinner/label
-    StatusUpdate {
-        slot_idx: usize,
-        status: String,
-    },
+    StatusUpdate { slot_idx: usize, status: String },
     /// An error occurred during OCR / Translation.
     Error {
         slot_idx: usize,
@@ -76,14 +66,14 @@ pub struct SlotRuntimeState {
     /// Track language changes to invalidate caches
     pub last_langs: (Option<String>, String),
     pub last_ppocr_model: Option<crate::infrastructure::settings::PpocrModelSuite>,
-    /// Time when the screen first became unstable. 
+    /// Time when the screen first became unstable.
     /// Used to force a translation if it never settles (e.g. in games).
     pub first_unstable_at: u64,
     /// Whether the last capture attempt resulted in an instruction to hide the overlay
     pub last_capture_hide: Arc<Mutex<Option<bool>>>,
     /// Pristine copy of the last captured frame buffer stored locally in RAM for real-time Preview rendering
     pub last_frame: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
-    
+
     // ── Realtime Stability Trackers ──
     pub last_stable_ocr_text: String,
     pub identical_frames_count: u32,
@@ -99,6 +89,8 @@ pub struct SlotRuntimeState {
     pub overlay_fade_alpha: f32,
     pub overlay_fade_target: f32,
     pub last_overlay_fade_ms: u64,
+    /// ID of the active error shown in the UI for this slot
+    pub active_error_id: Option<usize>,
 }
 
 impl SlotRuntimeState {
@@ -126,15 +118,19 @@ impl SlotRuntimeState {
             overlay_fade_alpha: 1.0,
             overlay_fade_target: 1.0,
             last_overlay_fade_ms: 0,
+            active_error_id: None,
         }
     }
 }
 
 /// Smart hash converts RGBA to thresholded grayscale before hashing.
 /// This prevents minor lighting/background particle changes from triggering text translation.
+/// Uses FNV-1a internally (see `crate::core::utils::fnv_hash_bytes` for the plain variant).
 pub fn smart_hash(data: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
-    
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001B3;
+    let mut h: u64 = FNV_OFFSET;
+
     // Dynamic step: smaller regions need finer sampling to detect
     // single-character text changes; large regions can skip more.
     let pixel_count = data.len() / 4;
@@ -143,13 +139,13 @@ pub fn smart_hash(data: &[u8]) -> u64 {
     while i + 2 < data.len() {
         // Quantize each channel to 3 bits (8 levels) to ignore compression noise and dithering
         let r = data[i] >> 5;
-        let g = data[i+1] >> 5;
-        let b = data[i+2] >> 5;
+        let g = data[i + 1] >> 5;
+        let b = data[i + 2] >> 5;
         let combined = (r << 6) | (g << 3) | b;
-        
+
         h ^= combined as u64;
-        h = h.wrapping_mul(0x100000001b3);
-        
+        h = h.wrapping_mul(FNV_PRIME);
+
         i += step;
     }
     h

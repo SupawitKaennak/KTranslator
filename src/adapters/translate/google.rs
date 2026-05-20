@@ -1,8 +1,10 @@
-use anyhow::Result;
-use crate::core::ports::Translator;
+﻿use crate::core::ports::Translator;
 use crate::core::types::LanguageTag;
+use anyhow::Result;
 use reqwest::blocking::Client;
 use serde_json::Value;
+
+use super::llm_common;
 
 pub struct GoogleTranslator {
     client: Client,
@@ -10,11 +12,7 @@ pub struct GoogleTranslator {
 
 impl GoogleTranslator {
     pub fn new() -> Result<Self> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .pool_idle_timeout(std::time::Duration::from_secs(120))
-            .build()?;
+        let client = llm_common::build_client(15)?;
         Ok(Self { client })
     }
 }
@@ -26,13 +24,15 @@ impl Translator for GoogleTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         _context_hint: Option<&str>,
-    ) -> Result<String> {
+    ) -> Result<String, crate::core::error::KError> {
         let sl = source.map(|s| s.as_str()).unwrap_or("auto");
         let tl = target.as_str();
 
         let mut last_err = None;
         for attempt in 0..3 {
-            let req = self.client.get("https://translate.googleapis.com/translate_a/single")
+            let req = self
+                .client
+                .get("https://translate.googleapis.com/translate_a/single")
                 .query(&[
                     ("client", "gtx"),
                     ("sl", sl),
@@ -47,7 +47,7 @@ impl Translator for GoogleTranslator {
                         let resp_text = match resp.text() {
                             Ok(t) => t,
                             Err(e) => {
-                                last_err = Some(anyhow::anyhow!("Read text error: {}", e));
+                                last_err = Some(format!("Read text error: {}", e));
                                 continue;
                             }
                         };
@@ -55,7 +55,7 @@ impl Translator for GoogleTranslator {
                         let v: Value = match serde_json::from_str(&resp_text) {
                             Ok(val) => val,
                             Err(e) => {
-                                last_err = Some(anyhow::anyhow!("JSON parse error: {}", e));
+                                last_err = Some(format!("JSON parse error: {}", e));
                                 continue;
                             }
                         };
@@ -72,28 +72,31 @@ impl Translator for GoogleTranslator {
                         if !translated.is_empty() {
                             return Ok(translated);
                         } else {
-                            last_err = Some(anyhow::anyhow!("Empty translation returned"));
+                            last_err = Some("Empty translation returned".to_string());
                         }
                     } else if resp.status().as_u16() == 429 {
                         // Rate limit hit, backoff heavily
-                        last_err = Some(anyhow::anyhow!("Rate limit (429)"));
+                        last_err = Some("Rate limit (429)".to_string());
                         std::thread::sleep(std::time::Duration::from_millis(1000 * (attempt + 1)));
                         continue;
                     } else {
-                        last_err = Some(anyhow::anyhow!("HTTP error: {}", resp.status()));
+                        last_err = Some(format!("HTTP error: {}", resp.status()));
                     }
                 }
                 Err(e) => {
-                    last_err = Some(anyhow::anyhow!("Request send error: {}", e));
+                    last_err = Some(format!("Request send error: {}", e));
                 }
             }
 
             // Simple backoff for general errors before retrying
             if attempt < 2 {
-                std::thread::sleep(std::time::Duration::from_millis(300 * (attempt as u64 + 1)));
+                std::thread::sleep(std::time::Duration::from_millis(300 * (attempt + 1)));
             }
         }
 
-        anyhow::bail!("Google Translate failed after 3 attempts. Last error: {:?}", last_err)
+        Err(crate::core::error::KError::Translation(format!(
+            "Google Translate failed after 3 attempts. Last error: {:?}",
+            last_err
+        )))
     }
 }

@@ -1,16 +1,14 @@
-use anyhow::{bail, Context, Result};
+﻿use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::core::{
-    ports::Translator,
-    prompt_builder,
-    types::LanguageTag,
-};
+use crate::core::{ports::Translator, types::LanguageTag};
+
+use super::llm_common;
 
 #[derive(Debug, Clone)]
 pub struct GeminiModel {
-    pub id: String,          // "gemini-2.0-flash"
+    pub id: String,           // "gemini-2.0-flash"
     pub display_name: String, // "Gemini 2.0 Flash"
 }
 
@@ -24,16 +22,11 @@ pub struct GeminiTranslator {
 
 impl GeminiTranslator {
     pub fn new(
-        api_key: String, 
-        model: String, 
+        api_key: String,
+        model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .pool_idle_timeout(std::time::Duration::from_secs(120))
-            .build()
-            .context("build http client")?;
+        let client = llm_common::build_client(llm_common::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -81,7 +74,11 @@ impl GeminiTranslator {
                 out.push(GeminiModel { id, display_name });
             }
         }
-        out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
+        out.sort_by(|a, b| {
+            a.display_name
+                .to_lowercase()
+                .cmp(&b.display_name.to_lowercase())
+        });
         Ok(out)
     }
 
@@ -100,31 +97,23 @@ impl Translator for GeminiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String> {
+    ) -> Result<String, crate::core::error::KError> {
         if self.api_key.trim().is_empty() {
-            bail!("Gemini API key is empty (open Settings and set it)");
+            return Err(crate::core::error::KError::Translation(
+                "Gemini API key is empty (open Settings and set it)".to_string(),
+            ));
         }
 
-        let lines: Vec<&str> = text.lines().collect();
-        let ctx = if self.behavior.as_ref().map(|b| b.contextual_translation).unwrap_or(false) {
-            context_hint
-        } else {
-            None
-        };
-        let prompt = prompt_builder::build_translation_prompt_with_behavior(
-            &lines, source, target, self.behavior.as_ref(), ctx,
-        );
-        
-        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.1);
-
-        // Dynamically calculate budget for output tokens based on actual input length.
-        // Prevent wasting massive output token quotas for short manga dialogs.
-        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
-        let max_tokens = estimated_tokens.clamp(128, 2048);
+        let prompt =
+            llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_common::get_temperature(self.behavior.as_ref(), 0.1);
+        let max_tokens = llm_common::estimate_max_tokens(text);
 
         let body = RequestBody {
             system_instruction: Some(Content {
-                parts: vec![Part { text: prompt.system }],
+                parts: vec![Part {
+                    text: prompt.system,
+                }],
             }),
             contents: vec![Content {
                 parts: vec![Part { text: prompt.user }],
@@ -132,30 +121,46 @@ impl Translator for GeminiTranslator {
             generation_config: Some(GenerationConfig {
                 temperature: Some(temp), // Dynamically mapped to Translation Creativity Slider
                 max_output_tokens: Some(max_tokens),
-                ..Default::default()
             }),
         };
 
-        let resp = self.client
+        let resp = self
+            .client
             .post(self.endpoint())
             .query(&[("key", &self.api_key)])
             .json(&body)
             .send()
-            .context("send generateContent request")?;
+            .map_err(|e| {
+                crate::core::error::KError::Translation(format!(
+                    "send generateContent request: {:?}",
+                    e
+                ))
+            })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            bail!("Gemini API error: {status} {body}");
+            return Err(crate::core::error::KError::Translation(format!(
+                "Gemini API error: {status} {body}"
+            )));
         }
 
-        let data: ResponseBody = resp.json().context("parse generateContent response")?;
+        let data: ResponseBody = resp.json().map_err(|e| {
+            crate::core::error::KError::Translation(format!(
+                "parse generateContent response: {:?}",
+                e
+            ))
+        })?;
         let translated = data
             .candidates
-            .get(0)
-            .and_then(|c| c.content.parts.get(0))
+            .first()
+            .and_then(|c| c.content.parts.first())
             .map(|p| p.text.clone())
-            .ok_or_else(|| anyhow::anyhow!("Gemini returned no candidates (Safety filter?)"))?;
+            .ok_or_else(|| {
+                crate::core::error::KError::Translation(
+                    "Gemini returned no candidates (Safety filter?)".to_string(),
+                )
+            })?;
 
         Ok(translated)
     }

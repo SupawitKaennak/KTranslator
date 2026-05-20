@@ -1,4 +1,4 @@
-#[cfg(target_os = "windows")]
+﻿#[cfg(target_os = "windows")]
 use std::ptr;
 #[cfg(target_os = "windows")]
 use windows::core::HSTRING;
@@ -7,20 +7,20 @@ use windows::Data::Text::WordsSegmenter;
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{COLORREF, HWND};
 #[cfg(target_os = "windows")]
-use windows::Win32::UI::WindowsAndMessaging::{
-    FindWindowW, SetLayeredWindowAttributes, LWA_COLORKEY, LWA_ALPHA,
-};
-#[cfg(target_os = "windows")]
-use windows::Win32::UI::WindowsAndMessaging::{
-    SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
+use windows::Win32::Graphics::Gdi::{
+    CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_XOR,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{
     GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS,
 };
 #[cfg(target_os = "windows")]
-use windows::Win32::Graphics::Gdi::{
-    CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_XOR,
+use windows::Win32::UI::WindowsAndMessaging::{
+    FindWindowW, SetLayeredWindowAttributes, LWA_ALPHA, LWA_COLORKEY,
+};
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::{
+    SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE, WDA_NONE,
 };
 
 /// Finds a window by its title.
@@ -62,10 +62,10 @@ pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
     #[cfg(target_os = "windows")]
     unsafe {
         let hwnd = HWND(hwnd_raw as *mut _);
-        
+
         // Apply color key for transparency (Black 0x000000 is our key)
         let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_COLORKEY | LWA_ALPHA);
-        
+
         // Exclude from capture if requested to prevent OCR feedback loops
         if hide_from_capture {
             let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
@@ -95,13 +95,17 @@ pub fn set_hollow_window_region(
         // Create the "hole" in the middle
         let inner = CreateRectRgn(left, top, width - right, height - bottom);
         let frame = CreateRectRgn(0, 0, 0, 0);
-        
+
         if outer.0.is_null() || inner.0.is_null() || frame.0.is_null() {
-            if !outer.0.is_null() { let _ = DeleteObject(outer.into()); }
-            if !inner.0.is_null() { let _ = DeleteObject(inner.into()); }
+            if !outer.0.is_null() {
+                let _ = DeleteObject(outer.into());
+            }
+            if !inner.0.is_null() {
+                let _ = DeleteObject(inner.into());
+            }
             return;
         }
-        
+
         let _ = CombineRgn(Some(frame), Some(outer), Some(inner), RGN_XOR);
         let _ = SetWindowRgn(hwnd, Some(frame), true);
         let _ = DeleteObject(outer.into());
@@ -110,7 +114,7 @@ pub fn set_hollow_window_region(
     let _ = (hwnd_raw, width, height, top, left, right, bottom);
 }
 
-/// Boosts the current process priority to Above Normal to ensure 
+/// Boosts the current process priority to Above Normal to ensure
 /// background threads (OCR/Translation) get enough CPU cycles during gaming.
 pub fn boost_process_priority() {
     #[cfg(target_os = "windows")]
@@ -128,7 +132,10 @@ pub fn segment_thai(
 ) -> String {
     use crate::infrastructure::settings::ThaiSegmentationMode;
 
-    if !text.chars().any(|c| (c as u32) >= 0x0E01 && (c as u32) <= 0x0E5B) {
+    if !text
+        .chars()
+        .any(|c| (c as u32) >= 0x0E01 && (c as u32) <= 0x0E5B)
+    {
         return text.to_string();
     }
 
