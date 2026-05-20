@@ -1,4 +1,4 @@
-﻿use crate::core::{
+use crate::core::{
     model::AppModel,
     ports::{FrameSource, OcrEngine, Translator},
     usecases::pipeline::TranslationPipeline,
@@ -578,110 +578,95 @@ impl BackgroundCoordinator {
                 }
             }
 
-            let rect = slot.rect.unwrap();
-            let display_id = slot.display_id;
-            let source_lang = slot.source_lang.clone();
-            let target_lang = slot.target_lang.clone();
-            let capture = capture.clone();
-            let ocr_engine = ocr_engine.clone();
-            let translator = translator.clone();
-            let tx = self.bg_tx.clone();
-            let prev_hash = slots_runtime[i].last_hash;
-            let stable_hash = slot.stable_hash;
-            let stable_since_ms = slot.stable_since_ms;
-            let language_version = slot.language_version;
-            let cache_arc = translation_cache.clone();
-            let text_cache_arc = text_translation_cache.clone();
-            let first_unstable_at = slots_runtime[i].first_unstable_at;
-            let platform = platform.clone();
-            let smart_merge = settings.smart_merge;
-            let img_proc_cfg = settings.img_proc.clone();
-            let txt_proc_cfg = settings.txt_proc.clone();
-            let regex_rules = settings.regex_rules.clone();
-            let glossary_entries = settings.glossary_entries.clone();
-            let last_frame_arc = slots_runtime[i].last_frame.clone();
-            let max_cache_entries = settings.perf.max_cache_entries;
-            let enable_batching = settings.perf.enable_batching;
-            let context_segments: Vec<String> = slots_runtime[i]
-                .recent_translations
-                .iter()
-                .cloned()
-                .collect();
-            let contextual_translation = settings.trans_behavior.contextual_translation;
-            let context_window_size = settings.realtime.context_window_size;
-            let th_segmentation = settings.txt_proc.th_segmentation;
-            let jp_merge_vertical = settings.txt_proc.jp_merge_vertical;
+            let task = SlotTask {
+                context: crate::core::usecases::pipeline::PipelineContext {
+                    slot_idx: i,
+                    rect: slot.rect.unwrap(),
+                    display_id: slot.display_id,
+                    source_lang: slot.source_lang.clone(),
+                    target_lang: slot.target_lang.clone(),
+                    language_version: slot.language_version,
+                    capture: capture.clone(),
+                    ocr_engine: ocr_engine.clone(),
+                    translator: translator.clone(),
+                    platform: platform.clone(),
+                    yolo_detector: yolo_detector.clone(),
+                    prev_hash: slots_runtime[i].last_hash,
+                    stable_hash: slot.stable_hash,
+                    stable_since_ms: slot.stable_since_ms,
+                    first_unstable_at: slots_runtime[i].first_unstable_at,
+                    cache_arc: translation_cache.clone(),
+                    text_cache_arc: text_translation_cache.clone(),
+                    max_cache_entries: settings.perf.max_cache_entries,
+                    smart_merge: settings.smart_merge,
+                    img_proc_cfg: settings.img_proc.clone(),
+                    txt_proc_cfg: settings.txt_proc.clone(),
+                    regex_rules: settings.regex_rules.clone(),
+                    glossary_entries: settings.glossary_entries.clone(),
+                    jp_merge_vertical: settings.txt_proc.jp_merge_vertical,
+                    th_segmentation: settings.txt_proc.th_segmentation,
+                    enable_batching: settings.perf.enable_batching,
+                    context_segments: slots_runtime[i]
+                        .recent_translations
+                        .iter()
+                        .cloned()
+                        .collect(),
+                    contextual_translation: settings.trans_behavior.contextual_translation,
+                    context_window_size: settings.realtime.context_window_size,
+                    last_frame_arc: slots_runtime[i].last_frame.clone(),
+                    status_tx: self.bg_tx.clone(),
+                    ctx: ctx.clone(),
+                },
+            };
 
-            let yolo_detector = yolo_detector.clone();
-            let ctx_worker = ctx.clone();
             self.pool.lock().execute(move || {
-                ctx_worker.request_repaint();
-                let tx_for_panic = tx.clone();
-                let ctx_for_panic = ctx_worker.clone();
-                let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                    let tx_inner = tx.clone();
-                    let result = TranslationPipeline::execute_slot(
-                        crate::core::usecases::pipeline::PipelineContext {
-                            slot_idx: i,
-                            rect,
-                            display_id,
-                            source_lang,
-                            target_lang,
-                            language_version,
-                            capture,
-                            ocr_engine,
-                            translator,
-                            platform: platform.clone(),
-                            yolo_detector,
-                            prev_hash,
-                            stable_hash,
-                            stable_since_ms,
-                            first_unstable_at,
-                            cache_arc,
-                            text_cache_arc,
-                            max_cache_entries,
-                            smart_merge,
-                            img_proc_cfg,
-                            txt_proc_cfg,
-                            regex_rules,
-                            glossary_entries,
-                            jp_merge_vertical,
-                            th_segmentation,
-                            enable_batching,
-                            context_segments,
-                            contextual_translation,
-                            context_window_size,
-                            last_frame_arc,
-                            status_tx: tx_inner,
-                            ctx: ctx_worker.clone(),
-                        },
-                    );
-
-                    match result {
-                        Ok(res) => {
-                            let _ = tx.send(res);
-                            ctx_worker.request_repaint();
-                        }
-                        Err(e) => {
-                            let _ = tx.send(BgResult::Error {
-                                slot_idx: i,
-                                language_version,
-                                err: format!("{e:#}"),
-                            });
-                            ctx_worker.request_repaint();
-                        }
-                    }
-                }));
-
-                if res.is_err() {
-                    let _ = tx_for_panic.send(BgResult::Error {
-                        slot_idx: i,
-                        language_version,
-                        err: "Background thread panicked (system error)".to_string(),
-                    });
-                    ctx_for_panic.request_repaint();
-                }
+                task.run();
             });
+        }
+    }
+}
+
+pub struct SlotTask {
+    pub context: crate::core::usecases::pipeline::PipelineContext,
+}
+
+impl SlotTask {
+    pub fn run(self) {
+        let tx = self.context.status_tx.clone();
+        let ctx_worker = self.context.ctx.clone();
+        let slot_idx = self.context.slot_idx;
+        let language_version = self.context.language_version;
+
+        let tx_for_panic = tx.clone();
+        let ctx_for_panic = ctx_worker.clone();
+
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let tx_inner = tx.clone();
+            let result = TranslationPipeline::execute_slot(self.context);
+
+            match result {
+                Ok(res) => {
+                    let _ = tx_inner.send(res);
+                    ctx_worker.request_repaint();
+                }
+                Err(e) => {
+                    let _ = tx_inner.send(BgResult::Error {
+                        slot_idx,
+                        language_version,
+                        err: format!("{e:#}"),
+                    });
+                    ctx_worker.request_repaint();
+                }
+            }
+        }));
+
+        if res.is_err() {
+            let _ = tx_for_panic.send(BgResult::Error {
+                slot_idx,
+                language_version,
+                err: "Background thread panicked (system error)".to_string(),
+            });
+            ctx_for_panic.request_repaint();
         }
     }
 }

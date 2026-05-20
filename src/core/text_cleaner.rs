@@ -1,4 +1,4 @@
-﻿use regex::Regex;
+use regex::Regex;
 use std::sync::LazyLock;
 use unicode_normalization::UnicodeNormalization;
 
@@ -276,7 +276,7 @@ impl TextCleaner {
         // --- OCR Fragment Merger ---
         // Windows OCR on manga fonts often splits words into isolated characters.
         // Merge single uppercase letters back into the previous word when both are uppercase.
-        if config.enable_wordninja {
+        if config.enable_ocr_merge {
             let tokens: Vec<&str> = s.split_whitespace().collect();
             if tokens.len() > 1 {
                 let mut merged: Vec<String> = Vec::new();
@@ -579,5 +579,36 @@ mod tests {
         let lines = vec!["A".to_string(), "B".to_string(), "A".to_string()];
         let result = TextCleaner::dedupe_consecutive_lines(lines);
         assert_eq!(result, vec!["A", "B", "A"]);
+    }
+
+    // ===== OCR-merge & Wordninja independent toggles =====
+
+    #[test]
+    fn test_ocr_merge_only() {
+        let mut cfg = default_config();
+        cfg.enable_ocr_merge = true;
+        cfg.enable_wordninja = false;
+
+        // "HELLO W O R L D" should merge when enable_ocr_merge is true
+        assert_eq!(TextCleaner::clean("HELLO W O R L D", &cfg), "HELLOWORLD");
+
+        // Compound word "gamestart" should NOT split when wordninja is false
+        assert_eq!(TextCleaner::clean("gamestart", &cfg), "gamestart");
+    }
+
+    #[test]
+    fn test_wordninja_only() {
+        let mut cfg = default_config();
+        cfg.enable_ocr_merge = false;
+        cfg.enable_wordninja = true;
+
+        // "HELLO W O R L D" should NOT merge when enable_ocr_merge is false
+        assert_eq!(
+            TextCleaner::clean("HELLO W O R L D", &cfg),
+            "HELLO W O R L D"
+        );
+
+        // Compound word "gamestart" should split when wordninja is true
+        assert_eq!(TextCleaner::clean("gamestart", &cfg), "game start");
     }
 }

@@ -1,4 +1,4 @@
-﻿use anyhow::{Context, Result};
+use anyhow::{Context, Result};
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
@@ -155,6 +155,7 @@ pub struct TextProcessingSettings {
     pub kana_spam_filter: bool,
     pub punctuation_normalization: bool,
     pub enable_wordninja: bool,
+    pub enable_ocr_merge: bool,
 
     // ── Language-Specific Processing ──
     pub jp_merge_vertical: bool,
@@ -185,6 +186,7 @@ impl Default for TextProcessingSettings {
             kana_spam_filter: true,
             punctuation_normalization: true,
             enable_wordninja: false,
+            enable_ocr_merge: true,
 
             jp_merge_vertical: true,
             jp_kana_normalization: true,
