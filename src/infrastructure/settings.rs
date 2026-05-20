@@ -22,9 +22,9 @@ pub enum OcrEngineType {
     BubbleYOLO,
 }
 
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum PpocrModelSuite {
+    #[default]
     CnEnMobile,
     CnEnServer,
     JapaneseMobile,
@@ -55,12 +55,6 @@ impl PpocrModelSuite {
             PpocrModelSuite::CyrillicMobile => "mobile_cyrillic",
             PpocrModelSuite::CyrillicServer => "server_cyrillic",
         }
-    }
-}
-
-impl Default for PpocrModelSuite {
-    fn default() -> Self {
-        Self::CnEnMobile
     }
 }
 
@@ -97,16 +91,16 @@ pub enum MorphologyOp {
 pub struct ImageProcessingSettings {
     pub grayscale: bool,
     pub invert: bool,
-    pub contrast: f32,       // 0.0 - 3.0 (default 1.0)
-    pub brightness: i32,     // -255 - 255 (default 0)
-    pub gamma: f32,          // 0.1 - 5.0 (default 1.0)
+    pub contrast: f32,   // 0.0 - 3.0 (default 1.0)
+    pub brightness: i32, // -255 - 255 (default 0)
+    pub gamma: f32,      // 0.1 - 5.0 (default 1.0)
     pub binarize: bool,
-    pub binary_threshold: u8,// 0 - 255 (default 127)
+    pub binary_threshold: u8, // 0 - 255 (default 127)
     pub adaptive_threshold: bool,
     pub denoise: bool,
     pub sharpen: bool,
     pub morphology: MorphologyOp,
-    pub resize_scale: f32,   // 0.5 - 4.0 (default 1.0)
+    pub resize_scale: f32, // 0.5 - 4.0 (default 1.0)
     pub deskew: bool,
     pub anti_alias_removal: bool,
 }
@@ -161,18 +155,18 @@ pub struct TextProcessingSettings {
     pub kana_spam_filter: bool,
     pub punctuation_normalization: bool,
     pub enable_wordninja: bool,
-    
+
     // ── Language-Specific Processing ──
     pub jp_merge_vertical: bool,
     pub jp_kana_normalization: bool,
     pub jp_remove_furigana: bool,
     pub jp_preserve_honorifics: bool,
-    
+
     pub cn_conversion: ChineseConversionMode,
-    
+
     pub th_segmentation: ThaiSegmentationMode,
     pub th_zero_width_cleanup: bool,
-    
+
     pub ar_rtl_correction: bool,
 }
 
@@ -191,17 +185,17 @@ impl Default for TextProcessingSettings {
             kana_spam_filter: true,
             punctuation_normalization: true,
             enable_wordninja: false,
-            
+
             jp_merge_vertical: true,
             jp_kana_normalization: true,
             jp_remove_furigana: true,
             jp_preserve_honorifics: false,
-            
+
             cn_conversion: ChineseConversionMode::None,
-            
+
             th_segmentation: ThaiSegmentationMode::Standard,
             th_zero_width_cleanup: true,
-            
+
             ar_rtl_correction: true,
         }
     }
@@ -271,7 +265,7 @@ pub struct TranslationBehaviorSettings {
     pub preserve_honorifics: bool,
     pub preserve_emojis: bool,
     pub contextual_translation: bool,
-    pub creativity: f32,             // 0.0 to 1.0, default 0.2
+    pub creativity: f32, // 0.0 to 1.0, default 0.2
     pub profanity_filter: bool,
     pub tone: TranslationTone,
     pub preset: TranslationStylePreset,
@@ -469,7 +463,7 @@ pub struct Settings {
 
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
-    
+
     pub img_proc: ImageProcessingSettings,
     pub txt_proc: TextProcessingSettings,
     pub regex_rules: Vec<RegexRule>,
@@ -548,4 +542,3 @@ pub fn save_settings(settings: &Settings) -> Result<()> {
     fs::write(&path, bytes).with_context(|| format!("write settings at {}", path.display()))?;
     Ok(())
 }
-

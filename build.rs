@@ -3,7 +3,7 @@ fn main() {
         // 1. Convert PNG to ICO if needed
         let png_path = "assets/icons/icon.png";
         let ico_path = "assets/icons/icon.ico";
-        
+
         // Simple conversion using the image crate (which is already a dependency)
         // Note: Since build.rs runs before main compilation, we use a simple approach
         if let Ok(img) = image::open(png_path) {

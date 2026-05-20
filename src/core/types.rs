@@ -38,4 +38,3 @@ impl LanguageTag {
         &self.0
     }
 }
-

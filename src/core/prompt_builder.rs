@@ -1,5 +1,5 @@
-use std::sync::LazyLock;
 use crate::core::types::LanguageTag;
+use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
 // Shared language code → human-readable name mapping
@@ -82,7 +82,11 @@ pub fn build_translation_prompt(
         };
         let system = format!("Translate to {target_name}. Output translation ONLY.{extra_rules}");
         let user = lines.first().unwrap_or(&"").to_string();
-        TranslationPrompt { system, user, line_count: lines.len() }
+        TranslationPrompt {
+            system,
+            user,
+            line_count: lines.len(),
+        }
     } else {
         // ── Multi-line batch mode (Numbered List protocol) ───────────────
         // Use numbered lines which is much more robust for Llama/OpenAI models.
@@ -119,10 +123,17 @@ pub fn build_translation_prompt(
         let user = if source.is_some() {
             format!("Translate these {count} segments from {source_name} to {target_name}:\n\n{joined_input}", count = lines.len())
         } else {
-            format!("Translate these {count} segments to {target_name}:\n\n{joined_input}", count = lines.len())
+            format!(
+                "Translate these {count} segments to {target_name}:\n\n{joined_input}",
+                count = lines.len()
+            )
         };
 
-        TranslationPrompt { system, user, line_count: lines.len() }
+        TranslationPrompt {
+            system,
+            user,
+            line_count: lines.len(),
+        }
     }
 }
 
@@ -134,20 +145,24 @@ pub fn build_translation_prompt_with_behavior(
     context_hint: Option<&str>,
 ) -> TranslationPrompt {
     let mut base = build_translation_prompt(lines, source, target);
-    
+
     if let Some(beh) = behavior {
         // Apply Prompt Customization Overrides if enabled
         if beh.custom_prompts.enabled {
             let target_name = lang_name(target);
             let source_name = lang_name_or_auto(source);
-            
-            base.system = beh.custom_prompts.system_prompt
+
+            base.system = beh
+                .custom_prompts
+                .system_prompt
                 .replace("{source_lang}", source_name)
                 .replace("{target_lang}", target_name);
-                
+
             if lines.len() <= 1 {
                 let txt = lines.first().unwrap_or(&"");
-                base.user = beh.custom_prompts.single_line_user_prompt
+                base.user = beh
+                    .custom_prompts
+                    .single_line_user_prompt
                     .replace("{source_lang}", source_name)
                     .replace("{target_lang}", target_name)
                     .replace("{text}", txt);
@@ -156,7 +171,9 @@ pub fn build_translation_prompt_with_behavior(
                 for (i, line) in lines.iter().enumerate() {
                     joined_input.push_str(&format!("{}. {}\n", i + 1, line));
                 }
-                base.user = beh.custom_prompts.multi_line_user_prompt
+                base.user = beh
+                    .custom_prompts
+                    .multi_line_user_prompt
                     .replace("{source_lang}", source_name)
                     .replace("{target_lang}", target_name)
                     .replace("{count}", &lines.len().to_string())
@@ -165,31 +182,39 @@ pub fn build_translation_prompt_with_behavior(
         }
 
         let mut custom_guidance = String::new();
-        
+
         // 1. Literal vs Natural slider
         if beh.literal_natural_slider < 0.35 {
             custom_guidance.push_str(" - Focus on highly literal accuracy, maintaining source sentence structure and idioms directly.\n");
         } else if beh.literal_natural_slider > 0.65 {
             custom_guidance.push_str(" - Focus on highly natural localization, seamlessly rewriting idioms for professional native flow.\n");
         } else {
-            custom_guidance.push_str(" - Balance literal semantic fidelity with smooth, natural readability.\n");
+            custom_guidance.push_str(
+                " - Balance literal semantic fidelity with smooth, natural readability.\n",
+            );
         }
-        
+
         // 2. Preservations
         if beh.preserve_honorifics {
             custom_guidance.push_str(" - STRONGLY PRESERVE character honorifics (e.g. -san, -sama, senpai, sensei) as-is in the translated text.\n");
         }
         if beh.preserve_emojis {
-            custom_guidance.push_str(" - Retain all original emojis, kaomojis, and expressive punctuation icons.\n");
+            custom_guidance.push_str(
+                " - Retain all original emojis, kaomojis, and expressive punctuation icons.\n",
+            );
         }
         if beh.preserve_formatting {
-            custom_guidance.push_str(" - Preserve original spacing, indentation, and inline formatting.\n");
+            custom_guidance
+                .push_str(" - Preserve original spacing, indentation, and inline formatting.\n");
         }
         if beh.preserve_line_breaks && lines.len() > 1 {
-            custom_guidance.push_str(" - Keep the exact same number of lines and line breaks as the input.\n");
+            custom_guidance
+                .push_str(" - Keep the exact same number of lines and line breaks as the input.\n");
         }
         if beh.preserve_punctuation {
-            custom_guidance.push_str(" - Do not add, remove, or replace punctuation marks unless required by grammar.\n");
+            custom_guidance.push_str(
+                " - Do not add, remove, or replace punctuation marks unless required by grammar.\n",
+            );
         }
         if beh.contextual_translation {
             custom_guidance.push_str(" - Use reference context only for names/tone continuity; never copy it into the output.\n");
@@ -197,7 +222,7 @@ pub fn build_translation_prompt_with_behavior(
         if beh.profanity_filter {
             custom_guidance.push_str(" - STRICT PROFANITY FILTER: Mask or replace offensive language with professional mild expressions.\n");
         }
-        
+
         // 3. Tone
         match beh.tone {
             crate::infrastructure::settings::TranslationTone::Formal => custom_guidance.push_str(" - TONE: Maintain a formal, respectable, and polite voice.\n"),
@@ -205,7 +230,7 @@ pub fn build_translation_prompt_with_behavior(
             crate::infrastructure::settings::TranslationTone::Polite => custom_guidance.push_str(" - TONE: Use standard polite forms suitable for respectful public communication.\n"),
             _ => {}
         }
-        
+
         // 4. Presets
         match beh.preset {
             crate::infrastructure::settings::TranslationStylePreset::JrpgMode => custom_guidance.push_str(" - STYLE PRESET: JRPG Mode. Use epic fantasy jargon for skills, clear crisp terms for items, and dramatic dialogue styling.\n"),
@@ -214,9 +239,12 @@ pub fn build_translation_prompt_with_behavior(
             crate::infrastructure::settings::TranslationStylePreset::StreamerMode => custom_guidance.push_str(" - STYLE PRESET: Streamer Overlay Mode. Keep translations concise, readable at a glance, and strictly safe-for-work.\n"),
             _ => {}
         }
-        
+
         if !custom_guidance.is_empty() {
-            base.system.push_str(&format!("\n\nBEHAVIOR & STYLE OVERRIDES:\n{}", custom_guidance));
+            base.system.push_str(&format!(
+                "\n\nBEHAVIOR & STYLE OVERRIDES:\n{}",
+                custom_guidance
+            ));
         }
     }
 
@@ -226,7 +254,7 @@ pub fn build_translation_prompt_with_behavior(
             base.user
         );
     }
-    
+
     base
 }
 
@@ -268,7 +296,7 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
     static RE_NUMBERED: LazyLock<regex::Regex> = LazyLock::new(|| {
         regex::Regex::new(r"(?m)^[\s\*\-]*[\[\(]?\s*(\d+)\s*[\]\)]?[\s\.\:\->\*]+\s*(.*)$").unwrap()
     });
-    
+
     let mut numbered_result = vec![String::new(); expected_count];
     let mut matched_indices = std::collections::HashSet::new();
 
@@ -284,7 +312,7 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
         }
     }
 
-    if matched_indices.len() >= (expected_count + 1) / 2 {
+    if matched_indices.len() >= expected_count.div_ceil(2) {
         return numbered_result;
     }
 
@@ -313,4 +341,3 @@ pub fn parse_translation_response(raw: &str, expected_count: usize) -> Vec<Strin
 
     result
 }
-

@@ -2,10 +2,7 @@ use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::core::{
-    ports::Translator,
-    types::LanguageTag,
-};
+use crate::core::{ports::Translator, types::LanguageTag};
 
 use super::llm_common;
 
@@ -19,7 +16,7 @@ pub struct OllamaTranslator {
 
 impl OllamaTranslator {
     pub fn new(
-        url: String, 
+        url: String,
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
@@ -72,8 +69,9 @@ impl Translator for OllamaTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String> {
-        let prompt = llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+    ) -> Result<String, crate::core::error::KError> {
+        let prompt =
+            llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
         let temp = llm_common::get_temperature(self.behavior.as_ref(), 0.1);
 
         self.call_ollama(&prompt.system, &prompt.user, temp)
@@ -81,7 +79,12 @@ impl Translator for OllamaTranslator {
 }
 
 impl OllamaTranslator {
-    fn call_ollama(&self, system_prompt: &str, user_prompt: &str, temp: f32) -> Result<String> {
+    fn call_ollama(
+        &self,
+        system_prompt: &str,
+        user_prompt: &str,
+        temp: f32,
+    ) -> Result<String, crate::core::error::KError> {
         let req = OllamaChatRequest {
             model: self.model.clone(),
             messages: vec![
@@ -104,19 +107,19 @@ impl OllamaTranslator {
         };
 
         let endpoint = format!("{}/api/chat", self.url);
-        let resp = self.client
-            .post(&endpoint)
-            .json(&req)
-            .send()
-            .context("send ollama request")?;
+        let resp = self.client.post(&endpoint).json(&req).send().map_err(|e| {
+            crate::core::error::KError::Translation(format!("send ollama request: {:?}", e))
+        })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            bail!("Ollama error: {status} {body} (Make sure Ollama is running and model '{}' is pulled)", self.model);
+            return Err(crate::core::error::KError::Translation(format!("Ollama error: {status} {body} (Make sure Ollama is running and model '{}' is pulled)", self.model)));
         }
 
-        let data: OllamaChatResponse = resp.json().context("parse ollama response")?;
+        let data: OllamaChatResponse = resp.json().map_err(|e| {
+            crate::core::error::KError::Translation(format!("parse ollama response: {:?}", e))
+        })?;
         Ok(data.message.content.trim().to_string())
     }
 }

@@ -1,11 +1,11 @@
-use eframe::egui;
+use crate::core::worker::SlotRuntimeState;
 use crate::core::{
     model::AppModel,
     types::{LanguageTag, Rect},
 };
-use crate::core::worker::SlotRuntimeState;
 use crate::infrastructure::settings::UiLanguage;
 use crate::user_interface::i18n::get_i18n;
+use eframe::egui;
 
 pub struct SlotUiResponse {
     pub do_crop: bool,
@@ -13,24 +13,24 @@ pub struct SlotUiResponse {
 }
 
 pub const LANGUAGE_OPTIONS: &[(&str, &str)] = &[
-    ("Thai (th)",                     "th"),
-    ("English (en)",                  "en"),
-    ("Japanese (ja)",                 "ja"),
-    ("Korean (ko)",                   "ko"),
-    ("Chinese Simplified (zh-Hans)",  "zh-Hans"),
+    ("Thai (th)", "th"),
+    ("English (en)", "en"),
+    ("Japanese (ja)", "ja"),
+    ("Korean (ko)", "ko"),
+    ("Chinese Simplified (zh-Hans)", "zh-Hans"),
     ("Chinese Traditional (zh-Hant)", "zh-Hant"),
-    ("French (fr)",                   "fr"),
-    ("German (de)",                   "de"),
-    ("Spanish (es)",                  "es"),
-    ("Italian (it)",                  "it"),
-    ("Portuguese (pt)",               "pt"),
-    ("Russian (ru)",                  "ru"),
-    ("Ukrainian (uk)",                "uk"),
-    ("Bulgarian (bg)",                "bg"),
-    ("Serbian (sr)",                  "sr"),
-    ("Croatian (hr)",                 "hr"),
-    ("Swahili (sw)",                  "sw"),
-    ("Afrikaans (af)",                "af"),
+    ("French (fr)", "fr"),
+    ("German (de)", "de"),
+    ("Spanish (es)", "es"),
+    ("Italian (it)", "it"),
+    ("Portuguese (pt)", "pt"),
+    ("Russian (ru)", "ru"),
+    ("Ukrainian (uk)", "uk"),
+    ("Bulgarian (bg)", "bg"),
+    ("Serbian (sr)", "sr"),
+    ("Croatian (hr)", "hr"),
+    ("Swahili (sw)", "sw"),
+    ("Afrikaans (af)", "af"),
 ];
 
 pub fn render_slot_item(
@@ -51,24 +51,23 @@ pub fn render_slot_item(
 
     frame.show(ui, |ui| {
         ui.set_min_width(500.0);
-        
+
         // --- HEADER ROW ---
         let i18n = get_i18n(lang);
 
         ui.horizontal(|ui| {
             ui.heading(format!("{} {}", i18n.region, slot_idx + 1));
-            
+
             let slot = &mut model.slots[slot_idx];
-            
-            ui.checkbox(&mut slot.enabled, i18n.active).on_hover_text(i18n.active_hover);
+
+            ui.checkbox(&mut slot.enabled, i18n.active)
+                .on_hover_text(i18n.active_hover);
 
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if slot_idx > 0 {
-                    if ui.button("🗑").on_hover_text(i18n.delete_hover).clicked() {
-                        should_remove = true;
-                    }
+                if slot_idx > 0 && ui.button("🗑").on_hover_text(i18n.delete_hover).clicked() {
+                    should_remove = true;
                 }
-                
+
                 if ui
                     .button(i18n.select_area)
                     .on_hover_text(i18n.select_area_hover)
@@ -90,7 +89,8 @@ pub fn render_slot_item(
 
             egui::ComboBox::from_id_salt(format!("disp_sel_{}", slot_idx))
                 .selected_text({
-                    available_screens.iter()
+                    available_screens
+                        .iter()
                         .find(|(id, _)| *id == slot.display_id)
                         .map(|(_, name)| name.clone())
                         .unwrap_or_else(|| "Primary".to_string())
@@ -103,8 +103,12 @@ pub fn render_slot_item(
 
             ui.add_space(20.0);
             ui.label(format!("{}:", i18n.refresh));
-            ui.add(egui::DragValue::new(&mut slot.refresh_ms).speed(10.0).suffix("ms"))
-                .on_hover_text(i18n.refresh_hover);
+            ui.add(
+                egui::DragValue::new(&mut slot.refresh_ms)
+                    .speed(10.0)
+                    .suffix("ms"),
+            )
+            .on_hover_text(i18n.refresh_hover);
         });
 
         ui.add_space(8.0);
@@ -114,22 +118,30 @@ pub fn render_slot_item(
             let slot = &mut model.slots[slot_idx];
 
             ui.label(format!("{}:", i18n.from));
-            
+
             // Define source language code: Default to "en" (English) if None
-            let mut current_src = slot.source_lang.as_ref().map(|l| l.0.clone()).unwrap_or_else(|| "en".to_string());
-            
+            let mut current_src = slot
+                .source_lang
+                .as_ref()
+                .map(|l| l.0.clone())
+                .unwrap_or_else(|| "en".to_string());
+
             let mut src_changed = false;
             egui::ComboBox::from_id_salt(format!("src_{slot_idx}"))
                 .selected_text(
-                    LANGUAGE_OPTIONS.iter()
+                    LANGUAGE_OPTIONS
+                        .iter()
                         .find(|(_, code)| *code == current_src)
                         .map(|(name, _)| *name)
-                        .unwrap_or("English (en)")
+                        .unwrap_or("English (en)"),
                 )
                 .show_ui(ui, |ui| {
                     // Render all language options (No Auto Detect)
                     for (name, code) in LANGUAGE_OPTIONS {
-                        if ui.selectable_value(&mut current_src, code.to_string(), *name).clicked() {
+                        if ui
+                            .selectable_value(&mut current_src, code.to_string(), *name)
+                            .clicked()
+                        {
                             src_changed = true;
                         }
                     }
@@ -138,24 +150,33 @@ pub fn render_slot_item(
             if src_changed || slot.source_lang.is_none() {
                 let old_src = slot.source_lang.clone();
                 slot.source_lang = Some(LanguageTag(current_src));
-                tracing::info!("Slot {} source language forced/changed: {:?} -> {:?}", slot_idx, old_src, slot.source_lang);
+                tracing::info!(
+                    "Slot {} source language forced/changed: {:?} -> {:?}",
+                    slot_idx,
+                    old_src,
+                    slot.source_lang
+                );
             }
 
             ui.add_space(10.0);
             ui.label(format!("{}:", i18n.to));
-            
+
             let mut current_tgt = slot.target_lang.0.clone();
             let mut tgt_changed = false;
             egui::ComboBox::from_id_salt(format!("tgt_{slot_idx}"))
                 .selected_text(
-                    LANGUAGE_OPTIONS.iter()
+                    LANGUAGE_OPTIONS
+                        .iter()
                         .find(|(_, code)| *code == current_tgt)
                         .map(|(name, _)| *name)
-                        .unwrap_or("Thai (th)")
+                        .unwrap_or("Thai (th)"),
                 )
                 .show_ui(ui, |ui| {
                     for (name, code) in LANGUAGE_OPTIONS {
-                        if ui.selectable_value(&mut current_tgt, code.to_string(), *name).clicked() {
+                        if ui
+                            .selectable_value(&mut current_tgt, code.to_string(), *name)
+                            .clicked()
+                        {
                             tgt_changed = true;
                         }
                     }
@@ -172,18 +193,23 @@ pub fn render_slot_item(
         ui.horizontal(|ui| {
             let slot = &mut model.slots[slot_idx];
 
-            ui.checkbox(&mut slot.show_frame, format!("{}", i18n.show_frame))
+            ui.checkbox(&mut slot.show_frame, i18n.show_frame.to_string())
                 .on_hover_text(i18n.show_frame_hover);
             ui.add_space(10.0);
-            ui.checkbox(&mut slot.overlay_mode, format!("{}", i18n.overlay_mode)).on_hover_text(i18n.overlay_mode_hover);
+            ui.checkbox(&mut slot.overlay_mode, i18n.overlay_mode.to_string())
+                .on_hover_text(i18n.overlay_mode_hover);
             ui.add_space(20.0);
-            
-            let popup_btn_text = if slot.popup_open { 
+
+            let popup_btn_text = if slot.popup_open {
                 i18n.close_popup
-            } else { 
-                i18n.open_popup 
+            } else {
+                i18n.open_popup
             };
-            if ui.button(popup_btn_text).on_hover_text(i18n.open_popup_hover).clicked() {
+            if ui
+                .button(popup_btn_text)
+                .on_hover_text(i18n.open_popup_hover)
+                .clicked()
+            {
                 slot.popup_open = !slot.popup_open;
             }
         });
@@ -191,14 +217,19 @@ pub fn render_slot_item(
         ui.add_space(8.0);
 
         // --- ADVANCED / POSITION ROW ---
-        egui::CollapsingHeader::new(format!("{}", i18n.manual_pos))
+        egui::CollapsingHeader::new(i18n.manual_pos.to_string())
             .id_salt(format!("manual_adj_{slot_idx}"))
             .default_open(false)
             .show(ui, |ui| {
                 let slot = &mut model.slots[slot_idx];
 
                 if slot.rect.is_none() {
-                    slot.rect = Some(Rect { x: 0.0, y: 0.0, w: 400.0, h: 200.0 });
+                    slot.rect = Some(Rect {
+                        x: 0.0,
+                        y: 0.0,
+                        w: 400.0,
+                        h: 200.0,
+                    });
                 }
                 if let Some(r) = slot.rect.as_mut() {
                     ui.horizontal(|ui| {
@@ -209,10 +240,18 @@ pub fn render_slot_item(
                         ui.add(egui::DragValue::new(&mut r.y).speed(1.0));
                         ui.add_space(8.0);
                         ui.label("W:");
-                        ui.add(egui::DragValue::new(&mut r.w).speed(1.0).range(150.0..=9999.0));
+                        ui.add(
+                            egui::DragValue::new(&mut r.w)
+                                .speed(1.0)
+                                .range(150.0..=9999.0),
+                        );
                         ui.add_space(8.0);
                         ui.label("H:");
-                        ui.add(egui::DragValue::new(&mut r.h).speed(1.0).range(100.0..=9999.0));
+                        ui.add(
+                            egui::DragValue::new(&mut r.h)
+                                .speed(1.0)
+                                .range(100.0..=9999.0),
+                        );
                     });
                     let s = (*r).snap_to_pixels();
                     *r = s;
@@ -229,10 +268,17 @@ pub fn render_slot_item(
                 ui.add(egui::Spinner::new().size(12.0));
             }
 
-            let status_text = if runtime.status.is_empty() { i18n.idle } else { &runtime.status };
+            let status_text = if runtime.status.is_empty() {
+                i18n.idle
+            } else {
+                &runtime.status
+            };
             ui.label(egui::RichText::new(status_text).size(13.0).strong());
         });
     });
 
-    SlotUiResponse { do_crop, should_remove }
+    SlotUiResponse {
+        do_crop,
+        should_remove,
+    }
 }

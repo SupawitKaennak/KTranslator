@@ -1,13 +1,10 @@
-use std::sync::Arc;
+use super::{
+    gemini::GeminiTranslator, google::GoogleTranslator, groq::GroqTranslator,
+    ollama::OllamaTranslator, openai::OpenAiTranslator,
+};
 use crate::core::ports::Translator;
 use crate::infrastructure::settings::{Settings, TranslationProvider};
-use super::{
-    gemini::GeminiTranslator,
-    groq::GroqTranslator,
-    ollama::OllamaTranslator,
-    openai::OpenAiTranslator,
-    google::GoogleTranslator,
-};
+use std::sync::Arc;
 
 /// Factory unifying the instantiation of text-to-text translation providers.
 pub struct TranslatorFactory;
@@ -26,15 +23,13 @@ impl TranslatorFactory {
             )
             .ok()
             .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
-            TranslationProvider::Groq => {
-                GroqTranslator::new(
-                    settings.groq_api_key.clone(), 
-                    settings.groq_model.clone(),
-                    Some(settings.trans_behavior.clone()),
-                )
-                .ok()
-                .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>)
-            }
+            TranslationProvider::Groq => GroqTranslator::new(
+                settings.groq_api_key.clone(),
+                settings.groq_model.clone(),
+                Some(settings.trans_behavior.clone()),
+            )
+            .ok()
+            .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
             TranslationProvider::Ollama => OllamaTranslator::new(
                 settings.ollama_url.clone(),
                 settings.ollama_model.clone(),

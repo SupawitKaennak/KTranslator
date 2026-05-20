@@ -139,10 +139,7 @@ impl RegionOverlayState {
         let h = self.px.1 as f32;
         let nx = ((p.x - img_rect.min.x) / img_rect.width()).clamp(0.0, 1.0);
         let ny = ((p.y - img_rect.min.y) / img_rect.height()).clamp(0.0, 1.0);
-        (
-            self.origin.0 as f32 + nx * w,
-            self.origin.1 as f32 + ny * h,
-        )
+        (self.origin.0 as f32 + nx * w, self.origin.1 as f32 + ny * h)
     }
 
     fn try_finish_create(&self, img_rect: &egui::Rect, a: Pos2, b: Pos2) -> Option<Rect> {
@@ -171,22 +168,10 @@ impl RegionOverlayState {
             }
         }
         let edges = [
-            (
-                egui::pos2(egui_r.center().x, egui_r.top()),
-                Handle::N,
-            ),
-            (
-                egui::pos2(egui_r.center().x, egui_r.bottom()),
-                Handle::S,
-            ),
-            (
-                egui::pos2(egui_r.left(), egui_r.center().y),
-                Handle::W,
-            ),
-            (
-                egui::pos2(egui_r.right(), egui_r.center().y),
-                Handle::E,
-            ),
+            (egui::pos2(egui_r.center().x, egui_r.top()), Handle::N),
+            (egui::pos2(egui_r.center().x, egui_r.bottom()), Handle::S),
+            (egui::pos2(egui_r.left(), egui_r.center().y), Handle::W),
+            (egui::pos2(egui_r.right(), egui_r.center().y), Handle::E),
         ];
         for (c, h) in edges {
             if p.distance(c) <= HANDLE_RADIUS {
@@ -378,8 +363,10 @@ fn run_create_mode(
             if let Some(rect) = st.try_finish_create(full_rect, a, b) {
                 let slot = st.slot_idx;
                 let _ = st;
-                *outcome.lock() =
-                    Some(RegionOutcome::Done { slot, rect: rect.snap_to_pixels() });
+                *outcome.lock() = Some(RegionOutcome::Done {
+                    slot,
+                    rect: rect.snap_to_pixels(),
+                });
                 return;
             }
         }
@@ -430,8 +417,10 @@ fn run_edit_mode(
         );
         let galley =
             painter.layout_no_wrap(label, egui::FontId::proportional(14.0), Color32::WHITE);
-        let label_pos =
-            egui::pos2(egui_r.center().x - galley.size().x / 2.0, egui_r.max.y + 8.0);
+        let label_pos = egui::pos2(
+            egui_r.center().x - galley.size().x / 2.0,
+            egui_r.max.y + 8.0,
+        );
         let bg = egui::Rect::from_min_size(
             label_pos - egui::vec2(4.0, 2.0),
             galley.size() + egui::vec2(8.0, 4.0),
@@ -454,16 +443,16 @@ fn run_edit_mode(
     }
 
     if ui.ctx().input(|i| i.pointer.primary_down()) {
-        if let (Some(handle), Some(start_p), Some(origin)) = (
-            st.active_handle,
-            st.drag_pointer_start,
-            st.drag_rect_origin,
-        ) {
+        if let (Some(handle), Some(start_p), Some(origin)) =
+            (st.active_handle, st.drag_pointer_start, st.drag_rect_origin)
+        {
             let (sx0, sy0) = st.pixel_to_screen(full_rect, start_p);
             let (sx1, sy1) = st.pixel_to_screen(full_rect, p);
             let dx = sx1 - sx0;
             let dy = sy1 - sy0;
-            st.rect = Some(RegionOverlayState::apply_handle_drag(origin, handle, dx, dy));
+            st.rect = Some(RegionOverlayState::apply_handle_drag(
+                origin, handle, dx, dy,
+            ));
         }
     }
 
@@ -501,8 +490,14 @@ fn cursor_for_handle(h: Handle) -> egui::CursorIcon {
 fn draw_handles(painter: &egui::Painter, r: egui::Rect) {
     let fill = Color32::from_rgb(0, 220, 120);
     let stroke = Stroke::new(1.5, Color32::WHITE);
-    for c in [r.left_top(), r.right_top(), r.left_bottom(), r.right_bottom()] {
-        let hr = egui::Rect::from_center_size(c, egui::vec2(HANDLE_RADIUS * 2.0, HANDLE_RADIUS * 2.0));
+    for c in [
+        r.left_top(),
+        r.right_top(),
+        r.left_bottom(),
+        r.right_bottom(),
+    ] {
+        let hr =
+            egui::Rect::from_center_size(c, egui::vec2(HANDLE_RADIUS * 2.0, HANDLE_RADIUS * 2.0));
         painter.rect_filled(hr, 3.0, fill);
         painter.rect_stroke(hr, 3.0, stroke, egui::StrokeKind::Outside);
     }
@@ -542,11 +537,17 @@ fn draw_selection_chrome(
 fn draw_crosshair(painter: &egui::Painter, full_rect: egui::Rect, p: Pos2) {
     let stroke = Stroke::new(1.0, Color32::from_rgba_unmultiplied(255, 255, 255, 100));
     painter.line_segment(
-        [egui::pos2(full_rect.left(), p.y), egui::pos2(full_rect.right(), p.y)],
+        [
+            egui::pos2(full_rect.left(), p.y),
+            egui::pos2(full_rect.right(), p.y),
+        ],
         stroke,
     );
     painter.line_segment(
-        [egui::pos2(p.x, full_rect.top()), egui::pos2(p.x, full_rect.bottom())],
+        [
+            egui::pos2(p.x, full_rect.top()),
+            egui::pos2(p.x, full_rect.bottom()),
+        ],
         stroke,
     );
 }

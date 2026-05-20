@@ -1,4 +1,4 @@
-/// Shared utility functions for the core layer.
+//! Shared utility functions for the core layer.
 
 /// FNV-1a hash for byte slices.
 /// Used for fast content-addressable deduplication of OCR frames and text.
@@ -57,7 +57,11 @@ mod tests {
         let h2 = fnv_hash_bytes(b"b");
         assert_ne!(h1, h2);
         let diff_bits = (h1 ^ h2).count_ones();
-        assert!(diff_bits > 8, "Expected significant avalanche, got {} bit differences", diff_bits);
+        assert!(
+            diff_bits > 8,
+            "Expected significant avalanche, got {} bit differences",
+            diff_bits
+        );
     }
 
     #[test]

@@ -47,8 +47,11 @@ fn hit_zone(full: egui::Rect, p: egui::Pos2) -> Option<Zone> {
     }
 
     // Border areas (draggable)
-    if p.y < full.top() + BORDER || p.y > full.bottom() - BORDER || 
-       p.x < full.left() + BORDER || p.x > full.right() - BORDER {
+    if p.y < full.top() + BORDER
+        || p.y > full.bottom() - BORDER
+        || p.x < full.left() + BORDER
+        || p.x > full.right() - BORDER
+    {
         return Some(Zone::Move);
     }
 
@@ -62,8 +65,6 @@ fn cursor_for(zone: Zone) -> egui::CursorIcon {
         Zone::Ne | Zone::Sw => egui::CursorIcon::ResizeNeSw,
     }
 }
-
-
 
 pub fn render_live_frame_viewport(
     ctx: &egui::Context,
@@ -85,12 +86,16 @@ pub fn render_live_frame_viewport(
         (slot.rect, slot.show_frame)
     };
 
-    let hwnd = runtime.frame_live_hwnd.load(std::sync::atomic::Ordering::Relaxed);
+    let hwnd = runtime
+        .frame_live_hwnd
+        .load(std::sync::atomic::Ordering::Relaxed);
     if !should_show || rect.is_none() {
         if hwnd != 0 {
             ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Close);
-            runtime.frame_live_hwnd.store(0, std::sync::atomic::Ordering::Relaxed);
-            
+            runtime
+                .frame_live_hwnd
+                .store(0, std::sync::atomic::Ordering::Relaxed);
+
             // Clear cached states so that when re-opened, it forces the correct initial position
             ctx.data_mut(|d| {
                 d.remove::<bool>(egui::Id::new(("first_frame", slot_idx)));
@@ -131,7 +136,7 @@ pub fn render_live_frame_viewport(
             ));
 
             let accent = egui::Color32::from_rgb(0, 255, 128);
-            
+
             // Draw a subtle "glow" border (Inside only to avoid Win32 clipping)
             for i in 1..5 {
                 let alpha = (100 / i) as u8; // Increased alpha from 60
@@ -144,25 +149,30 @@ pub fn render_live_frame_viewport(
                 );
             }
             // Main solid border - matched to BORDER width for perfect visual feedback
-            painter.rect_stroke(full, 0.0, egui::Stroke::new(BORDER, accent), egui::StrokeKind::Inside);
+            painter.rect_stroke(
+                full,
+                0.0,
+                egui::Stroke::new(BORDER, accent),
+                egui::StrokeKind::Inside,
+            );
 
             // Use an almost-invisible but solid color for draggable areas (Alpha 1)
             // We use a faint version of the accent color to blend in perfectly.
             let invisible_drag_color = accent.gamma_multiply(1.0 / 255.0);
-            
+
             // Fill draggable areas with invisible-solid color
-            let top_border = egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.min.y + BORDER));
-            let left_border = egui::Rect::from_min_max(full.min, egui::pos2(full.min.x + BORDER, full.max.y));
-            let right_border = egui::Rect::from_min_max(egui::pos2(full.max.x - BORDER, full.min.y), full.max);
-            let bottom_border = egui::Rect::from_min_max(egui::pos2(full.min.x, full.max.y - BORDER), full.max);
+            let top_border =
+                egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.min.y + BORDER));
+            let left_border =
+                egui::Rect::from_min_max(full.min, egui::pos2(full.min.x + BORDER, full.max.y));
+            let right_border =
+                egui::Rect::from_min_max(egui::pos2(full.max.x - BORDER, full.min.y), full.max);
+            let bottom_border =
+                egui::Rect::from_min_max(egui::pos2(full.min.x, full.max.y - BORDER), full.max);
             painter.rect_filled(top_border, 0.0, invisible_drag_color);
             painter.rect_filled(left_border, 0.0, invisible_drag_color);
             painter.rect_filled(right_border, 0.0, invisible_drag_color);
             painter.rect_filled(bottom_border, 0.0, invisible_drag_color);
-
-
-
-
 
             let pointer = ctx.input(|i| i.pointer.latest_pos());
             if let Some(p) = pointer {
@@ -170,10 +180,18 @@ pub fn render_live_frame_viewport(
                     if let Some(z) = hit_zone(full, p) {
                         match z {
                             Zone::Move => ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag),
-                            Zone::Nw => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::NorthWest)),
-                            Zone::Ne => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::NorthEast)),
-                            Zone::Sw => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::SouthWest)),
-                            Zone::Se => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(egui::ResizeDirection::SouthEast)),
+                            Zone::Nw => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(
+                                egui::ResizeDirection::NorthWest,
+                            )),
+                            Zone::Ne => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(
+                                egui::ResizeDirection::NorthEast,
+                            )),
+                            Zone::Sw => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(
+                                egui::ResizeDirection::SouthWest,
+                            )),
+                            Zone::Se => ctx.send_viewport_cmd(egui::ViewportCommand::BeginResize(
+                                egui::ResizeDirection::SouthEast,
+                            )),
                         }
                     }
                 }
@@ -199,9 +217,7 @@ pub fn render_live_frame_viewport(
                     .unwrap_or(r)
             };
 
-            let last_rect: Rect = ctx
-                .data(|d| d.get_temp(last_rect_id))
-                .unwrap_or(current_r);
+            let last_rect: Rect = ctx.data(|d| d.get_temp(last_rect_id)).unwrap_or(current_r);
 
             let model_changed = (current_r.x - last_rect.x).abs() > 0.1
                 || (current_r.y - last_rect.y).abs() > 0.1
@@ -225,7 +241,7 @@ pub fn render_live_frame_viewport(
                     snap_logical(current_r.h, ppp),
                 );
 
-                let needs_set = ctx.input(|i| i.viewport().outer_rect).map_or(true, |or| {
+                let needs_set = ctx.input(|i| i.viewport().outer_rect).is_none_or(|or| {
                     (or.min.x - target_pos.x).abs() > 0.6
                         || (or.min.y - target_pos.y).abs() > 0.6
                         || (or.width() - target_size.x).abs() > 0.6
@@ -268,16 +284,18 @@ pub fn render_live_frame_viewport(
                 let w_px = (full.width() * ppp).round() as i32;
                 let h_px = (full.height() * ppp).round() as i32;
                 let b_px = (BORDER * ppp).round() as i32;
-                
+
                 // We use set_hollow_window_region for robust click-through
-                crate::infrastructure::win32::set_hollow_window_region(raw, w_px, h_px, b_px, b_px, b_px, b_px);
+                crate::infrastructure::win32::set_hollow_window_region(
+                    raw, w_px, h_px, b_px, b_px, b_px, b_px,
+                );
 
                 let cached = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
                 if raw != cached {
                     crate::infrastructure::win32::apply_overlay_attributes(raw, hide_capture);
                     hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
                 }
-                
+
                 let last_hide_id = egui::Id::new(("last_hide", slot_idx));
                 let last_hide = ctx.data(|d| d.get_temp::<bool>(last_hide_id));
                 if last_hide != Some(hide_capture) {

@@ -26,7 +26,7 @@ pub struct I18n {
     pub system_default: &'static str,
     pub allow_capture: &'static str,
     pub smart_merge: &'static str,
-    
+
     // Slot UI
     pub region: &'static str,
     pub active: &'static str,
@@ -132,10 +132,10 @@ pub struct I18n {
     pub overlay_customization: &'static str,
     pub use_yolo_bubble: &'static str,
     pub show_yolo_debug_borders: &'static str,
-    
+
     // Debugging Panel
     pub dbg_telemetry: &'static str,
-    
+
     // Additional UI strings
     pub capture_section: &'static str,
     pub offline: &'static str,
@@ -255,7 +255,7 @@ const EN: I18n = I18n {
     ui_language: "UI Language",
     auto_detect: "Auto Detect",
     system_default: "System Default",
-    allow_capture: "Screenshot Mode (Allow Snip)", 
+    allow_capture: "Screenshot Mode (Allow Snip)",
     smart_merge: "Smart Sentence Merge (Better grammar)",
     region: "Region",
     active: "Active",
@@ -338,7 +338,8 @@ const EN: I18n = I18n {
     img_deskew: "Deskew Rotation",
     overlay_customization: "Overlay Customization",
     use_yolo_bubble: "Enable YOLO Speech Bubble OCR (Segment bubbles before running OCR)",
-    show_yolo_debug_borders: "Show YOLO debug borders (Render red outlines around detected bubbles)",
+    show_yolo_debug_borders:
+        "Show YOLO debug borders (Render red outlines around detected bubbles)",
     dbg_telemetry: "Advanced Pipeline Telemetry",
     capture_section: "Capture",
     offline: "Offline",
@@ -372,7 +373,8 @@ const EN: I18n = I18n {
     ppocr_server_desc: "Precision: CN/EN Suite (Server ~194MB)",
     ppocr_std_dict: "Standard: CN+EN (Matches Suite)",
     ppocr_jp_dict: "Japanese Specific (Needs JP Rec Model)",
-    txt_proc_adv_desc: "Advanced filters applied to scrub raw recognized text before entering Translation modules:",
+    txt_proc_adv_desc:
+        "Advanced filters applied to scrub raw recognized text before entering Translation modules:",
     jp_merge_v: "Merge Vertical Text Layouts",
     jp_kana_norm: "Full-width Kana Normalization",
     jp_strip_furi: "Strip Furigana / Reading Rubies",
@@ -385,8 +387,10 @@ const EN: I18n = I18n {
     th_syllable: "Syllable-Level Tokenization",
     th_zw_cleanup: "Scrub Zero-Width / Floating Tone Marks",
     ar_rtl_fix: "Right-to-Left (RTL) Glyph Re-ordering Correction",
-    regex_adv_desc: "Advanced regular expression pipeline applied to OCR blocks or output translated text:",
-    gloss_adv_desc: "Enforce specific translations for characters, skills, items, slang, or memory overrides:",
+    regex_adv_desc:
+        "Advanced regular expression pipeline applied to OCR blocks or output translated text:",
+    gloss_adv_desc:
+        "Enforce specific translations for characters, skills, items, slang, or memory overrides:",
     gloss_char_name: "Character Name",
     gloss_game_term: "Game Terminology",
     gloss_slang: "Slang / Jargon",
@@ -396,9 +400,11 @@ const EN: I18n = I18n {
     close_popup: "Close Popup",
     active_hover: "Enable or disable this translation region",
     delete_hover: "Delete this region",
-    select_area_hover: "Pick a new area on screen (release to save). With Show Frame on, drag the frame directly.",
+    select_area_hover:
+        "Pick a new area on screen (release to save). With Show Frame on, drag the frame directly.",
     refresh_hover: "How often to check for screen changes",
-    show_frame_hover: "Green frame on screen — drag title bar or corners to move/resize in real time (Luna-style)",
+    show_frame_hover:
+        "Green frame on screen — drag title bar or corners to move/resize in real time (Luna-style)",
     overlay_mode_hover: "Show translated text directly over the original text on your screen",
     open_popup_hover: "Toggle the in-game translation result window",
     region_title: "Select area — drag to draw or adjust, release to save, Esc cancel",
@@ -597,7 +603,8 @@ const TH: I18n = I18n {
     close_popup: "ปิดหน้าต่างแยก",
     active_hover: "เปิดหรือปิดการใช้งานพื้นที่แปลภาษานี้",
     delete_hover: "ลบพื้นที่นี้",
-    select_area_hover: "เลือกพื้นที่ใหม่บนหน้าจอ (ปล่อยเม้าส์เพื่อบันทึก) หากเปิดการแสดงกรอบ สามารถลากกรอบได้โดยตรง",
+    select_area_hover:
+        "เลือกพื้นที่ใหม่บนหน้าจอ (ปล่อยเม้าส์เพื่อบันทึก) หากเปิดการแสดงกรอบ สามารถลากกรอบได้โดยตรง",
     refresh_hover: "ความถี่ในการตรวจสอบความเปลี่ยนแปลงของหน้าจอ",
     show_frame_hover: "แสดงกรอบสีเขียวบนหน้าจอ — สามารถลากและปรับขนาดได้แบบเรียลไทม์",
     overlay_mode_hover: "แสดงข้อความแปลทับลงบนข้อความต้นฉบับโดยตรง",

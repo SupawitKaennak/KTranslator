@@ -1,6 +1,6 @@
-use std::sync::Arc;
-use parking_lot::Mutex;
 use crate::infrastructure::settings::Settings;
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 /// Controller managing transient state for the Settings UI.
 /// Encapsulates API models fetching status and active configuration drafts.
