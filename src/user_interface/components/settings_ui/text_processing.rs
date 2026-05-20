@@ -13,6 +13,7 @@ pub fn render_tab_text_processing(
     ui.add_space(4.0);
     ui.checkbox(&mut settings.smart_merge, i18n.smart_merge);
     ui.checkbox(&mut settings.txt_proc.enable_wordninja, i18n.txt_wordninja);
+    ui.checkbox(&mut settings.txt_proc.enable_ocr_merge, i18n.txt_ocr_merge);
 
     ui.add_space(12.0);
     ui.separator();
