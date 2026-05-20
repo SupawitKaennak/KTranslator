@@ -5,54 +5,12 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use ndarray::Array4;
 use image::DynamicImage;
-use std::cmp::Ordering;
 use crate::infrastructure::settings::GpuBackend;
 
-#[derive(Debug, Clone)]
-pub struct BubbleBox {
-    pub x1: f32,
-    pub y1: f32,
-    pub x2: f32,
-    pub y2: f32,
-    pub prob: f32,
-    #[allow(dead_code)]
-    pub class_id: usize,
-}
+use super::nms_utils::{DetectionBox, nms};
 
-fn iou(a: &BubbleBox, b: &BubbleBox) -> f32 {
-    let x_left = a.x1.max(b.x1);
-    let y_top = a.y1.max(b.y1);
-    let x_right = a.x2.min(b.x2);
-    let y_bottom = a.y2.min(b.y2);
-
-    if x_right < x_left || y_bottom < y_top {
-        return 0.0;
-    }
-
-    let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-    let a_area = (a.x2 - a.x1) * (a.y2 - a.y1);
-    let b_area = (b.x2 - b.x1) * (b.y2 - b.y1);
-
-    intersection_area / (a_area + b_area - intersection_area)
-}
-
-fn nms(mut boxes: Vec<BubbleBox>, iou_threshold: f32) -> Vec<BubbleBox> {
-    boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
-    let mut result = Vec::new();
-    for i in 0..boxes.len() {
-        let mut keep = true;
-        for res in &result {
-            if iou(&boxes[i], res) > iou_threshold {
-                keep = false;
-                break;
-            }
-        }
-        if keep {
-            result.push(boxes[i].clone());
-        }
-    }
-    result
-}
+/// Type alias for backwards compatibility with callers expecting BubbleBox
+pub type BubbleBox = DetectionBox;
 
 pub struct YoloBubbleDetector {
     session: Arc<Mutex<Option<Session>>>,

@@ -26,7 +26,7 @@ impl BackgroundCoordinator {
     pub fn now_ms() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis() as u64
     }
 
@@ -430,13 +430,16 @@ impl BackgroundCoordinator {
                 let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
                     let tx_inner = tx.clone();
                     let result = TranslationPipeline::execute_slot(
-                        i, rect, display_id, source_lang, target_lang,
-                        capture, ocr_engine, translator, prev_hash, stable_hash,
-                        stable_since_ms, language_version, cache_arc, text_cache_arc,
-                        first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
-                        max_cache_entries, platform.clone(),
-                        enable_batching, context_segments, contextual_translation, context_window_size,
-                        th_segmentation, jp_merge_vertical, yolo_detector,
+                        crate::core::usecases::pipeline::PipelineContext {
+                            slot_idx: i, rect, display_id, source_lang, target_lang, language_version,
+                            capture, ocr_engine, translator, platform: platform.clone(), yolo_detector,
+                            prev_hash, stable_hash, stable_since_ms, first_unstable_at,
+                            cache_arc, text_cache_arc, max_cache_entries,
+                            smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries,
+                            jp_merge_vertical, th_segmentation, enable_batching,
+                            context_segments, contextual_translation, context_window_size,
+                            last_frame_arc, status_tx: tx_inner, ctx: ctx_worker.clone(),
+                        }
                     );
 
                     match result {

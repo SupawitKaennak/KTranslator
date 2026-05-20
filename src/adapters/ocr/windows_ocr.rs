@@ -183,8 +183,9 @@ impl WindowsOcr {
 use std::sync::LazyLock;
 
 // Robust global runtime to handle Windows async calls from any thread (including non-tokio threads)
+// Uses current_thread since we only block_on() single WinRT async operations sequentially.
 static GLOBAL_RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
-    tokio::runtime::Builder::new_multi_thread()
+    tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .expect("Failed to create global OCR tokio runtime")

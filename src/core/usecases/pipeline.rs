@@ -14,7 +14,7 @@ use crate::core::{
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
+        .unwrap_or_default()
         .as_millis() as u64
 }
 
@@ -38,41 +38,71 @@ where
 /// Decouples raw infrastructure access and hashing from task concurrency.
 pub struct TranslationPipeline;
 
+/// Groups all parameters needed by `TranslationPipeline::execute_slot`.
+///
+/// Replaces the previous 33-parameter function signature with a structured context
+/// that organizes parameters by their role in the pipeline.
+pub struct PipelineContext {
+    // --- Slot identity ---
+    pub slot_idx: usize,
+    pub rect: Rect,
+    pub display_id: u32,
+    pub source_lang: Option<LanguageTag>,
+    pub target_lang: LanguageTag,
+    pub language_version: u32,
+
+    // --- Services ---
+    pub capture: Arc<dyn FrameSource>,
+    pub ocr_engine: Arc<dyn OcrEngine>,
+    pub translator: Option<Arc<dyn Translator + Send + Sync>>,
+    pub platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
+    pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>,
+
+    // --- Hash/stability state ---
+    pub prev_hash: u64,
+    pub stable_hash: u64,
+    pub stable_since_ms: u64,
+    pub first_unstable_at: u64,
+
+    // --- Caches ---
+    pub cache_arc: Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
+    pub text_cache_arc: Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
+    pub max_cache_entries: usize,
+
+    // --- Processing config ---
+    pub smart_merge: bool,
+    pub img_proc_cfg: crate::infrastructure::settings::ImageProcessingSettings,
+    pub txt_proc_cfg: crate::infrastructure::settings::TextProcessingSettings,
+    pub regex_rules: Vec<crate::infrastructure::settings::RegexRule>,
+    pub glossary_entries: Vec<crate::infrastructure::settings::GlossaryEntry>,
+    pub jp_merge_vertical: bool,
+    pub th_segmentation: crate::infrastructure::settings::ThaiSegmentationMode,
+    pub enable_batching: bool,
+
+    // --- Context/history ---
+    pub context_segments: Vec<String>,
+    pub contextual_translation: bool,
+    pub context_window_size: u32,
+
+    // --- UI handles ---
+    pub last_frame_arc: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
+    pub status_tx: mpsc::Sender<BgResult>,
+    pub ctx: egui::Context,
+}
+
 impl TranslationPipeline {
-    pub fn execute_slot(
-        slot_idx: usize,
-        rect: Rect,
-        display_id: u32,
-        source_lang: Option<LanguageTag>,
-        target_lang: LanguageTag,
-        capture: Arc<dyn FrameSource>,
-        ocr_engine: Arc<dyn OcrEngine>,
-        translator: Option<Arc<dyn Translator + Send + Sync>>,
-        prev_hash: u64,
-        stable_hash: u64,
-        stable_since_ms: u64,
-        language_version: u32,
-        cache_arc: Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
-        text_cache_arc: Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
-        first_unstable_at: u64,
-        smart_merge: bool,
-        img_proc_cfg: crate::infrastructure::settings::ImageProcessingSettings,
-        txt_proc_cfg: crate::infrastructure::settings::TextProcessingSettings,
-        regex_rules: Vec<crate::infrastructure::settings::RegexRule>,
-        glossary_entries: Vec<crate::infrastructure::settings::GlossaryEntry>,
-        last_frame_arc: Arc<Mutex<Option<crate::core::ports::FrameRgba>>>,
-        status_tx: mpsc::Sender<BgResult>,
-        ctx: egui::Context,
-        max_cache_entries: usize,
-        platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
-        enable_batching: bool,
-        context_segments: Vec<String>,
-        contextual_translation: bool,
-        context_window_size: u32,
-        th_segmentation: crate::infrastructure::settings::ThaiSegmentationMode,
-        jp_merge_vertical: bool,
-        yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>,
-    ) -> anyhow::Result<BgResult> {
+    pub fn execute_slot(p: PipelineContext) -> anyhow::Result<BgResult> {
+        // Destructure for convenient local access (preserves all original variable names)
+        let PipelineContext {
+            slot_idx, rect, display_id, source_lang, target_lang, language_version,
+            capture, ocr_engine, translator, platform, yolo_detector,
+            prev_hash, stable_hash, stable_since_ms, first_unstable_at,
+            cache_arc, text_cache_arc, max_cache_entries,
+            smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries,
+            jp_merge_vertical, th_segmentation, enable_batching,
+            context_segments, contextual_translation, context_window_size,
+            last_frame_arc, status_tx, ctx,
+        } = p;
         let frame = capture.capture_rect(rect, display_id)?;
         
         *last_frame_arc.lock() = Some(frame.clone());
@@ -317,11 +347,7 @@ impl TranslationPipeline {
 
         // --- Aggressive Text-Level Cache Check ---
         {
-            let text_hash = {
-                let mut h: u64 = 0xcbf29ce484222325;
-                for b in ocr_text.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
-                h
-            };
+            let text_hash = crate::core::utils::fnv_hash_str(&ocr_text);
             let tc_key = (text_hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
             let cached = { let tc = text_cache_arc.lock(); tc.get(&tc_key).cloned() };
 
@@ -394,11 +420,7 @@ impl TranslationPipeline {
         let translated = trans_lines.iter().filter(|s| !s.is_empty()).cloned().collect::<Vec<_>>().join("\n");
 
         {
-            let text_hash = {
-                let mut h: u64 = 0xcbf29ce484222325;
-                for b in ocr_text.as_bytes() { h ^= *b as u64; h = h.wrapping_mul(0x100000001b3); }
-                h
-            };
+            let text_hash = crate::core::utils::fnv_hash_str(&ocr_text);
             let text_cache_key = (text_hash, source_lang.as_ref().map(|l| l.0.clone()), target_lang.0.clone());
             let mut frame_cache = cache_arc.lock();
             enforce_cache_limit(&mut frame_cache, max_cache_entries);

@@ -249,9 +249,10 @@ pub fn process_image_for_ocr(
         out = scaled;
     }
 
-    // Deskew rotation projection logic maintained seamlessly.
+    // Deskew: not yet implemented — requires affine transform or Hough-based rotation.
+    // Enabling the setting will have no effect until this is implemented.
     if config.deskew {
-        // Non-destructive memory passthrough enabled.
+        tracing::debug!("Deskew requested but not yet implemented — passing through unchanged");
     }
 
     (out, final_w, final_h)

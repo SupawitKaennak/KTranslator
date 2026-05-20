@@ -4,5 +4,6 @@ pub mod ollama;
 pub mod openai;
 pub mod google;
 pub mod translator_factory;
+pub mod llm_common;
 
 pub use translator_factory::create_translator;

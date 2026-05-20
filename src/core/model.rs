@@ -48,10 +48,9 @@ pub struct AppModel {
     pub download_progress: crate::infrastructure::asset_manager::DownloadProgress,
 }
 
-impl AppModel {
-    pub fn new_default() -> Self {
-        let mut slots = Vec::new();
-        slots.push(RegionSlot {
+impl Default for RegionSlot {
+    fn default() -> Self {
+        Self {
             id: RegionId(0),
             display_id: 0,
             enabled: false,
@@ -74,10 +73,15 @@ impl AppModel {
             popup_open: false,
             overlay_mode: false,
             language_version: 0,
-        });
+        }
+    }
+}
+
+impl AppModel {
+    pub fn new_default() -> Self {
         Self {
             running: false,
-            slots,
+            slots: vec![RegionSlot::default()],
             download_progress: crate::infrastructure::asset_manager::DownloadProgress::default(),
         }
     }
@@ -85,29 +89,8 @@ impl AppModel {
         let new_idx = self.slots.len();
         self.slots.push(RegionSlot {
             id: RegionId(new_idx),
-            display_id: 0,
-            enabled: false,
-            show_frame: false,
-            rect: None,
-            source_lang: Some(LanguageTag("en".to_string())),
-            target_lang: LanguageTag("en".to_string()),
-            stable_hash: 0,
-            stable_since_ms: 0,
-            refresh_ms: 5000,
-            last_ocr_text: String::new(),
-            last_translation: String::new(),
-            last_ocr_lines: Vec::new(),
-            last_trans_lines: Vec::new(),
-            last_yolo_bubbles: Vec::new(),
-            pending_text: String::new(),
-            next_tick_at_ms: 0,
-            translate_backoff_ms: 0,
-            translate_next_try_at_ms: 0,
-            popup_open: false,
-            overlay_mode: false,
-            language_version: 0,
+            ..RegionSlot::default()
         });
         new_idx
     }
 }
-

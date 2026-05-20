@@ -224,7 +224,7 @@ impl App {
 
     fn tick_background(&mut self, ctx: &egui::Context) {
         // 1. Process pending signals from popups/error window
-        while let Ok(_) = self.error_dismiss_rx.try_recv() {
+        while self.error_dismiss_rx.try_recv().is_ok() {
             self.err_handler.clear_all();
         }
 
@@ -462,10 +462,8 @@ impl App {
 
         // Trim translation cache
         {
-            let cache = self.translation_cache.lock();
+            let mut cache = self.translation_cache.lock();
             if cache.len() > max_entries {
-                drop(cache);
-                let mut cache = self.translation_cache.lock();
                 let to_remove = cache.len() - max_entries;
                 let keys: Vec<_> = cache.keys().take(to_remove).cloned().collect();
                 for key in keys {
@@ -477,10 +475,8 @@ impl App {
 
         // Trim text translation cache
         {
-            let cache = self.text_translation_cache.lock();
+            let mut cache = self.text_translation_cache.lock();
             if cache.len() > max_entries {
-                drop(cache);
-                let mut cache = self.text_translation_cache.lock();
                 let to_remove = cache.len() - max_entries;
                 let keys: Vec<_> = cache.keys().take(to_remove).cloned().collect();
                 for key in keys {
