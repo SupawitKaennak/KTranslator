@@ -1,4 +1,6 @@
 use crate::infrastructure::settings::{ImageProcessingSettings, MorphologyOp};
+use std::cell::RefCell;
+use std::thread_local;
 
 /// Applies requested image processing filters to Raw RGBA buffer before OCR.
 /// Returns the processed image buffer (RGBA format) along with new width and height.
@@ -8,6 +10,10 @@ pub fn process_image_for_ocr(
     height: u32,
     config: &ImageProcessingSettings,
 ) -> (Vec<u8>, u32, u32) {
+    // Thread‑local reusable buffer to reduce allocations
+    thread_local! {
+        static REUSE_BUF: RefCell<Option<Vec<u8>>> = RefCell::new(None);
+    }
     // Return pristine buffer instantly if all filters are deactivated
     let is_active = config.grayscale || config.invert || (config.contrast - 1.0).abs() > 0.01 
         || config.brightness != 0 || (config.gamma - 1.0).abs() > 0.01 || config.binarize 
@@ -19,7 +25,15 @@ pub fn process_image_for_ocr(
         return (rgba_data.to_vec(), width, height);
     }
 
-    let mut out = rgba_data.to_vec();
+    let mut out = REUSE_BUF.with(|buf| {
+        if let Some(mut existing) = buf.borrow_mut().take() {
+            existing.clear();
+            existing.extend_from_slice(rgba_data);
+            existing
+        } else {
+            rgba_data.to_vec()
+        }
+    });
 
     // 1. Grayscale Conversion
     if config.grayscale || config.binarize || config.adaptive_threshold {
@@ -255,5 +269,10 @@ pub fn process_image_for_ocr(
         tracing::debug!("Deskew requested but not yet implemented — passing through unchanged");
     }
 
-    (out, final_w, final_h)
+    let result = (out.clone(), final_w, final_h);
+    // Store buffer for next call
+    REUSE_BUF.with(|buf| {
+        *buf.borrow_mut() = Some(out);
+    });
+    result
 }
