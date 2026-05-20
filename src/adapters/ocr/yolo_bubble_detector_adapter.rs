@@ -1,4 +1,4 @@
-﻿use crate::infrastructure::settings::GpuBackend;
+use crate::infrastructure::settings::GpuBackend;
 use anyhow::Result;
 use image::DynamicImage;
 use ndarray::Array4;
@@ -7,7 +7,7 @@ use parking_lot::Mutex;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::nms_utils::{nms, DetectionBox};
+use super::non_max_suppression_utils::{nms, DetectionBox};
 
 /// Type alias for backwards compatibility with callers expecting BubbleBox
 pub type BubbleBox = DetectionBox;
@@ -48,7 +48,7 @@ impl YoloBubbleDetector {
         }
 
         let session =
-            super::onnx_engine::OnnxEngine::create_session(&resolved_path, self.gpu_backend)?;
+            super::onnx_inference_engine::OnnxEngine::create_session(&resolved_path, self.gpu_backend)?;
         *session_guard = Some(session);
         Ok(())
     }

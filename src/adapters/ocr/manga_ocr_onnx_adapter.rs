@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use ndarray::{Array2, Array4};
 use ort::session::Session;
 use parking_lot::Mutex;
@@ -11,7 +11,7 @@ use crate::core::types::LanguageTag;
 use crate::infrastructure::settings::GpuBackend;
 use std::cmp::Ordering;
 
-use super::nms_utils::{nms, DetectionBox};
+use super::non_max_suppression_utils::{nms, DetectionBox};
 
 pub struct OnnxMangaRecognizer {
     encoder: Arc<Mutex<Option<Session>>>,
@@ -78,10 +78,10 @@ impl OnnxMangaRecognizer {
         }
 
         let encoder =
-            super::onnx_engine::OnnxEngine::create_session(&encoder_path, self.gpu_backend)?;
+            super::onnx_inference_engine::OnnxEngine::create_session(&encoder_path, self.gpu_backend)?;
         let decoder =
-            super::onnx_engine::OnnxEngine::create_session(&decoder_path, self.gpu_backend)?;
-        let yolo = super::onnx_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
+            super::onnx_inference_engine::OnnxEngine::create_session(&decoder_path, self.gpu_backend)?;
+        let yolo = super::onnx_inference_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
 
         let tokenizer = Tokenizer::from_file(tokenizer_path)
             .map_err(|e| anyhow::anyhow!("Tokenizer Error: {}", e))?;

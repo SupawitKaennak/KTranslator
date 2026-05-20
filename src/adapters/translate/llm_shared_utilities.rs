@@ -1,4 +1,4 @@
-﻿//! Shared utilities for LLM-based translator adapters.
+//! Shared utilities for LLM-based translator adapters.
 //!
 //! All LLM translators (OpenAI, Gemini, Groq, Ollama) share common logic for:
 //! - HTTP client construction with consistent timeout/keepalive settings
@@ -12,7 +12,7 @@ use reqwest::blocking::Client;
 use std::time::Duration;
 
 use crate::core::{
-    prompt_builder::{self, TranslationPrompt},
+    llm_prompt_builder::{self, TranslationPrompt},
     types::LanguageTag,
 };
 use crate::infrastructure::settings::TranslationBehaviorSettings;
@@ -50,7 +50,7 @@ pub fn build_client(timeout_secs: u64) -> Result<Client> {
 /// Handles:
 /// - Splitting text into lines
 /// - Checking whether contextual translation is enabled
-/// - Delegating to `prompt_builder::build_translation_prompt_with_behavior`
+/// - Delegating to `llm_prompt_builder::build_translation_prompt_with_behavior`
 pub fn build_prompt(
     text: &str,
     source: Option<&LanguageTag>,
@@ -64,7 +64,7 @@ pub fn build_prompt(
     } else {
         None
     };
-    prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, behavior, ctx)
+    llm_prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, behavior, ctx)
 }
 
 /// Estimates the output token budget based on input text length.

@@ -1,8 +1,10 @@
-﻿pub mod error_handler;
-pub mod glossary_engine;
-pub mod image_processor;
+pub mod error_handler;
+pub mod glossary_replacement_engine;
+pub mod image_processing_usecase;
 pub mod pipeline;
-pub mod regex_engine;
+pub mod pipeline_cache;
+pub mod pipeline_ocr;
+pub mod regex_replacement_engine;
 pub mod settings_controller;
-pub mod text_formatter;
-pub mod translation_runner;
+pub mod text_formatting_usecase;
+pub mod translation_runner_usecase;

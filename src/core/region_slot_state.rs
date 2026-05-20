@@ -1,54 +1,108 @@
-﻿use crate::core::ports::OcrTextLine;
-use parking_lot::Mutex;
-use std::collections::VecDeque;
-use std::sync::atomic::AtomicIsize;
-use std::sync::Arc;
+use serde::{Deserialize, Serialize};
 
-/// Results from background worker threads sent back to the main UI loop.
-pub enum BgResult {
-    /// Combined OCR + Translation completed successfully.
-    Done {
-        slot_idx: usize,
-        language_version: u32,
-        ocr_text: String,
-        translated: String,
-        frame_hash: u64,
-        /// Per-line OCR bounding boxes for positional overlay rendering.
-        ocr_lines: Vec<OcrTextLine>,
-        /// Translation split by newline, matching ocr_lines length.
-        trans_lines: Vec<String>,
-        yolo_bubbles: Vec<OcrTextLine>,
-    },
-    /// The captured frame is identical to the previous one — skip API call.
-    Unchanged { slot_idx: usize },
-    /// The screen is changing. Update the stable hash tracker and skip API.
-    HashChanged { slot_idx: usize, new_hash: u64 },
-    /// The screen is stable but we are waiting for the debounce duration.
-    WaitingDebounce { slot_idx: usize },
-    /// The frame matches a cached translation.
-    CacheHit {
-        slot_idx: usize,
-        language_version: u32,
-        ocr_text: String,
-        translated: String,
-        frame_hash: u64,
-        ocr_lines: Vec<OcrTextLine>,
-        trans_lines: Vec<String>,
-        yolo_bubbles: Vec<OcrTextLine>,
-    },
-    /// Direct status update for the UI spinner/label
-    StatusUpdate { slot_idx: usize, status: String },
-    /// An error occurred during OCR / Translation.
-    Error {
-        slot_idx: usize,
-        language_version: u32,
-        err: String,
-    },
+use crate::core::{
+    ports::OcrTextLine,
+    types::{LanguageTag, Rect, RegionId},
+};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegionSlot {
+    pub id: RegionId,
+    pub display_id: u32,
+    pub enabled: bool,
+    pub show_frame: bool,
+    pub rect: Option<Rect>,
+    pub source_lang: Option<LanguageTag>, // None = auto
+    pub target_lang: LanguageTag,
+    #[serde(skip)]
+    pub stable_hash: u64,
+    #[serde(skip)]
+    pub stable_since_ms: u64,
+    pub refresh_ms: u64,
+    pub last_ocr_text: String,
+    pub last_translation: String,
+    /// Per-line OCR results with bounding boxes (image-pixel coordinates).
+    /// Used by the positional overlay to place translated text at the right position.
+    #[serde(skip)]
+    pub last_ocr_lines: Vec<OcrTextLine>,
+    /// Translation split by newline, matched index-for-index with last_ocr_lines.
+    #[serde(skip)]
+    pub last_trans_lines: Vec<String>,
+    #[serde(skip)]
+    pub last_yolo_bubbles: Vec<OcrTextLine>,
+    pub pending_text: String,
+    pub next_tick_at_ms: u64,
+    pub translate_backoff_ms: u64,
+    pub translate_next_try_at_ms: u64,
+    pub popup_open: bool,
+    pub overlay_mode: bool,
+    #[serde(skip)]
+    pub language_version: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppModel {
+    pub running: bool,
+    pub slots: Vec<RegionSlot>,
+    #[serde(skip)]
+    pub download_progress: crate::core::types::DownloadProgress,
+}
+
+impl Default for RegionSlot {
+    fn default() -> Self {
+        Self {
+            id: RegionId(0),
+            display_id: 0,
+            enabled: false,
+            show_frame: false,
+            rect: None,
+            source_lang: Some(LanguageTag("en".to_string())),
+            target_lang: LanguageTag("en".to_string()),
+            stable_hash: 0,
+            stable_since_ms: 0,
+            refresh_ms: 5000,
+            last_ocr_text: String::new(),
+            last_translation: String::new(),
+            last_ocr_lines: Vec::new(),
+            last_trans_lines: Vec::new(),
+            last_yolo_bubbles: Vec::new(),
+            pending_text: String::new(),
+            next_tick_at_ms: 0,
+            translate_backoff_ms: 0,
+            translate_next_try_at_ms: 0,
+            popup_open: false,
+            overlay_mode: false,
+            language_version: 0,
+        }
+    }
+}
+
+impl AppModel {
+    pub fn new_default() -> Self {
+        Self {
+            running: false,
+            slots: vec![RegionSlot::default()],
+            download_progress: crate::core::types::DownloadProgress::default(),
+        }
+    }
+    pub fn add_slot(&mut self) -> usize {
+        let new_idx = self.slots.len();
+        self.slots.push(RegionSlot {
+            id: RegionId(new_idx),
+            ..RegionSlot::default()
+        });
+        new_idx
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Runtime state for each translation slot
 // ---------------------------------------------------------------------------
+
+use parking_lot::Mutex;
+use std::collections::VecDeque;
+use std::sync::atomic::AtomicIsize;
+use std::sync::Arc;
 
 pub struct SlotRuntimeState {
     /// True if the slot has a background task running (capture or API)
@@ -121,32 +175,4 @@ impl SlotRuntimeState {
             active_error_id: None,
         }
     }
-}
-
-/// Smart hash converts RGBA to thresholded grayscale before hashing.
-/// This prevents minor lighting/background particle changes from triggering text translation.
-/// Uses FNV-1a internally (see `crate::core::utils::fnv_hash_bytes` for the plain variant).
-pub fn smart_hash(data: &[u8]) -> u64 {
-    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
-    const FNV_PRIME: u64 = 0x00000100000001B3;
-    let mut h: u64 = FNV_OFFSET;
-
-    // Dynamic step: smaller regions need finer sampling to detect
-    // single-character text changes; large regions can skip more.
-    let pixel_count = data.len() / 4;
-    let step: usize = if pixel_count < 50_000 { 8 } else { 32 };
-    let mut i = 0;
-    while i + 2 < data.len() {
-        // Quantize each channel to 3 bits (8 levels) to ignore compression noise and dithering
-        let r = data[i] >> 5;
-        let g = data[i + 1] >> 5;
-        let b = data[i + 2] >> 5;
-        let combined = (r << 6) | (g << 3) | b;
-
-        h ^= combined as u64;
-        h = h.wrapping_mul(FNV_PRIME);
-
-        i += step;
-    }
-    h
 }

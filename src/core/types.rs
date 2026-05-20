@@ -1,4 +1,4 @@
-﻿use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RegionId(pub usize); // 0..5
@@ -46,3 +46,6 @@ pub struct DownloadProgress {
     pub is_downloading: bool,
     pub error: Option<String>,
 }
+
+pub type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
+pub type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
