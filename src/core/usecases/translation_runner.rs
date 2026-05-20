@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 
 use crate::core::ports::Translator;
 use crate::core::types::LanguageTag;

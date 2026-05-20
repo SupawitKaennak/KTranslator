@@ -1,4 +1,4 @@
-use crate::core::error::KError;
+﻿use crate::core::error::KError;
 use crate::core::types::{LanguageTag, Rect};
 
 #[derive(Debug, Clone)]

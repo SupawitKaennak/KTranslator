@@ -1,4 +1,4 @@
-pub mod error_handler;
+﻿pub mod error_handler;
 pub mod glossary_engine;
 pub mod image_processor;
 pub mod pipeline;

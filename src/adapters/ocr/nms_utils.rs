@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+﻿use std::cmp::Ordering;
 
 /// Axis-aligned bounding box with confidence score and class ID.
 /// Unified type used across YOLO detectors for NMS processing.

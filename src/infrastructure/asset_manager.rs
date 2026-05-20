@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -148,13 +148,7 @@ pub fn check_bubble_yolo_exists() -> bool {
             .unwrap_or(false)
 }
 
-#[derive(Clone, Default, Debug)]
-pub struct DownloadProgress {
-    pub current_file: String,
-    pub progress: f32, // 0.0 to 1.0
-    pub is_downloading: bool,
-    pub error: Option<String>,
-}
+pub use crate::core::types::DownloadProgress;
 
 /// Generic download helper that downloads a list of model assets with progress reporting.
 async fn download_asset_list(
@@ -274,25 +268,25 @@ pub async fn download_ppocr_models(
     let rec_url = match settings.ppocr_model {
         crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => PPOCR_MOBILE_MODELS[1].url,
         crate::infrastructure::settings::PpocrModelSuite::CnEnServer => PPOCR_SERVER_MODELS[1].url,
-        
+
         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => 
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer =>
             "https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/model.onnx",
-            
+
         crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
-        crate::infrastructure::settings::PpocrModelSuite::KoreanServer => 
+        crate::infrastructure::settings::PpocrModelSuite::KoreanServer =>
             "https://huggingface.co/cycloneboy/korean_PP-OCRv4_rec_infer/resolve/main/model.onnx",
-            
+
         crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
-        crate::infrastructure::settings::PpocrModelSuite::ThaiServer => 
+        crate::infrastructure::settings::PpocrModelSuite::ThaiServer =>
             "https://huggingface.co/itextresearch/itext-th_PP-OCRv5_mobile_rec_infer/resolve/main/inference.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
-        crate::infrastructure::settings::PpocrModelSuite::LatinServer => 
+        crate::infrastructure::settings::PpocrModelSuite::LatinServer =>
             "https://huggingface.co/cycloneboy/latin_PP-OCRv3_rec_infer/resolve/main/model.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile |
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => 
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer =>
             "https://huggingface.co/cycloneboy/cyrillic_PP-OCRv3_rec_infer/resolve/main/model.onnx",
     };
 

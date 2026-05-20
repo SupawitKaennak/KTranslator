@@ -1,4 +1,4 @@
-pub mod builtin_paddle_ocr;
+﻿pub mod builtin_paddle_ocr;
 pub mod manga109_yolo_ocr;
 pub mod nms_utils;
 pub mod ocr_factory;

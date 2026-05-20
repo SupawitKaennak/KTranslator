@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::Settings;
+﻿use crate::infrastructure::settings::Settings;
 use parking_lot::Mutex;
 use std::sync::Arc;
 

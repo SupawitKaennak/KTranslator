@@ -1,4 +1,4 @@
-//! Fullscreen region picker / editor (Luna-style, single viewport).
+﻿//! Fullscreen region picker / editor (Luna-style, single viewport).
 //!
 //! One opaque fullscreen window with a screenshot — no transparent layered HWND,
 //! no multi-helper jitter. Used for both "select new area" and "adjust existing".

@@ -1,4 +1,4 @@
-use anyhow::Context;
+﻿use anyhow::Context;
 use eframe::egui;
 use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};
@@ -12,6 +12,11 @@ use crate::core::{
 
 type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
 type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
+
+/// Force-proceed threshold: if a frame has been unstable for this long, proceed anyway.
+const FORCE_PROCEED_MS: u64 = 800;
+/// Minimum stable duration before debounce allows OCR/translation to proceed.
+const DEBOUNCE_STABLE_MS: u64 = 150;
 
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
@@ -154,7 +159,7 @@ impl TranslationPipeline {
         } else {
             now.saturating_sub(first_unstable_at)
         };
-        let force_proceed = unstable_since_start > 800;
+        let force_proceed = unstable_since_start > FORCE_PROCEED_MS;
 
         // Let's keep logic exactly flow matching:
         let cache_key = (
@@ -177,7 +182,7 @@ impl TranslationPipeline {
         }
 
         // 3. Stable Debounce check: Reduced from 400ms to 150ms for hyper-reactive response
-        if unstable_dur < 150 && !force_proceed {
+        if unstable_dur < DEBOUNCE_STABLE_MS && !force_proceed {
             return Ok(BgResult::WaitingDebounce { slot_idx });
         }
 

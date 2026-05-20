@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------------------
+﻿// ---------------------------------------------------------------------------
 // Platform abstraction layer
 //
 // Provides a trait `PlatformServices` that encapsulates all OS-specific

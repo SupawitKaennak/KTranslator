@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::{ImageProcessingSettings, MorphologyOp};
+﻿use crate::infrastructure::settings::{ImageProcessingSettings, MorphologyOp};
 use std::cell::RefCell;
 use std::thread_local;
 

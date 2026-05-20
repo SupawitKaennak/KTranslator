@@ -1,4 +1,4 @@
-//! Shared utility functions for the core layer.
+﻿//! Shared utility functions for the core layer.
 
 /// FNV-1a hash for byte slices.
 /// Used for fast content-addressable deduplication of OCR frames and text.

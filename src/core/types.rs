@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+﻿use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RegionId(pub usize); // 0..5
@@ -37,4 +37,12 @@ impl LanguageTag {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+#[derive(Clone, Default, Debug)]
+pub struct DownloadProgress {
+    pub current_file: String,
+    pub progress: f32, // 0.0 to 1.0
+    pub is_downloading: bool,
+    pub error: Option<String>,
 }

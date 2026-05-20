@@ -1,4 +1,4 @@
-use crate::core::worker::SlotRuntimeState;
+﻿use crate::core::worker::SlotRuntimeState;
 use crate::core::{
     model::AppModel,
     types::{LanguageTag, Rect},

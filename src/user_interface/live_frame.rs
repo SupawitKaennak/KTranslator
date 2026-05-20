@@ -1,4 +1,4 @@
-//! Luna-style live frame: drag / resize on screen in real time (no fullscreen editor).
+﻿//! Luna-style live frame: drag / resize on screen in real time (no fullscreen editor).
 //!
 //! Uses a hollow Win32 window region so the center is click-through while the border
 //! receives mouse events. Translation overlay stays a separate passthrough layer.

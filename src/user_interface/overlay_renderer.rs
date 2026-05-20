@@ -1,4 +1,4 @@
-use crate::core::model::AppModel;
+﻿use crate::core::model::AppModel;
 use crate::core::types::physical_px_to_logical_points;
 use crate::core::worker::SlotRuntimeState;
 use crate::infrastructure::platform::PlatformServices;
@@ -150,7 +150,7 @@ pub fn render_overlay_viewport(
                             while idx < ocr_lines.len() {
                                 let mut block_lines = vec![ocr_lines[idx].clone()];
                                 let trans = trans_lines.get(idx).map(|s| s.as_str()).unwrap_or("").trim().to_string();
-                                
+
                                 let mut j = idx + 1;
                                 while j < ocr_lines.len() {
                                     let next_trans = trans_lines.get(j).map(|s| s.as_str()).unwrap_or("").trim();
@@ -220,11 +220,11 @@ pub fn render_overlay_viewport(
                                     for (i, line) in block_lines.iter().enumerate() {
                                         let line_h_points = line.h / ppp;
                                         let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-                                        let wrap_width = (line.w / ppp).max(30.0); 
+                                        let wrap_width = (line.w / ppp).max(30.0);
 
                                         let chunk_text = chunks.get(i).cloned().unwrap_or_default();
                                         let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&chunk_text);
-                                        
+
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(
                                                 full_text,
@@ -248,13 +248,13 @@ pub fn render_overlay_viewport(
                                             egui::pos2((line.x / ppp) - overlay_padding/2.0, start_y - overlay_padding/4.0),
                                             egui::vec2(bg_w + overlay_padding, bg_h + overlay_padding/2.0),
                                         );
-                                        
+
                                         last_bottom_y = last_bottom_y.max(bg.max.y);
                                         painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                        
+
                                         if !galley.rows.is_empty() {
                                             let text_y = start_y + (bg_h - galley.size().y) / 2.0;
-                                            
+
                                             let text_x = match overlay_settings.overlay_text_align {
                                                 crate::infrastructure::settings::TextAlign::Left => bg.left() + overlay_padding/2.0,
                                                 crate::infrastructure::settings::TextAlign::Center => bg.center().x,
@@ -291,7 +291,7 @@ pub fn render_overlay_viewport(
                                             egui::vec2(bg_w + overlay_padding, bg_h),
                                         );
                                         painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-                                        
+
                                         let text_pos = egui::pos2(last_line.x / ppp, extra_y + overlay_padding/2.0);
                                         painter.galley(text_pos, galley, overlay_text_color);
                                         extra_y += bg_h + 4.0;
@@ -371,7 +371,7 @@ pub fn render_overlay_viewport(
                             );
                             let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 0, 0));
                             painter.rect_stroke(rect, 4.0, stroke, egui::StrokeKind::Outside);
-                            
+
                             let text_pos = egui::pos2(rect.min.x + 2.0, rect.min.y + 2.0);
                             let galley = ctx.fonts(|f| {
                                 f.layout(
@@ -400,7 +400,7 @@ pub fn render_overlay_viewport(
                 let cached_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
                 let current_hide = overlay_settings.hide_from_capture;
                 let mut last_hide = runtime.last_capture_hide.lock();
-                
+
                 if raw != cached_hwnd || *last_hide != Some(current_hide) {
                     crate::infrastructure::win32::apply_overlay_attributes(raw, current_hide);
                     hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);

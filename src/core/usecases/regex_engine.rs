@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::{RegexRule, RegexRuleType};
+﻿use crate::infrastructure::settings::{RegexRule, RegexRuleType};
 use parking_lot::Mutex;
 use regex::Regex;
 use std::collections::HashMap;

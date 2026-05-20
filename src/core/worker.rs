@@ -1,4 +1,4 @@
-use crate::core::ports::OcrTextLine;
+﻿use crate::core::ports::OcrTextLine;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicIsize;

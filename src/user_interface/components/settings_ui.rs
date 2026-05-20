@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::{Settings, TranslationProvider, UiLanguage};
+﻿use crate::infrastructure::settings::{Settings, TranslationProvider, UiLanguage};
 use crate::user_interface::i18n::get_i18n;
 use eframe::egui;
 use parking_lot::Mutex;
@@ -39,7 +39,7 @@ pub fn show_settings_window(
     ctx: &egui::Context,
     settings_arc: Arc<Mutex<Settings>>,
     ctrl: &crate::core::usecases::settings_controller::SettingsController,
-    download_progress: crate::infrastructure::asset_manager::DownloadProgress,
+    download_progress: crate::core::types::DownloadProgress,
     download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
     slots_runtime: &[crate::core::worker::SlotRuntimeState],
 ) -> SettingsWindowResponse {
@@ -413,7 +413,7 @@ fn render_tab_ocr(
     ui: &mut egui::Ui,
     settings: &mut Settings,
     i18n: &crate::user_interface::i18n::I18n,
-    download_progress: &crate::infrastructure::asset_manager::DownloadProgress,
+    download_progress: &crate::core::types::DownloadProgress,
     download_trigger_tx: &std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
 ) {
     ui.heading(i18n.tab_ocr);
@@ -1016,7 +1016,7 @@ fn render_tab_overlay(
     ui: &mut egui::Ui,
     settings: &mut Settings,
     i18n: &crate::user_interface::i18n::I18n,
-    download_progress: &crate::infrastructure::asset_manager::DownloadProgress,
+    download_progress: &crate::core::types::DownloadProgress,
     download_trigger_tx: &std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
 ) {
     ui.heading(i18n.tab_overlay);
@@ -1506,19 +1506,19 @@ fn render_tab_translation_behavior(
             .show(ui, |ui| {
                 ui.label(egui::RichText::new("Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}").small().color(egui::Color32::GRAY));
                 ui.add_space(6.0);
-                
+
                 ui.label("System Prompt (Role & Guidelines):");
                 ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.system_prompt).desired_rows(3).desired_width(f32::INFINITY));
                 ui.add_space(6.0);
-                
+
                 ui.label("Single-line User Prompt Template:");
                 ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.single_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
                 ui.add_space(6.0);
-                
+
                 ui.label("Multi-line Batch User Prompt Template:");
                 ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.multi_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
                 ui.add_space(4.0);
-                
+
                 if ui.button("Reset to Default Prompts").clicked() {
                     beh.custom_prompts = crate::infrastructure::settings::CustomPromptSettings {
                         enabled: true,

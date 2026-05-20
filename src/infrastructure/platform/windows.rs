@@ -1,4 +1,4 @@
-use super::PlatformServices;
+﻿use super::PlatformServices;
 
 /// Windows platform implementation using Win32 APIs.
 pub struct WindowsPlatform;
