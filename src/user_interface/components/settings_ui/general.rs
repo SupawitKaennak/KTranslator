@@ -4,7 +4,7 @@ use eframe::egui;
 pub fn render_tab_general(
     ui: &mut egui::Ui,
     settings: &mut Settings,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     ui.heading(i18n.tab_general);
     ui.add_space(8.0);

@@ -5,7 +5,7 @@ pub fn render_tab_image_processing(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
     settings: &mut Settings,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
     captured_frame: Option<&crate::core::ports::FrameRgba>,
 ) {
     ui.heading(i18n.tab_image_processing);
@@ -64,7 +64,7 @@ pub fn render_tab_image_processing(
 
     // Apply high-performance processing pipeline
     let (processed_data, pw, ph) =
-        crate::core::usecases::image_proc::process_image_for_ocr(raw_pixels, w, h, img_proc);
+        crate::core::usecases::image_processing_usecase::process_image_for_ocr(raw_pixels, w, h, img_proc);
 
     // Render Preview Texture on GUI
     let color_img =

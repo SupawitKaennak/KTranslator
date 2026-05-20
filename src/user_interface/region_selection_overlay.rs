@@ -246,7 +246,7 @@ pub fn run_region_viewport(
     outcome: Arc<Mutex<Option<RegionOutcome>>>,
     lang: crate::infrastructure::settings::UiLanguage,
 ) {
-    let i18n = crate::ui::i18n::get_i18n(lang);
+    let i18n = crate::user_interface::i18n::get_i18n(lang);
     let title = i18n.region_title;
 
     ctx.show_viewport_immediate(
@@ -258,7 +258,7 @@ pub fn run_region_viewport(
             .with_resizable(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop),
         |ctx, class| {
-            crate::ui::fonts::setup_fonts(ctx);
+            crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::Window::new(i18n.region).show(ctx, |ui| {
                     region_content(ui, &state, &outcome, i18n);
@@ -276,7 +276,7 @@ fn region_content(
     ui: &mut egui::Ui,
     state: &Arc<Mutex<RegionOverlayState>>,
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     if outcome.lock().is_some() {
         return;
@@ -317,7 +317,7 @@ fn run_create_mode(
     full_rect: &egui::Rect,
     pointer: Option<Pos2>,
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     let painter = ui.painter();
     let response = ui.interact(*full_rect, ui.id().with("create"), Sense::click_and_drag());
@@ -381,7 +381,7 @@ fn run_edit_mode(
     full_rect: &egui::Rect,
     pointer: Option<Pos2>,
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     let screen_rect = match st.rect {
         Some(r) => r,
@@ -510,7 +510,7 @@ fn draw_selection_chrome(
     full_rect: &egui::Rect,
     start: Pos2,
     curr: Pos2,
-    _i18n: &crate::ui::i18n::I18n,
+    _i18n: &crate::user_interface::i18n::I18n,
 ) {
     painter.rect_stroke(
         r,

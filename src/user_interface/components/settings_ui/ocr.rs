@@ -4,7 +4,7 @@ use eframe::egui;
 pub fn render_tab_ocr(
     ui: &mut egui::Ui,
     settings: &mut Settings,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
     download_progress: &crate::core::types::DownloadProgress,
     download_trigger_tx: &std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
 ) {

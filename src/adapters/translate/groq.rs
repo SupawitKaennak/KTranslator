@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{ports::Translator, types::LanguageTag};
 
-use super::llm_shared;
+use super::llm_shared_utilities;
 
 #[derive(Clone)]
 pub struct GroqTranslator {
@@ -20,7 +20,7 @@ impl GroqTranslator {
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = llm_shared::build_client(llm_shared::DEFAULT_TIMEOUT_SECS)?;
+        let client = llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -79,9 +79,9 @@ impl Translator for GroqTranslator {
         }
 
         let prompt =
-            llm_shared::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
-        let temp = llm_shared::get_temperature(self.behavior.as_ref(), 0.2);
-        let max_tokens = llm_shared::estimate_max_tokens(text);
+            llm_shared_utilities::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.2);
+        let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
 
         let req = GroqChatRequest {
             model: self.model.clone(),

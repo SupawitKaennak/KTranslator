@@ -4,9 +4,9 @@ use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};
 
 use crate::core::{
-    pipeline_result::BgResult,
+    pipeline_execution_result::BgResult,
     ports::{FrameSource, OcrEngine, Translator},
-    cleaner::TextCleaner,
+    text_cleaning_pipeline::TextCleaner,
     types::{LanguageTag, Rect, TextTranslationCache, TranslationCache},
     utils::smart_hash,
 };
@@ -38,7 +38,7 @@ pub struct PipelineContext {
     pub ocr_engine: Arc<dyn OcrEngine>,
     pub translator: Option<Arc<dyn Translator + Send + Sync>>,
     pub platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
-    pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo::YoloBubbleDetector>>,
+    pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>,
 
     // --- Hash/stability state ---
     pub prev_hash: u64,
@@ -191,7 +191,7 @@ impl TranslationPipeline {
         raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
 
         let blocks =
-            crate::core::text_layout::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
+            crate::core::text_layout_analyzer::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
 
         let mut ocr_lines = Vec::new();
         let mut block_sizes = Vec::new();
@@ -211,7 +211,7 @@ impl TranslationPipeline {
 
         // Helper check: Perfect Translation Memory Hit
         if let Some(memory_trans) =
-            crate::core::usecases::glossary::GlossaryEngine::apply_translation_memory(
+            crate::core::usecases::glossary_replacement_engine::GlossaryEngine::apply_translation_memory(
                 &ocr_text_base,
                 &glossary_entries,
             )
@@ -247,7 +247,7 @@ impl TranslationPipeline {
         // 1. Apply Pre-Translation Regex Engine Rules FIRST
         // This ensures space-separated words like "HA NAZO NO" are merged to "HANAZONO" BEFORE glossary looks for it.
         let (ocr_text_regex, regex_protected_map) =
-            crate::core::usecases::regex_rules::RegexEngine::apply_pre_rules(
+            crate::core::usecases::regex_replacement_engine::RegexEngine::apply_pre_rules(
                 &ocr_text_base,
                 &regex_rules,
             );
@@ -255,19 +255,19 @@ impl TranslationPipeline {
         // 2. Apply Glossary Engine Overrides and Protected words SECOND
         // Now Glossary will successfully catch "HANAZONO" and apply protection or guidance correctly!
         let (ocr_text, gloss_protected_map) =
-            crate::core::usecases::glossary::GlossaryEngine::apply_pre_override(
+            crate::core::usecases::glossary_replacement_engine::GlossaryEngine::apply_pre_override(
                 &ocr_text_regex,
                 &glossary_entries,
             );
 
         // Extract active glossary metadata for injection into AI Guidance prompt
         let active_glossary_entries =
-            crate::core::usecases::glossary::GlossaryEngine::filter_active_entries(
+            crate::core::usecases::glossary_replacement_engine::GlossaryEngine::filter_active_entries(
                 &ocr_text,
                 &glossary_entries,
             );
         let glossary_guidance_str =
-            crate::core::usecases::glossary::GlossaryEngine::build_glossary_guidance(
+            crate::core::usecases::glossary_replacement_engine::GlossaryEngine::build_glossary_guidance(
                 &active_glossary_entries,
             );
 
@@ -284,13 +284,13 @@ impl TranslationPipeline {
         let build_trans_lines = move |translated: &str| -> Vec<String> {
             // Decode Glossary protected masks first
             let decoded_gloss =
-                crate::core::usecases::glossary::GlossaryEngine::apply_post_override(
+                crate::core::usecases::glossary_replacement_engine::GlossaryEngine::apply_post_override(
                     translated,
                     &gloss_protected_map_inner,
                 );
 
             // Apply Regex Post rules and decode masks
-            let mut post_trans = crate::core::usecases::regex_rules::RegexEngine::apply_post_rules(
+            let mut post_trans = crate::core::usecases::regex_replacement_engine::RegexEngine::apply_post_rules(
                 &decoded_gloss,
                 &regex_rules_inner,
                 &regex_protected_map_inner,
@@ -298,7 +298,7 @@ impl TranslationPipeline {
 
             // Forcefully apply any missed Glossary entries (like CharacterName, Terms) on the final text
             // to serve as a 100% reliable post-translation enforcer.
-            post_trans = crate::core::usecases::glossary::GlossaryEngine::apply_post_glossary_overrides(&post_trans, &glossary_entries_inner);
+            post_trans = crate::core::usecases::glossary_replacement_engine::GlossaryEngine::apply_post_glossary_overrides(&post_trans, &glossary_entries_inner);
 
             let mut block_translations =
                 Self::parse_numbered_lines(&post_trans, blocks.len(), &txt_proc_cfg_inner);
@@ -428,7 +428,7 @@ impl TranslationPipeline {
             ));
         }
         let context_hint = if contextual_translation {
-            crate::core::usecases::translate_run::build_context_hint(
+            crate::core::usecases::translation_runner_usecase::build_context_hint(
                 &context_segments,
                 context_window_size,
             )
@@ -436,7 +436,7 @@ impl TranslationPipeline {
             None
         };
         let context_hint_ref = context_hint.as_deref();
-        let translator_output = crate::core::usecases::translate_run::translate_text(
+        let translator_output = crate::core::usecases::translation_runner_usecase::translate_text(
             translator
                 .as_deref()
                 .context("No translator provider selected")?,
@@ -489,7 +489,7 @@ impl TranslationPipeline {
         ocr_count: usize,
         config: &crate::infrastructure::settings::TextProcessingSettings,
     ) -> Vec<String> {
-        let mut result = crate::core::prompt::parse_translation_response(raw, ocr_count);
+        let mut result = crate::core::llm_prompt_builder::parse_translation_response(raw, ocr_count);
         for s in result.iter_mut() {
             *s = TextCleaner::clean(s, config);
         }

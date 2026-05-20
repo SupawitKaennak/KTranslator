@@ -1,1 +1,1 @@
-pub mod screen;
+pub mod screenshots_crate_adapter;

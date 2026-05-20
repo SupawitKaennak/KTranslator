@@ -1,4 +1,4 @@
-use crate::adapters::ocr::yolo::YoloBubbleDetector;
+use crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector;
 use crate::core::ports::{FrameRgba, OcrEngine, OcrTextLine};
 use crate::infrastructure::settings::ImageProcessingSettings;
 use std::sync::Arc;
@@ -60,13 +60,13 @@ pub fn perform_ocr(
                             .saturating_sub(crop_y);
 
                         if crop_w >= 5 && crop_h >= 5 {
-                            let cropped_frame = crate::core::usecases::image_proc::crop_frame(
+                            let cropped_frame = crate::core::usecases::image_processing_usecase::crop_frame(
                                 frame, crop_x, crop_y, crop_w, crop_h,
                             );
 
                             // Perform full image pre-processing on the cropped speech bubble
                             let (proc_data, proc_w, proc_h) =
-                                crate::core::usecases::image_proc::process_image_for_ocr(
+                                crate::core::usecases::image_processing_usecase::process_image_for_ocr(
                                     &cropped_frame.data,
                                     cropped_frame.width,
                                     cropped_frame.height,
@@ -103,7 +103,7 @@ pub fn perform_ocr(
     if !bubble_detection_successful {
         // Fallback: Perform Image pre-processing IN-PLACE on frame
         let (proc_data, proc_w, proc_h) =
-            crate::core::usecases::image_proc::process_image_for_ocr(
+            crate::core::usecases::image_processing_usecase::process_image_for_ocr(
                 &frame.data,
                 frame.width,
                 frame.height,

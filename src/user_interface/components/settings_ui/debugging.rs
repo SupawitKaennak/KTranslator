@@ -3,7 +3,7 @@ use eframe::egui;
 pub fn render_tab_debugging(
     ui: &mut egui::Ui,
     debug_infos: &[super::SlotDebugInfo],
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     ui.heading(i18n.tab_debugging);
     ui.add_space(8.0);

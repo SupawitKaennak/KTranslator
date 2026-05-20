@@ -1,8 +1,8 @@
 use crate::core::{
-    pipeline_result::BgResult,
+    pipeline_execution_result::BgResult,
     ports::{FrameSource, OcrEngine, Translator},
-    slot::AppModel,
-    slot::SlotRuntimeState,
+    region_slot_state::AppModel,
+    region_slot_state::SlotRuntimeState,
     types::{TextTranslationCache, TranslationCache},
     usecases::pipeline::TranslationPipeline,
 };
@@ -14,7 +14,7 @@ pub struct BackgroundCoordinator {
     pub bg_rx: mpsc::Receiver<BgResult>,
     pool: Mutex<threadpool::ThreadPool>,
     yolo_bubble:
-        Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo::YoloBubbleDetector>>>>,
+        Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>>>,
 }
 
 impl BackgroundCoordinator {
@@ -57,9 +57,9 @@ impl BackgroundCoordinator {
 
         let yolo_detector = if settings.use_yolo_bubble {
             let mut guard = self.yolo_bubble.lock();
-            if guard.is_none() && crate::infrastructure::assets::check_bubble_yolo_exists() {
+            if guard.is_none() && crate::infrastructure::asset_download_manager::check_bubble_yolo_exists() {
                 *guard = Some(Arc::new(
-                    crate::adapters::ocr::yolo::YoloBubbleDetector::new(
+                    crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector::new(
                         settings.perf.gpu_backend,
                     ),
                 ));

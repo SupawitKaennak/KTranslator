@@ -17,6 +17,6 @@ impl PlatformServices for WindowsPlatform {
         text: &str,
         mode: crate::infrastructure::settings::ThaiSegmentationMode,
     ) -> String {
-        crate::infrastructure::thai::segment_thai(text, mode)
+        crate::infrastructure::thai_word_segmenter::segment_thai(text, mode)
     }
 }

@@ -4,7 +4,7 @@ use eframe::egui;
 pub fn render_tab_performance(
     ui: &mut egui::Ui,
     settings: &mut Settings,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
 ) {
     super::section_header(ui, i18n.tab_performance);
     ui.label(egui::RichText::new("Fine-tune thread execution, hardware acceleration, and cache footprints for maximal frame stability.").small().color(egui::Color32::GRAY));
