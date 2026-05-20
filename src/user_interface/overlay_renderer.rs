@@ -1,11 +1,11 @@
+use crate::core::model::AppModel;
+use crate::core::types::physical_px_to_logical_points;
+use crate::core::worker::SlotRuntimeState;
+use crate::infrastructure::platform::PlatformServices;
+use crate::infrastructure::settings::Settings;
 use eframe::egui;
 use parking_lot::Mutex;
 use std::sync::Arc;
-use crate::core::model::AppModel;
-use crate::core::types::physical_px_to_logical_points;
-use crate::infrastructure::settings::Settings;
-use crate::infrastructure::platform::PlatformServices;
-use crate::core::worker::SlotRuntimeState;
 
 /// Convert physical screen pixels to logical viewport coordinates (rounded).
 fn snap_logical(px: f32, ppp: f32) -> f32 {
@@ -22,27 +22,33 @@ pub fn render_overlay_viewport(
     platform: &Arc<dyn PlatformServices>,
 ) {
     let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
-    
+
     let viewport_id = egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx));
     let (rect, should_show) = {
         let m = model_arc.lock();
-        if slot_idx >= m.slots.len() { return; }
+        if slot_idx >= m.slots.len() {
+            return;
+        }
         let slot = &m.slots[slot_idx];
         (slot.rect, slot.overlay_mode)
     };
 
-    let hwnd = runtime.overlay_hwnd.load(std::sync::atomic::Ordering::Relaxed);
-    if !should_show || rect.is_none() { 
+    let hwnd = runtime
+        .overlay_hwnd
+        .load(std::sync::atomic::Ordering::Relaxed);
+    if !should_show || rect.is_none() {
         if hwnd != 0 {
             ctx.send_viewport_cmd_to(viewport_id, egui::ViewportCommand::Close);
-            runtime.overlay_hwnd.store(0, std::sync::atomic::Ordering::Relaxed);
+            runtime
+                .overlay_hwnd
+                .store(0, std::sync::atomic::Ordering::Relaxed);
         }
-        return; 
+        return;
     }
     let r = rect.unwrap().snap_to_pixels();
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
-    
+
     let model_arc_inner = model_arc.clone();
     let hwnd_cache = runtime.overlay_hwnd.clone();
     let overlay_settings = settings.clone();
@@ -424,7 +430,9 @@ pub fn render_popup_viewport(
         move |ctx, class| {
             let (last_ocr_text, last_trans_lines) = {
                 let m = model_arc_inner.lock();
-                if slot_idx >= m.slots.len() { return; }
+                if slot_idx >= m.slots.len() {
+                    return;
+                }
                 let slot = &m.slots[slot_idx];
                 (slot.last_ocr_text.clone(), slot.last_trans_lines.clone())
             };
@@ -462,4 +470,3 @@ pub fn render_popup_viewport(
         },
     );
 }
-

@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use regex::Regex;
-use parking_lot::Mutex;
 use crate::infrastructure::settings::{RegexRule, RegexRuleType};
+use parking_lot::Mutex;
+use regex::Regex;
+use std::collections::HashMap;
 
 /// Thread-safe cache for compiled regex patterns.
 /// Avoids recompiling the same pattern string on every OCR frame (~20-60fps).
@@ -80,7 +80,11 @@ impl RegexEngine {
     }
 
     /// Applies PostTranslation rules and decodes Protected placeholders.
-    pub fn apply_post_rules(text: &str, rules: &[RegexRule], protected_map: &HashMap<String, String>) -> String {
+    pub fn apply_post_rules(
+        text: &str,
+        rules: &[RegexRule],
+        protected_map: &HashMap<String, String>,
+    ) -> String {
         let mut current_text = text.to_string();
 
         // 1. First apply user post-translation regex rules
@@ -159,7 +163,8 @@ mod tests {
     #[test]
     fn post_translation_rule_applies_after() {
         let rules = vec![rule(RegexRuleType::PostTranslation, r"foo", "bar")];
-        let result = RegexEngine::apply_post_rules("foo baz foo", &rules, &std::collections::HashMap::new());
+        let result =
+            RegexEngine::apply_post_rules("foo baz foo", &rules, &std::collections::HashMap::new());
         assert_eq!(result, "bar baz bar");
     }
 

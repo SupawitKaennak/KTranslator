@@ -1,7 +1,7 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod core;
 mod adapters;
+mod core;
 mod infrastructure;
 mod user_interface;
 
@@ -10,16 +10,14 @@ async fn main() -> eframe::Result<()> {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ktranslator=debug,debug"));
 
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     tracing::info!("KTranslator starting up...");
     #[cfg(windows)]
     {
+        use windows::core::PCWSTR;
         use windows::Win32::UI::HiDpi::*;
         use windows::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
-        use windows::core::PCWSTR;
         unsafe {
             let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
             // Set AppUserModelID to ensure taskbar icon shows correctly

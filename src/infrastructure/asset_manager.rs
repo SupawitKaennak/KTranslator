@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-use std::fs;
 use anyhow::Result;
+use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Clone, Copy)]
 pub struct ModelAsset<'a> {
@@ -112,7 +112,8 @@ pub const PPOCR_DICT_KOREAN: ModelAsset<'static> = ModelAsset {
 
 pub const PPOCR_DICT_THAI: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Thai)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/th_dict.txt",
+    url:
+        "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/th_dict.txt",
     path: "models/ppocr/thai_dict.txt",
 };
 
@@ -141,7 +142,10 @@ pub fn check_bubble_yolo_exists() -> bool {
             p = exe_dir.join(BUBBLE_YOLO_MODEL.path);
         }
     }
-    p.exists() && fs::metadata(&p).map(|m| m.len() > 5 * 1024 * 1024).unwrap_or(false)
+    p.exists()
+        && fs::metadata(&p)
+            .map(|m| m.len() > 5 * 1024 * 1024)
+            .unwrap_or(false)
 }
 
 #[derive(Clone, Default, Debug)]
@@ -160,10 +164,10 @@ async fn download_asset_list(
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .build()?;
-    
+
     for asset in assets {
         let mut dest_path = PathBuf::from(asset.path);
-        
+
         // Ensure we download relative to the EXE directory for portability
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
@@ -176,7 +180,7 @@ async fn download_asset_list(
             if let Ok(meta) = fs::metadata(&dest_path) {
                 let is_onnx = dest_path.extension().and_then(|s| s.to_str()) == Some("onnx");
                 let threshold = if is_onnx { 10 * 1024 * 1024 } else { 5 * 1024 }; // 10MB for ONNX, 5KB for others
-                
+
                 if meta.len() > threshold {
                     continue;
                 } else {
@@ -200,14 +204,14 @@ async fn download_asset_list(
 
         let mut response = client.get(asset.url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
-        
+
         let mut file = fs::File::create(&dest_path)?;
         let mut downloaded: u64 = 0;
 
         while let Some(chunk) = response.chunk().await? {
             file.write_all(&chunk)?;
             downloaded += chunk.len() as u64;
-            
+
             if total_size > 0 {
                 let new_prog = downloaded as f32 / total_size as f32;
                 if (new_prog - progress.progress).abs() > 0.01 {
@@ -222,38 +226,48 @@ async fn download_asset_list(
 }
 
 /// Download Manga-OCR models.
-pub async fn download_models(progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>) -> Result<()> {
+pub async fn download_models(
+    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+) -> Result<()> {
     download_asset_list(&MANGA_MODELS, &progress_tx).await?;
 
-    let _ = progress_tx.send(DownloadProgress {
-        current_file: "All files downloaded!".to_string(),
-        progress: 1.0,
-        is_downloading: false,
-        error: None,
-    }).await;
+    let _ = progress_tx
+        .send(DownloadProgress {
+            current_file: "All files downloaded!".to_string(),
+            progress: 1.0,
+            is_downloading: false,
+            error: None,
+        })
+        .await;
 
     Ok(())
 }
 
 /// Download PP-OCR models for Built-in PaddleOCR.
-pub async fn download_ppocr_models(progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>) -> Result<()> {
+pub async fn download_ppocr_models(
+    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+) -> Result<()> {
     let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
-    
+
     // 1. Detection Model URL
     let det_url = match settings.ppocr_model {
-        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile |
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => PPOCR_MOBILE_MODELS[0].url,
-        
-        crate::infrastructure::settings::PpocrModelSuite::CnEnServer |
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer |
-        crate::infrastructure::settings::PpocrModelSuite::KoreanServer |
-        crate::infrastructure::settings::PpocrModelSuite::ThaiServer |
-        crate::infrastructure::settings::PpocrModelSuite::LatinServer |
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => PPOCR_SERVER_MODELS[0].url,
+        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile
+        | crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile
+        | crate::infrastructure::settings::PpocrModelSuite::KoreanMobile
+        | crate::infrastructure::settings::PpocrModelSuite::ThaiMobile
+        | crate::infrastructure::settings::PpocrModelSuite::LatinMobile
+        | crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
+            PPOCR_MOBILE_MODELS[0].url
+        }
+
+        crate::infrastructure::settings::PpocrModelSuite::CnEnServer
+        | crate::infrastructure::settings::PpocrModelSuite::JapaneseServer
+        | crate::infrastructure::settings::PpocrModelSuite::KoreanServer
+        | crate::infrastructure::settings::PpocrModelSuite::ThaiServer
+        | crate::infrastructure::settings::PpocrModelSuite::LatinServer
+        | crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => {
+            PPOCR_SERVER_MODELS[0].url
+        }
     };
 
     // 2. Recognition Model URL
@@ -284,23 +298,29 @@ pub async fn download_ppocr_models(progress_tx: tokio::sync::mpsc::Sender<Downlo
 
     // 3. Dictionary URL
     let dict_url = match settings.ppocr_model {
-        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile |
-        crate::infrastructure::settings::PpocrModelSuite::CnEnServer => PPOCR_MOBILE_MODELS[2].url,
-        
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => PPOCR_DICT_JAPANESE.url,
-        
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
-        crate::infrastructure::settings::PpocrModelSuite::KoreanServer => PPOCR_DICT_KOREAN.url,
-        
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
-        crate::infrastructure::settings::PpocrModelSuite::ThaiServer => PPOCR_DICT_THAI.url,
+        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile
+        | crate::infrastructure::settings::PpocrModelSuite::CnEnServer => {
+            PPOCR_MOBILE_MODELS[2].url
+        }
 
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
-        crate::infrastructure::settings::PpocrModelSuite::LatinServer => PPOCR_DICT_LATIN.url,
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile
+        | crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => {
+            PPOCR_DICT_JAPANESE.url
+        }
 
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile |
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => PPOCR_DICT_CYRILLIC.url,
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile
+        | crate::infrastructure::settings::PpocrModelSuite::KoreanServer => PPOCR_DICT_KOREAN.url,
+
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile
+        | crate::infrastructure::settings::PpocrModelSuite::ThaiServer => PPOCR_DICT_THAI.url,
+
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile
+        | crate::infrastructure::settings::PpocrModelSuite::LatinServer => PPOCR_DICT_LATIN.url,
+
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile
+        | crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => {
+            PPOCR_DICT_CYRILLIC.url
+        }
     };
 
     let folder_name = settings.ppocr_model.folder_name();
@@ -312,34 +332,50 @@ pub async fn download_ppocr_models(progress_tx: tokio::sync::mpsc::Sender<Downlo
     let dict_p_owned = format!("{}/dict.txt", base_p);
 
     let assets = [
-        ModelAsset { name: "PP-OCR Detection", url: det_url, path: &det_p_owned },
-        ModelAsset { name: "PP-OCR Recognition", url: rec_url, path: &rec_p_owned },
-        ModelAsset { name: "PP-OCR Dictionary", url: dict_url, path: &dict_p_owned },
+        ModelAsset {
+            name: "PP-OCR Detection",
+            url: det_url,
+            path: &det_p_owned,
+        },
+        ModelAsset {
+            name: "PP-OCR Recognition",
+            url: rec_url,
+            path: &rec_p_owned,
+        },
+        ModelAsset {
+            name: "PP-OCR Dictionary",
+            url: dict_url,
+            path: &dict_p_owned,
+        },
     ];
 
     download_asset_list(&assets, &progress_tx).await?;
 
-    let _ = progress_tx.send(DownloadProgress {
-        current_file: format!("PP-OCR suite '{}' downloaded successfully!", folder_name),
-        progress: 1.0,
-        is_downloading: false,
-        error: None,
-    }).await;
+    let _ = progress_tx
+        .send(DownloadProgress {
+            current_file: format!("PP-OCR suite '{}' downloaded successfully!", folder_name),
+            progress: 1.0,
+            is_downloading: false,
+            error: None,
+        })
+        .await;
 
     Ok(())
 }
 
-pub async fn download_bubble_yolo_model(progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>) -> Result<()> {
+pub async fn download_bubble_yolo_model(
+    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+) -> Result<()> {
     download_asset_list(&[BUBBLE_YOLO_MODEL], &progress_tx).await?;
 
-    let _ = progress_tx.send(DownloadProgress {
-        current_file: "Bubble YOLO model downloaded successfully!".to_string(),
-        progress: 1.0,
-        is_downloading: false,
-        error: None,
-    }).await;
+    let _ = progress_tx
+        .send(DownloadProgress {
+            current_file: "Bubble YOLO model downloaded successfully!".to_string(),
+            progress: 1.0,
+            is_downloading: false,
+            error: None,
+        })
+        .await;
 
     Ok(())
 }
-
-

@@ -1,6 +1,6 @@
+use parking_lot::Mutex;
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use parking_lot::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(dead_code)]
@@ -42,7 +42,7 @@ impl ErrorHandler {
         *next += 1;
 
         let msg = message.into();
-        
+
         // Structured logging integration
         match severity {
             ErrorSeverity::Warning => tracing::warn!("[Error #{id}] {msg}"),
@@ -79,7 +79,7 @@ impl ErrorHandler {
     pub fn get_all_errors(&self) -> Vec<AppError> {
         self.errors.lock().values().cloned().collect()
     }
-    
+
     /// Checks if any errors are actively unaddressed.
     pub fn has_errors(&self) -> bool {
         !self.errors.lock().is_empty()

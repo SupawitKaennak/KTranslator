@@ -56,16 +56,16 @@ pub fn iou(a: &DetectionBox, b: &DetectionBox) -> f32 {
 pub fn nms(mut boxes: Vec<DetectionBox>, iou_threshold: f32) -> Vec<DetectionBox> {
     boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
     let mut result = Vec::new();
-    for i in 0..boxes.len() {
+    for b in &boxes {
         let mut keep = true;
         for res in &result {
-            if iou(&boxes[i], res) > iou_threshold {
+            if iou(b, res) > iou_threshold {
                 keep = false;
                 break;
             }
         }
         if keep {
-            result.push(boxes[i].clone());
+            result.push(b.clone());
         }
     }
     result
@@ -76,7 +76,14 @@ mod tests {
     use super::*;
 
     fn bbox(x1: f32, y1: f32, x2: f32, y2: f32, prob: f32) -> DetectionBox {
-        DetectionBox { x1, y1, x2, y2, prob, class_id: 0 }
+        DetectionBox {
+            x1,
+            y1,
+            x2,
+            y2,
+            prob,
+            class_id: 0,
+        }
     }
 
     #[test]

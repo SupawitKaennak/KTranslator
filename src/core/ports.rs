@@ -1,12 +1,11 @@
-use anyhow::Result;
-
+use crate::core::error::KError;
 use crate::core::types::{LanguageTag, Rect};
 
 #[derive(Debug, Clone)]
 pub struct FrameRgba {
     pub width: u32,
     pub height: u32,
-    pub data: Vec<u8>, // RGBA8
+    pub data: std::sync::Arc<Vec<u8>>, // RGBA8
 }
 
 /// One line of OCR-recognised text together with its bounding box in
@@ -31,13 +30,21 @@ pub struct OcrTextBlock {
 }
 
 pub trait FrameSource: Send + Sync {
-    fn capture_rect(&self, rect: Rect, display_id: u32) -> Result<FrameRgba>;
+    fn capture_rect(&self, rect: Rect, display_id: u32) -> Result<FrameRgba, KError>;
 }
 
 #[allow(dead_code)] // trait contract; used by GeminiOcr and may be called directly in future
 pub trait OcrEngine: Send + Sync {
-    fn recognize(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<String>;
-    fn recognize_lines(&self, frame: FrameRgba, lang_hint: Option<&LanguageTag>) -> Result<Vec<OcrTextLine>>;
+    fn recognize(
+        &self,
+        frame: FrameRgba,
+        lang_hint: Option<&LanguageTag>,
+    ) -> Result<String, KError>;
+    fn recognize_lines(
+        &self,
+        frame: FrameRgba,
+        lang_hint: Option<&LanguageTag>,
+    ) -> Result<Vec<OcrTextLine>, KError>;
 }
 
 pub trait Translator: Send + Sync {
@@ -47,7 +54,7 @@ pub trait Translator: Send + Sync {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String>;
+    ) -> Result<String, KError>;
 
     /// Optional: Translate directly from an image frame (Vision mode)
     #[allow(dead_code)]
@@ -56,8 +63,9 @@ pub trait Translator: Send + Sync {
         _frame: &FrameRgba,
         _source: Option<&LanguageTag>,
         _target: &LanguageTag,
-    ) -> Result<String> {
-        anyhow::bail!("Vision translation not supported by this provider")
+    ) -> Result<String, KError> {
+        Err(KError::Translation(
+            "Vision translation not supported by this provider".to_string(),
+        ))
     }
 }
-

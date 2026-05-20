@@ -125,4 +125,3 @@ mod tests {
         assert!((get_temperature(None, 0.3) - 0.3).abs() < f32::EPSILON);
     }
 }
-

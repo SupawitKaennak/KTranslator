@@ -8,7 +8,6 @@ impl PlatformServices for WindowsPlatform {
         crate::infrastructure::win32::find_window(title)
     }
 
-
     fn boost_process_priority(&self) {
         crate::infrastructure::win32::boost_process_priority();
     }
