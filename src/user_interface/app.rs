@@ -1,4 +1,4 @@
-use std::sync::{mpsc, Arc};
+﻿use std::sync::{mpsc, Arc};
 
 use eframe::egui;
 use parking_lot::Mutex;
@@ -77,10 +77,8 @@ pub struct App {
     /// Model download channels
     download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
     download_trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
-    download_progress_rx:
-        tokio::sync::mpsc::Receiver<crate::infrastructure::asset_manager::DownloadProgress>,
-    download_progress_tx:
-        tokio::sync::mpsc::Sender<crate::infrastructure::asset_manager::DownloadProgress>,
+    download_progress_rx: tokio::sync::mpsc::Receiver<crate::core::types::DownloadProgress>,
+    download_progress_tx: tokio::sync::mpsc::Sender<crate::core::types::DownloadProgress>,
 
     /// Timestamp of last cache cleanup for periodic memory management
     last_cleanup_time: Arc<Mutex<u64>>,

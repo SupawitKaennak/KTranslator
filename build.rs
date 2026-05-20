@@ -1,4 +1,4 @@
-fn main() {
+﻿fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() == "windows" {
         // 1. Convert PNG to ICO if needed
         let png_path = "assets/icons/icon.png";

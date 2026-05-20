@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+﻿use serde::{Deserialize, Serialize};
 
 use crate::core::{
     ports::OcrTextLine,
@@ -45,7 +45,7 @@ pub struct AppModel {
     pub running: bool,
     pub slots: Vec<RegionSlot>,
     #[serde(skip)]
-    pub download_progress: crate::infrastructure::asset_manager::DownloadProgress,
+    pub download_progress: crate::core::types::DownloadProgress,
 }
 
 impl Default for RegionSlot {
@@ -82,7 +82,7 @@ impl AppModel {
         Self {
             running: false,
             slots: vec![RegionSlot::default()],
-            download_progress: crate::infrastructure::asset_manager::DownloadProgress::default(),
+            download_progress: crate::core::types::DownloadProgress::default(),
         }
     }
     pub fn add_slot(&mut self) -> usize {

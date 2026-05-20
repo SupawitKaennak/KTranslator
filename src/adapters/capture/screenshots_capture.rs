@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use parking_lot::Mutex;
 use screenshots::Screen;
 use std::collections::HashMap;

@@ -1,4 +1,4 @@
-mod app;
+﻿mod app;
 pub mod components;
 mod font_loader;
 pub mod i18n;

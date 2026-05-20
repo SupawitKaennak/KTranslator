@@ -1,4 +1,4 @@
-use anyhow::Result;
+﻿use anyhow::Result;
 use image::{ImageBuffer, Rgba};
 use std::future::IntoFuture;
 use std::sync::Arc;
@@ -231,6 +231,71 @@ impl WindowsOcr {
             final_scale,
         )
     }
+
+    fn frame_to_bitmap(
+        processed: FrameRgba,
+    ) -> Result<windows::Graphics::Imaging::SoftwareBitmap, crate::core::error::KError> {
+        // Encode raw pixels to PNG in memory
+        let mut png_buffer = Vec::new();
+        let mut cursor = std::io::Cursor::new(&mut png_buffer);
+        let raw_data = Arc::try_unwrap(processed.data).unwrap_or_else(|arc| (*arc).clone());
+        let img =
+            ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(processed.width, processed.height, raw_data)
+                .ok_or_else(|| {
+                    crate::core::error::KError::Ocr("Failed to create image buffer".to_string())
+                })?;
+        image::DynamicImage::ImageRgba8(img)
+            .write_to(&mut cursor, image::ImageFormat::Png)
+            .map_err(|e| crate::core::error::KError::Ocr(format!("Image write error: {:?}", e)))?;
+
+        let stream = InMemoryRandomAccessStream::new()
+            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        let writer = stream
+            .GetOutputStreamAt(0)
+            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        {
+            let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)
+                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            data_writer
+                .WriteBytes(&png_buffer)
+                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            wait_for(
+                data_writer
+                    .StoreAsync()
+                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                    .into_future(),
+            )
+            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            wait_for(
+                data_writer
+                    .FlushAsync()
+                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                    .into_future(),
+            )
+            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        }
+
+        let decoder = wait_for(
+            BitmapDecoder::CreateWithIdAsync(
+                windows::Graphics::Imaging::BitmapDecoder::PngDecoderId().map_err(|e| {
+                    crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e))
+                })?,
+                &stream,
+            )
+            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+            .into_future(),
+        )
+        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        let bitmap = wait_for(
+            decoder
+                .GetSoftwareBitmapAsync()
+                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                .into_future(),
+        )
+        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+
+        Ok(bitmap)
+    }
 }
 
 use std::sync::LazyLock;
@@ -256,65 +321,7 @@ impl OcrEngineTrait for WindowsOcr {
     ) -> Result<String, crate::core::error::KError> {
         let engine = self.get_engine(lang_hint)?;
         let (processed, _) = Self::preprocess(frame);
-
-        // Encode raw pixels to PNG in memory
-        let mut png_buffer = Vec::new();
-        let mut cursor = std::io::Cursor::new(&mut png_buffer);
-        let raw_data = Arc::try_unwrap(processed.data).unwrap_or_else(|arc| (*arc).clone());
-        let img =
-            ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(processed.width, processed.height, raw_data)
-                .ok_or_else(|| {
-                    crate::core::error::KError::Ocr("Failed to create image buffer".to_string())
-                })?;
-        image::DynamicImage::ImageRgba8(img)
-            .write_to(&mut cursor, image::ImageFormat::Png)
-            .map_err(|e| crate::core::error::KError::Ocr(format!("Image write error: {:?}", e)))?;
-
-        let stream = InMemoryRandomAccessStream::new()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        let writer = stream
-            .GetOutputStreamAt(0)
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        {
-            let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-            data_writer
-                .WriteBytes(&png_buffer)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-            wait_for(
-                data_writer
-                    .StoreAsync()
-                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-                    .into_future(),
-            )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-            wait_for(
-                data_writer
-                    .FlushAsync()
-                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-                    .into_future(),
-            )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        }
-
-        let decoder = wait_for(
-            BitmapDecoder::CreateWithIdAsync(
-                windows::Graphics::Imaging::BitmapDecoder::PngDecoderId().map_err(|e| {
-                    crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e))
-                })?,
-                &stream,
-            )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-            .into_future(),
-        )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        let bitmap = wait_for(
-            decoder
-                .GetSoftwareBitmapAsync()
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-                .into_future(),
-        )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        let bitmap = Self::frame_to_bitmap(processed)?;
 
         let result = wait_for(
             engine
@@ -336,65 +343,7 @@ impl OcrEngineTrait for WindowsOcr {
     ) -> Result<Vec<OcrTextLine>, crate::core::error::KError> {
         let engine = self.get_engine(lang_hint)?;
         let (processed, scale) = Self::preprocess(frame);
-
-        // Encode raw pixels to PNG in memory
-        let mut png_buffer = Vec::new();
-        let mut cursor = std::io::Cursor::new(&mut png_buffer);
-        let raw_data = Arc::try_unwrap(processed.data).unwrap_or_else(|arc| (*arc).clone());
-        let img =
-            ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(processed.width, processed.height, raw_data)
-                .ok_or_else(|| {
-                    crate::core::error::KError::Ocr("Failed to create image buffer".to_string())
-                })?;
-        image::DynamicImage::ImageRgba8(img)
-            .write_to(&mut cursor, image::ImageFormat::Png)
-            .map_err(|e| crate::core::error::KError::Ocr(format!("Image write error: {:?}", e)))?;
-
-        let stream = InMemoryRandomAccessStream::new()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        let writer = stream
-            .GetOutputStreamAt(0)
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        {
-            let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-            data_writer
-                .WriteBytes(&png_buffer)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-            wait_for(
-                data_writer
-                    .StoreAsync()
-                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-                    .into_future(),
-            )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-            wait_for(
-                data_writer
-                    .FlushAsync()
-                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-                    .into_future(),
-            )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        }
-
-        let decoder = wait_for(
-            BitmapDecoder::CreateWithIdAsync(
-                windows::Graphics::Imaging::BitmapDecoder::PngDecoderId().map_err(|e| {
-                    crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e))
-                })?,
-                &stream,
-            )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-            .into_future(),
-        )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
-        let bitmap = wait_for(
-            decoder
-                .GetSoftwareBitmapAsync()
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
-                .into_future(),
-        )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        let bitmap = Self::frame_to_bitmap(processed)?;
 
         let result = wait_for(
             engine

@@ -1,4 +1,4 @@
-use crate::core::ports::Translator;
+﻿use crate::core::ports::Translator;
 use crate::core::types::LanguageTag;
 use anyhow::Result;
 use reqwest::blocking::Client;

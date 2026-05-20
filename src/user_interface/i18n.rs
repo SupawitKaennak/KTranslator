@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::UiLanguage;
+﻿use crate::infrastructure::settings::UiLanguage;
 
 #[allow(dead_code)]
 pub struct I18n {

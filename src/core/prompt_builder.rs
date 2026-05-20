@@ -1,4 +1,4 @@
-use crate::core::types::LanguageTag;
+﻿use crate::core::types::LanguageTag;
 use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------

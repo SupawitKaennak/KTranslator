@@ -1,4 +1,4 @@
-use eframe::egui;
+﻿use eframe::egui;
 use std::sync::Arc;
 
 /// Configures and loads all necessary fonts for multi-language support.

@@ -1,4 +1,4 @@
-/// Formats text specifically for overlay display, enforcing Thai character integrity
+﻿/// Formats text specifically for overlay display, enforcing Thai character integrity
 /// and auto-calculating optimal distribution chunks.
 pub struct TextFormatter;
 

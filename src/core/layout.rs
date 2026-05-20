@@ -1,4 +1,4 @@
-use crate::core::ports::{OcrTextBlock, OcrTextLine};
+﻿use crate::core::ports::{OcrTextBlock, OcrTextLine};
 
 fn get_char_size(line: &OcrTextLine) -> f32 {
     // The height of a text line bounding box is generally the most reliable

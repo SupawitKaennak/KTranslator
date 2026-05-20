@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::{GlossaryEntry, GlossaryType};
+﻿use crate::infrastructure::settings::{GlossaryEntry, GlossaryType};
 use std::collections::HashMap;
 
 pub struct GlossaryEngine;

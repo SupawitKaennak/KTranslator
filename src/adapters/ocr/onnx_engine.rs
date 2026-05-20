@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::GpuBackend;
+﻿use crate::infrastructure::settings::GpuBackend;
 use anyhow::Result;
 use ort::ep::{CUDAExecutionProvider, DirectMLExecutionProvider, TensorRTExecutionProvider};
 use ort::session::{builder::SessionBuilder, Session};

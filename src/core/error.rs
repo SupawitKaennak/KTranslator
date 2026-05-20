@@ -1,4 +1,4 @@
-use thiserror::Error;
+﻿use thiserror::Error;
 
 #[derive(Debug, Clone, Error, PartialEq, Eq)]
 #[allow(dead_code)]

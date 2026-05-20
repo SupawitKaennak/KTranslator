@@ -1,4 +1,4 @@
-//! Shared utilities for LLM-based translator adapters.
+﻿//! Shared utilities for LLM-based translator adapters.
 //!
 //! All LLM translators (OpenAI, Gemini, Groq, Ollama) share common logic for:
 //! - HTTP client construction with consistent timeout/keepalive settings
