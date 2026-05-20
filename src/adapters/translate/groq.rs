@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{
     ports::Translator,
-    prompt_builder,
     types::LanguageTag,
 };
+
+use super::llm_common;
 
 #[derive(Clone)]
 pub struct GroqTranslator {
@@ -22,12 +23,7 @@ impl GroqTranslator {
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(30))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .pool_idle_timeout(std::time::Duration::from_secs(120))
-            .build()
-            .context("build http client")?;
+        let client = llm_common::build_client(llm_common::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -83,21 +79,9 @@ impl Translator for GroqTranslator {
             bail!("Groq API key is empty (obtain it from console.groq.com)");
         }
 
-        let lines: Vec<&str> = text.lines().collect();
-        let ctx = if self.behavior.as_ref().map(|b| b.contextual_translation).unwrap_or(false) {
-            context_hint
-        } else {
-            None
-        };
-        let prompt = prompt_builder::build_translation_prompt_with_behavior(
-            &lines, source, target, self.behavior.as_ref(), ctx,
-        );
-        
-        let temp = self.behavior.as_ref().map(|b| b.creativity).unwrap_or(0.2);
-
-        // Dynamically calculate budget for output tokens based on actual input length.
-        let estimated_tokens = (text.len() as f32 * 2.5).ceil() as u32 + 64;
-        let max_tokens = estimated_tokens.clamp(128, 2048);
+        let prompt = llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_common::get_temperature(self.behavior.as_ref(), 0.2);
+        let max_tokens = llm_common::estimate_max_tokens(text);
 
         let req = GroqChatRequest {
             model: self.model.clone(),

@@ -302,7 +302,7 @@ pub fn render_overlay_viewport(
                                 let mut y = last_bottom_y + 4.0;
                                 for extra in &trans_lines[ocr_lines.len()..] {
                                     if extra.trim().is_empty() { continue; }
-                                    let wrap_width = (full_rect.width() - (last.x as f32 / ppp) + full_rect.left() - 8.0).max(100.0);
+                                    let wrap_width = (full_rect.width() - (last.x / ppp) + full_rect.left() - 8.0).max(100.0);
                                     let galley = ctx.fonts(|f| {
                                         f.layout(
                                             extra.clone(),
@@ -311,7 +311,7 @@ pub fn render_overlay_viewport(
                                             wrap_width,
                                         )
                                     });
-                                    let pos = egui::pos2(last.x as f32 / ppp, y);
+                                    let pos = egui::pos2(last.x / ppp, y);
                                     let bg = egui::Rect::from_min_size(
                                         pos - egui::vec2(overlay_padding, overlay_padding/2.0),
                                         galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),

@@ -11,51 +11,7 @@ use crate::core::types::LanguageTag;
 use crate::infrastructure::settings::GpuBackend;
 use std::cmp::Ordering;
 
-#[allow(dead_code)]
-#[derive(Debug, Clone)]
-struct BoundingBox {
-    x1: f32,
-    y1: f32,
-    x2: f32,
-    y2: f32,
-    prob: f32,
-    class_id: usize,
-}
-
-fn iou(a: &BoundingBox, b: &BoundingBox) -> f32 {
-    let x_left = a.x1.max(b.x1);
-    let y_top = a.y1.max(b.y1);
-    let x_right = a.x2.min(b.x2);
-    let y_bottom = a.y2.min(b.y2);
-
-    if x_right < x_left || y_bottom < y_top {
-        return 0.0;
-    }
-
-    let intersection_area = (x_right - x_left) * (y_bottom - y_top);
-    let a_area = (a.x2 - a.x1) * (a.y2 - a.y1);
-    let b_area = (b.x2 - b.x1) * (b.y2 - b.y1);
-
-    intersection_area / (a_area + b_area - intersection_area)
-}
-
-fn nms(mut boxes: Vec<BoundingBox>, iou_threshold: f32) -> Vec<BoundingBox> {
-    boxes.sort_by(|a, b| b.prob.partial_cmp(&a.prob).unwrap_or(Ordering::Equal));
-    let mut result = Vec::new();
-    for i in 0..boxes.len() {
-        let mut keep = true;
-        for res in &result {
-            if iou(&boxes[i], res) > iou_threshold {
-                keep = false;
-                break;
-            }
-        }
-        if keep {
-            result.push(boxes[i].clone());
-        }
-    }
-    result
-}
+use super::nms_utils::{DetectionBox, nms};
 
 pub struct OnnxMangaRecognizer {
     encoder: Arc<Mutex<Option<Session>>>,
@@ -131,7 +87,7 @@ impl OnnxMangaRecognizer {
         Ok(())
     }
 
-    fn detect_text_boxes(&self, img: &image::DynamicImage) -> Result<Vec<BoundingBox>> {
+    fn detect_text_boxes(&self, img: &image::DynamicImage) -> Result<Vec<DetectionBox>> {
         let orig_w = img.width() as f32;
         let orig_h = img.height() as f32;
         
@@ -199,7 +155,7 @@ impl OnnxMangaRecognizer {
                 let x2 = cx + w / 2.0;
                 let y2 = cy + h / 2.0;
                 
-                boxes.push(BoundingBox {
+                boxes.push(DetectionBox {
                     x1: x1 / scale,
                     y1: y1 / scale,
                     x2: x2 / scale,
@@ -328,7 +284,7 @@ impl OcrEngine for OnnxMangaRecognizer {
         sorted_boxes.sort_by(|a, b| b.x1.partial_cmp(&a.x1).unwrap_or(Ordering::Equal));
 
         // Step 2: Group boxes into columns based on x distance
-        let mut columns: Vec<Vec<BoundingBox>> = Vec::new();
+        let mut columns: Vec<Vec<DetectionBox>> = Vec::new();
         for bbox in sorted_boxes {
             let mut added = false;
             // Try to find a column group where this box fits (x-coordinate is within 120px of the column's first element)
@@ -352,7 +308,7 @@ impl OcrEngine for OnnxMangaRecognizer {
         }
 
         // Step 4: Flatten columns back to a sorted vector
-        let sorted_boxes: Vec<BoundingBox> = columns.into_iter().flatten().collect();
+        let sorted_boxes: Vec<DetectionBox> = columns.into_iter().flatten().collect();
 
         for bbox in sorted_boxes {
             let pad = 10.0;

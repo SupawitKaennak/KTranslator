@@ -4,17 +4,15 @@ use crate::core::types::LanguageTag;
 use reqwest::blocking::Client;
 use serde_json::Value;
 
+use super::llm_common;
+
 pub struct GoogleTranslator {
     client: Client,
 }
 
 impl GoogleTranslator {
     pub fn new() -> Result<Self> {
-        let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(15))
-            .tcp_keepalive(std::time::Duration::from_secs(60))
-            .pool_idle_timeout(std::time::Duration::from_secs(120))
-            .build()?;
+        let client = llm_common::build_client(15)?;
         Ok(Self { client })
     }
 }

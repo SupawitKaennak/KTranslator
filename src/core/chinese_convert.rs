@@ -12,8 +12,8 @@ fn build_map(to_traditional: bool) -> HashMap<char, char> {
         ("时", "時"), ("来", "來"), ("个", "個"), ("说", "說"), ("这", "這"),
         ("为", "為"), ("们", "們"), ("过", "過"), ("还", "還"), ("没", "沒"),
         ("见", "見"), ("开", "開"), ("关", "關"), ("问", "問"), ("长", "長"),
-        ("门", "門"), ("头", "頭"), ("电", "電"), ("风", "風"), ("龙", "龍"),
-        ("马", "馬"), ("鸟", "鳥"), ("鱼", "魚"), ("车", "車"), ("东", "東"),
+        ("门", "門"), ("头", "頭"), ("电", "電"), ("风", "風"),
+        ("车", "車"), ("东", "東"),
         ("丝", "絲"), ("两", "兩"), ("严", "嚴"), ("丧", "喪"), ("临", "臨"),
         ("义", "義"), ("乐", "樂"), ("书", "書"), ("买", "買"), ("乱", "亂"),
         ("云", "雲"), ("亚", "亞"), ("产", "產"), ("亲", "親"), ("亿", "億"),
@@ -210,7 +210,7 @@ fn build_map(to_traditional: bool) -> HashMap<char, char> {
         ("鲋", "鮒"), ("鲍", "鮑"), ("鲎", "鱟"), ("鲐", "鮐"), ("鲑", "鮭"),
         ("鲒", "鮚"), ("鲔", "鮪"), ("鲕", "鮞"), ("鲚", "鱭"), ("鲛", "鮫"),
         ("鲜", "鮮"), ("鲞", "鯗"), ("鲟", "鱘"), ("鲠", "鯁"), ("鲤", "鯉"),
-        ("鲢", "鰱"), ("鲣", "鰹"), ("鲤", "鯉"), ("鲨", "鯊"), ("鲰", "鯪"),
+        ("鲢", "鰱"), ("鲣", "鰹"), ("鲨", "鯊"), ("鲰", "鯪"),
         ("鲱", "鯡"), ("鲲", "鯤"), ("鲳", "鯧"), ("鲴", "鯝"), ("鲵", "鯢"),
         ("鲶", "鯰"), ("鲷", "鯛"), ("鲸", "鯨"), ("鲹", "鰺"), ("鲺", "鯴"),
         ("鲻", "鯔"), ("鲼", "鱝"), ("鲽", "鰈"), ("鳃", "鰓"), ("鳄", "鱷"),
@@ -238,7 +238,7 @@ fn build_map(to_traditional: bool) -> HashMap<char, char> {
         ("鼹", "鼴"), ("鼻", "鼻"), ("鼾", "鼾"), ("齁", "齁"), ("齐", "齊"),
         ("齿", "齒"), ("龀", "齔"), ("龃", "齟"), ("龄", "齡"), ("龅", "齙"),
         ("龆", "齠"), ("龈", "齦"), ("龊", "齪"), ("龋", "齲"), ("龌", "齷"),
-        ("龙", "龍"), ("龚", "龔"), ("龛", "龕"), ("龟", "龜"), ("龛", "龕"),
+        ("龙", "龍"), ("龚", "龔"), ("龛", "龕"), ("龟", "龜"),
     ];
 
     let mut map = HashMap::new();
@@ -264,4 +264,46 @@ pub fn convert_chinese(text: &str, mode: ChineseConversionMode) -> String {
         ChineseConversionMode::TraditionalToSimplified => &*T2S,
     };
     text.chars().map(|c| *map.get(&c).unwrap_or(&c)).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn s2t_basic() {
+        let result = convert_chinese("国学会", ChineseConversionMode::SimplifiedToTraditional);
+        assert_eq!(result, "國學會");
+    }
+
+    #[test]
+    fn t2s_basic() {
+        let result = convert_chinese("國學會", ChineseConversionMode::TraditionalToSimplified);
+        assert_eq!(result, "国学会");
+    }
+
+    #[test]
+    fn none_mode_passthrough() {
+        let result = convert_chinese("Hello 世界", ChineseConversionMode::None);
+        assert_eq!(result, "Hello 世界");
+    }
+
+    #[test]
+    fn mixed_text_only_converts_mapped_chars() {
+        let result = convert_chinese("Hello 国 World", ChineseConversionMode::SimplifiedToTraditional);
+        assert_eq!(result, "Hello 國 World");
+    }
+
+    #[test]
+    fn round_trip_s2t_t2s() {
+        let original = "发现问题";
+        let traditional = convert_chinese(original, ChineseConversionMode::SimplifiedToTraditional);
+        let back = convert_chinese(&traditional, ChineseConversionMode::TraditionalToSimplified);
+        assert_eq!(back, original);
+    }
+
+    #[test]
+    fn empty_string() {
+        assert_eq!(convert_chinese("", ChineseConversionMode::SimplifiedToTraditional), "");
+    }
 }

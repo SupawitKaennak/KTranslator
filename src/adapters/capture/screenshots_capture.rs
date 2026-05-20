@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use screenshots::Screen;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use parking_lot::Mutex;
 use std::time::{Duration, Instant};
 
 use crate::core::{
@@ -65,16 +65,20 @@ impl ScreenshotsCapture {
             
         let dxgi_idx = Self::get_dxgi_index(screen.display_info.id, screens);
 
-        let mut dxgi_guard = self.dxgi_cache.lock().unwrap();
-        let safe_m = dxgi_guard.entry(display_id).or_insert_with(|| {
-            let mut m = dxgcap::DXGIManager::new(50).unwrap_or_else(|_| dxgcap::DXGIManager::new(500).unwrap());
-            m.set_capture_source_index(dxgi_idx);
-            SafeManager {
+        let mut dxgi_guard = self.dxgi_cache.lock();
+        if !dxgi_guard.contains_key(&display_id) {
+            let m = dxgcap::DXGIManager::new(50)
+                .or_else(|_| dxgcap::DXGIManager::new(500))
+                .map_err(|e| anyhow::anyhow!("Failed to initialize DXGI capture: {:?}", e))?;
+            let mut safe_m = SafeManager {
                 manager: m,
                 last_pixels: Vec::new(),
                 last_dims: (0, 0),
-            }
-        });
+            };
+            safe_m.manager.set_capture_source_index(dxgi_idx);
+            dxgi_guard.insert(display_id, safe_m);
+        }
+        let safe_m = dxgi_guard.get_mut(&display_id).unwrap(); // Safe: just inserted above
 
         match safe_m.manager.capture_frame() {
             Ok(res) => {
@@ -163,7 +167,7 @@ impl ScreenshotsCapture {
 impl FrameSource for ScreenshotsCapture {
     fn capture_rect(&self, rect: Rect, display_id: u32) -> Result<FrameRgba> {
         let now = Instant::now();
-        let mut screen_guard = self.screen_cache.lock().unwrap();
+        let mut screen_guard = self.screen_cache.lock();
         
         let screens = if let Some((last_refresh, cached_screens)) = &*screen_guard {
             if now.duration_since(*last_refresh) > Duration::from_secs(2) {

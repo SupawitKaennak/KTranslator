@@ -7,39 +7,48 @@ use crate::core::{
     ports::{FrameRgba, OcrEngine, OcrTextLine},
     types::LanguageTag,
 };
+use crate::infrastructure::settings::PpocrModelSuite;
 
 /// Built-in PaddleOCR adapter using oar-ocr ONNX pipeline.
 /// Unlike PaddleOcr (subprocess), this runs the detection+recognition models
 /// directly in-process via ONNX Runtime, eliminating IPC overhead (~125ms).
 pub struct BuiltinPaddleOcr {
-    pipeline: Arc<Mutex<Option<(oar_ocr::oarocr::OAROCR, crate::infrastructure::settings::PpocrModelSuite)>>>,
+    pipeline: Arc<Mutex<Option<(oar_ocr::oarocr::OAROCR, PpocrModelSuite)>>>,
     models_dir: String,
+    model_suite: Arc<Mutex<PpocrModelSuite>>,
 }
 
 impl BuiltinPaddleOcr {
-    pub fn new(models_dir: String) -> Self {
+    pub fn new(models_dir: String, model_suite: PpocrModelSuite) -> Self {
         Self {
             pipeline: Arc::new(Mutex::new(None)),
             models_dir,
+            model_suite: Arc::new(Mutex::new(model_suite)),
         }
+    }
+
+    /// Update the model suite when settings change (called from factory).
+    #[allow(dead_code)]
+    pub fn set_model_suite(&self, suite: PpocrModelSuite) {
+        *self.model_suite.lock() = suite;
     }
 
     fn ensure_pipeline(&self) -> Result<()> {
         let mut guard = self.pipeline.lock();
-        let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
+        let current_suite = *self.model_suite.lock();
 
         if let Some((_, active_suite)) = guard.as_ref() {
-            if *active_suite == settings.ppocr_model {
+            if *active_suite == current_suite {
                 return Ok(());
             }
             tracing::info!(
                 "Active PaddleOCR model suite changed from {:?} to {:?}. Invalidating cached pipeline...",
-                active_suite, settings.ppocr_model
+                active_suite, current_suite
             );
             *guard = None; // Invalidate the cached pipeline to force reload
         }
         
-        let folder_name = settings.ppocr_model.folder_name();
+        let folder_name = current_suite.folder_name();
 
         let target_suite_dir = Path::new(&self.models_dir).join(folder_name);
         
@@ -84,8 +93,8 @@ impl BuiltinPaddleOcr {
             .build()
             .context("Failed to initialize Built-in PaddleOCR pipeline")?;
 
-        *guard = Some((pipeline, settings.ppocr_model));
-        tracing::info!("Built-in PaddleOCR pipeline ready (GPU accelerated via DirectML) for {:?}", settings.ppocr_model);
+        *guard = Some((pipeline, current_suite));
+        tracing::info!("Built-in PaddleOCR pipeline ready (GPU accelerated via DirectML) for {:?}", current_suite);
         Ok(())
     }
 }

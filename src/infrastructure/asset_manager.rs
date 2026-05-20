@@ -4,13 +4,13 @@ use anyhow::Result;
 use std::io::Write;
 
 #[derive(Clone, Copy)]
-pub struct ModelAsset {
-    pub name: &'static str,
-    pub url: &'static str,
-    pub path: &'static str,
+pub struct ModelAsset<'a> {
+    pub name: &'a str,
+    pub url: &'a str,
+    pub path: &'a str,
 }
 
-pub const MANGA_MODELS: [ModelAsset; 10] = [
+pub const MANGA_MODELS: [ModelAsset<'static>; 10] = [
     ModelAsset {
         name: "YOLO Text Detector",
         url: "https://huggingface.co/deepghs/manga109_yolo/resolve/main/v2023.12.07_s/model.onnx",
@@ -65,7 +65,7 @@ pub const MANGA_MODELS: [ModelAsset; 10] = [
 
 /// PP-OCRv4 Mobile models for Built-in PaddleOCR (det + rec + dict).
 /// Total ~15MB — covers Chinese+English with high accuracy.
-pub const PPOCR_MOBILE_MODELS: [ModelAsset; 3] = [
+pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
     ModelAsset {
         name: "PP-OCRv4 Detection (Mobile)",
         url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv4_mobile_det.onnx",
@@ -85,7 +85,7 @@ pub const PPOCR_MOBILE_MODELS: [ModelAsset; 3] = [
 
 /// PP-OCRv4 Server models for maximum precision on complex game/manga fonts.
 /// Det (~108MB) + Rec (~86MB).
-pub const PPOCR_SERVER_MODELS: [ModelAsset; 2] = [
+pub const PPOCR_SERVER_MODELS: [ModelAsset<'static>; 2] = [
     ModelAsset {
         name: "PP-OCRv4 Detection (Server)",
         url: "https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv4/ch_PP-OCRv4_det_server_infer.onnx",
@@ -98,37 +98,37 @@ pub const PPOCR_SERVER_MODELS: [ModelAsset; 2] = [
     },
 ];
 
-pub const PPOCR_DICT_JAPANESE: ModelAsset = ModelAsset {
+pub const PPOCR_DICT_JAPANESE: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Japanese)",
     url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/japan_dict.txt",
     path: "models/ppocr/japan_dict.txt",
 };
 
-pub const PPOCR_DICT_KOREAN: ModelAsset = ModelAsset {
+pub const PPOCR_DICT_KOREAN: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Korean)",
     url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt",
     path: "models/ppocr/korean_dict.txt",
 };
 
-pub const PPOCR_DICT_THAI: ModelAsset = ModelAsset {
+pub const PPOCR_DICT_THAI: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Thai)",
     url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/th_dict.txt",
     path: "models/ppocr/thai_dict.txt",
 };
 
-pub const PPOCR_DICT_LATIN: ModelAsset = ModelAsset {
+pub const PPOCR_DICT_LATIN: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Latin)",
     url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/latin_dict.txt",
     path: "models/ppocr/latin_dict.txt",
 };
 
-pub const PPOCR_DICT_CYRILLIC: ModelAsset = ModelAsset {
+pub const PPOCR_DICT_CYRILLIC: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Cyrillic)",
     url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/cyrillic_dict.txt",
     path: "models/ppocr/cyrillic_dict.txt",
 };
 
-pub const BUBBLE_YOLO_MODEL: ModelAsset = ModelAsset {
+pub const BUBBLE_YOLO_MODEL: ModelAsset<'static> = ModelAsset {
     name: "YOLO Bubble Detector (Manga-Bubble-YOLO)",
     url: "https://huggingface.co/Kiuyha/Manga-Bubble-YOLO/resolve/main/onnx/yolo26n.onnx",
     path: "models/bubble-yolo/yolo26n.onnx",
@@ -154,7 +154,7 @@ pub struct DownloadProgress {
 
 /// Generic download helper that downloads a list of model assets with progress reporting.
 async fn download_asset_list(
-    assets: &[ModelAsset],
+    assets: &[ModelAsset<'_>],
     progress_tx: &tokio::sync::mpsc::Sender<DownloadProgress>,
 ) -> Result<()> {
     let client = reqwest::Client::builder()
@@ -307,14 +307,14 @@ pub async fn download_ppocr_models(progress_tx: tokio::sync::mpsc::Sender<Downlo
 
     // Construct persistent path names within isolated subset directories
     let base_p = format!("models/ppocr/{}", folder_name);
-    let det_p: &'static str = Box::leak(format!("{}/det.onnx", base_p).into_boxed_str());
-    let rec_p: &'static str = Box::leak(format!("{}/rec.onnx", base_p).into_boxed_str());
-    let dict_p: &'static str = Box::leak(format!("{}/dict.txt", base_p).into_boxed_str());
+    let det_p_owned = format!("{}/det.onnx", base_p);
+    let rec_p_owned = format!("{}/rec.onnx", base_p);
+    let dict_p_owned = format!("{}/dict.txt", base_p);
 
     let assets = [
-        ModelAsset { name: "PP-OCR Detection", url: det_url, path: det_p },
-        ModelAsset { name: "PP-OCR Recognition", url: rec_url, path: rec_p },
-        ModelAsset { name: "PP-OCR Dictionary", url: dict_url, path: dict_p },
+        ModelAsset { name: "PP-OCR Detection", url: det_url, path: &det_p_owned },
+        ModelAsset { name: "PP-OCR Recognition", url: rec_url, path: &rec_p_owned },
+        ModelAsset { name: "PP-OCR Dictionary", url: dict_url, path: &dict_p_owned },
     ];
 
     download_asset_list(&assets, &progress_tx).await?;

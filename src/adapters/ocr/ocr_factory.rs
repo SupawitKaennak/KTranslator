@@ -28,7 +28,7 @@ impl OcrAdapterFactory {
         match engine_type {
             OcrEngineType::BuiltinPaddle => {
                 match std::panic::catch_unwind(|| {
-                    BuiltinPaddleOcr::new("models/ppocr".to_string())
+                    BuiltinPaddleOcr::new("models/ppocr".to_string(), settings.ppocr_model)
                 }) {
                     Ok(engine) => (Arc::new(engine), None),
                     Err(_) => {

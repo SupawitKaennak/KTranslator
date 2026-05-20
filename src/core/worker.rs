@@ -132,8 +132,11 @@ impl SlotRuntimeState {
 
 /// Smart hash converts RGBA to thresholded grayscale before hashing.
 /// This prevents minor lighting/background particle changes from triggering text translation.
+/// Uses FNV-1a internally (see `crate::core::utils::fnv_hash_bytes` for the plain variant).
 pub fn smart_hash(data: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf29ce484222325;
+    const FNV_OFFSET: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x00000100000001B3;
+    let mut h: u64 = FNV_OFFSET;
     
     // Dynamic step: smaller regions need finer sampling to detect
     // single-character text changes; large regions can skip more.
@@ -148,7 +151,7 @@ pub fn smart_hash(data: &[u8]) -> u64 {
         let combined = (r << 6) | (g << 3) | b;
         
         h ^= combined as u64;
-        h = h.wrapping_mul(0x100000001b3);
+        h = h.wrapping_mul(FNV_PRIME);
         
         i += step;
     }
