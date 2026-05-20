@@ -1,4 +1,4 @@
-﻿//! Fullscreen region picker / editor (Luna-style, single viewport).
+//! Fullscreen region picker / editor (Luna-style, single viewport).
 //!
 //! One opaque fullscreen window with a screenshot — no transparent layered HWND,
 //! no multi-helper jitter. Used for both "select new area" and "adjust existing".
@@ -258,7 +258,7 @@ pub fn run_region_viewport(
             .with_resizable(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop),
         |ctx, class| {
-            crate::user_interface::font_loader::setup_fonts(ctx);
+            crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::Window::new(i18n.region).show(ctx, |ui| {
                     region_content(ui, &state, &outcome, i18n);

@@ -1,6 +1,6 @@
-﻿use crate::core::worker::SlotRuntimeState;
+use crate::core::region_slot_state::SlotRuntimeState;
 use crate::core::{
-    model::AppModel,
+    region_slot_state::AppModel,
     types::{LanguageTag, Rect},
 };
 use crate::infrastructure::settings::UiLanguage;

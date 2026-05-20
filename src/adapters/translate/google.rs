@@ -1,10 +1,10 @@
-﻿use crate::core::ports::Translator;
+use crate::core::ports::Translator;
 use crate::core::types::LanguageTag;
 use anyhow::Result;
 use reqwest::blocking::Client;
 use serde_json::Value;
 
-use super::llm_common;
+use super::llm_shared_utilities;
 
 pub struct GoogleTranslator {
     client: Client,
@@ -12,7 +12,7 @@ pub struct GoogleTranslator {
 
 impl GoogleTranslator {
     pub fn new() -> Result<Self> {
-        let client = llm_common::build_client(15)?;
+        let client = llm_shared_utilities::build_client(15)?;
         Ok(Self { client })
     }
 }

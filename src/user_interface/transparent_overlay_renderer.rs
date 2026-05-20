@@ -1,6 +1,6 @@
-﻿use crate::core::model::AppModel;
+use crate::core::region_slot_state::AppModel;
+use crate::core::region_slot_state::SlotRuntimeState;
 use crate::core::types::physical_px_to_logical_points;
-use crate::core::worker::SlotRuntimeState;
 use crate::infrastructure::platform::PlatformServices;
 use crate::infrastructure::settings::Settings;
 use eframe::egui;
@@ -75,7 +75,7 @@ pub fn render_overlay_viewport(
                 snap_logical(r.y, ppp),
             )),
         move |ctx, class| {
-            crate::user_interface::font_loader::setup_fonts(ctx);
+            crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::CentralPanel::default().show(ctx, |ui| {
                     ui.label("Frame Viewer (Embedded)");
@@ -166,7 +166,7 @@ pub fn render_overlay_viewport(
                                     continue;
                                 }
 
-                                let chunks = crate::core::usecases::text_formatter::TextFormatter::create_chunks(&trans, block_lines.len());
+                                let chunks = crate::core::usecases::text_formatting_usecase::TextFormatter::create_chunks(&trans, block_lines.len());
 
                                 if block_lines.len() > 1 {
                                     // --- 1. Unified Background Mode (for Merged Sentences) ---
@@ -186,7 +186,7 @@ pub fn render_overlay_viewport(
 
                                         // Render the whole joined text inside the union rect
                                         let raw_text = chunks.join("\n");
-                                        let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&raw_text);
+                                        let full_text = crate::core::usecases::text_formatting_usecase::TextFormatter::wrap_thai_text(&raw_text);
                                         let font_size = overlay_settings.overlay_font_size;
                                         let wrap_width = bg_rect.width().max(50.0);
 
@@ -223,7 +223,7 @@ pub fn render_overlay_viewport(
                                         let wrap_width = (line.w / ppp).max(30.0);
 
                                         let chunk_text = chunks.get(i).cloned().unwrap_or_default();
-                                        let full_text = crate::core::usecases::text_formatter::TextFormatter::wrap_thai_text(&chunk_text);
+                                        let full_text = crate::core::usecases::text_formatting_usecase::TextFormatter::wrap_thai_text(&chunk_text);
 
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(

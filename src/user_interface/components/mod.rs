@@ -1,2 +1,2 @@
-﻿pub mod settings_ui;
-pub mod slot_ui;
+pub mod settings_ui;
+pub mod region_slot_panel;

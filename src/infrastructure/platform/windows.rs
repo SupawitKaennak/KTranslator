@@ -1,4 +1,4 @@
-﻿use super::PlatformServices;
+use super::PlatformServices;
 
 /// Windows platform implementation using Win32 APIs.
 pub struct WindowsPlatform;
@@ -17,6 +17,6 @@ impl PlatformServices for WindowsPlatform {
         text: &str,
         mode: crate::infrastructure::settings::ThaiSegmentationMode,
     ) -> String {
-        crate::infrastructure::win32::segment_thai(text, mode)
+        crate::infrastructure::thai_word_segmenter::segment_thai(text, mode)
     }
 }

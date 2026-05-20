@@ -1,6 +1,25 @@
-﻿use crate::infrastructure::settings::{ImageProcessingSettings, MorphologyOp};
+use crate::core::ports::FrameRgba;
+use crate::infrastructure::settings::{ImageProcessingSettings, MorphologyOp};
 use std::cell::RefCell;
 use std::thread_local;
+
+pub fn crop_frame(frame: &FrameRgba, x: u32, y: u32, w: u32, h: u32) -> FrameRgba {
+    let mut data = Vec::with_capacity((w * h * 4) as usize);
+    for row in y..(y + h) {
+        let src_idx = (row * frame.width + x) as usize * 4;
+        let length = (w * 4) as usize;
+        if src_idx + length <= frame.data.len() {
+            data.extend_from_slice(&frame.data[src_idx..(src_idx + length)]);
+        } else {
+            data.resize(data.len() + length, 0);
+        }
+    }
+    FrameRgba {
+        width: w,
+        height: h,
+        data: std::sync::Arc::new(data),
+    }
+}
 
 /// Applies requested image processing filters to Raw RGBA buffer before OCR.
 /// Returns the processed image buffer (RGBA format) along with new width and height.

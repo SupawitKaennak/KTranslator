@@ -105,7 +105,7 @@ pub fn render_tab_overlay(
     );
 
     if settings.use_yolo_bubble {
-        let exists = crate::infrastructure::asset_manager::check_bubble_yolo_exists();
+        let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
         if !exists {
             ui.add_space(8.0);
             if download_progress.is_downloading && download_progress.current_file.contains("Bubble")

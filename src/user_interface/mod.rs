@@ -1,9 +1,11 @@
-﻿mod app;
+pub mod application;
+pub mod application_initializer;
+pub mod application_services;
 pub mod components;
-mod font_loader;
+mod font_loader_setup;
 pub mod i18n;
 mod live_frame;
-mod overlay_renderer;
-mod region_overlay;
+mod transparent_overlay_renderer;
+mod region_selection_overlay;
 
-pub use app::App;
+pub use application::App;
