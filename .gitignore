@@ -10,3 +10,7 @@ settings.json
 !/models/manga-ocr/.gitkeep
 /models/ppocr/*
 !/models/ppocr/.gitkeep
+
+# Agent instructions and rules
+.agents/
+
