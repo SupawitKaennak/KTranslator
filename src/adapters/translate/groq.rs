@@ -1,10 +1,10 @@
-﻿use anyhow::{bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::core::{ports::Translator, types::LanguageTag};
 
-use super::llm_common;
+use super::llm_shared;
 
 #[derive(Clone)]
 pub struct GroqTranslator {
@@ -20,7 +20,7 @@ impl GroqTranslator {
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = llm_common::build_client(llm_common::DEFAULT_TIMEOUT_SECS)?;
+        let client = llm_shared::build_client(llm_shared::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -79,9 +79,9 @@ impl Translator for GroqTranslator {
         }
 
         let prompt =
-            llm_common::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
-        let temp = llm_common::get_temperature(self.behavior.as_ref(), 0.2);
-        let max_tokens = llm_common::estimate_max_tokens(text);
+            llm_shared::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_shared::get_temperature(self.behavior.as_ref(), 0.2);
+        let max_tokens = llm_shared::estimate_max_tokens(text);
 
         let req = GroqChatRequest {
             model: self.model.clone(),

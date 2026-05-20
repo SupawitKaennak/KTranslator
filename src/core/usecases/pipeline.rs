@@ -1,46 +1,20 @@
-﻿use anyhow::Context;
+use anyhow::Context;
 use eframe::egui;
 use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};
 
 use crate::core::{
-    ports::{FrameRgba, FrameSource, OcrEngine, OcrTextLine, Translator},
-    text_cleaner::TextCleaner,
-    types::{LanguageTag, Rect},
-    worker::{smart_hash, BgResult},
+    pipeline_result::BgResult,
+    ports::{FrameSource, OcrEngine, Translator},
+    cleaner::TextCleaner,
+    types::{LanguageTag, Rect, TextTranslationCache, TranslationCache},
+    utils::smart_hash,
 };
-
-type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
-type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
 
 /// Force-proceed threshold: if a frame has been unstable for this long, proceed anyway.
 const FORCE_PROCEED_MS: u64 = 800;
 /// Minimum stable duration before debounce allows OCR/translation to proceed.
 const DEBOUNCE_STABLE_MS: u64 = 150;
-
-fn now_ms() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
-
-/// Enforces cache size limit by removing oldest entries if cache is full
-fn enforce_cache_limit<K, V>(
-    cache: &mut parking_lot::MutexGuard<indexmap::IndexMap<K, V>>,
-    max_entries: usize,
-) where
-    K: Clone + std::hash::Hash + std::cmp::Eq,
-{
-    if cache.len() >= max_entries {
-        // Remove oldest entries (true FIFO by removing first few elements)
-        let to_remove = cache.len() - max_entries + 1; // +1 to make room for new entry
-        for _ in 0..to_remove {
-            cache.shift_remove_index(0);
-        }
-        tracing::warn!("Cache limit reached, removed {} oldest entries", to_remove);
-    }
-}
 
 /// Orchestrates the end-to-end screen translation flow for a single frame.
 /// Decouples raw infrastructure access and hashing from task concurrency.
@@ -64,7 +38,7 @@ pub struct PipelineContext {
     pub ocr_engine: Arc<dyn OcrEngine>,
     pub translator: Option<Arc<dyn Translator + Send + Sync>>,
     pub platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
-    pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>,
+    pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo::YoloBubbleDetector>>,
 
     // --- Hash/stability state ---
     pub prev_hash: u64,
@@ -141,7 +115,7 @@ impl TranslationPipeline {
         *last_frame_arc.lock() = Some(frame.clone());
         ctx.request_repaint();
         let hash = smart_hash(&frame.data);
-        let now = now_ms();
+        let now = crate::core::utils::now_ms();
 
         tracing::debug!(slot = slot_idx, hash = %hash, "Frame captured and hashed");
 
@@ -186,22 +160,14 @@ impl TranslationPipeline {
             return Ok(BgResult::WaitingDebounce { slot_idx });
         }
 
-        // Check Cache
-        {
-            let cache = cache_arc.lock();
-            if let Some((cached_ocr, cached_trans)) = cache.get(&cache_key) {
-                tracing::debug!(slot = slot_idx, hash = %hash, "Cache hit for whole frame");
-                return Ok(BgResult::CacheHit {
-                    slot_idx,
-                    language_version,
-                    ocr_text: cached_ocr.clone(),
-                    translated: cached_trans.clone(),
-                    frame_hash: hash,
-                    ocr_lines: Vec::new(),
-                    trans_lines: vec![cached_trans.clone()],
-                    yolo_bubbles: Vec::new(),
-                });
-            }
+        if let Some(cache_hit) = crate::core::usecases::pipeline_cache::check_cache(
+            &cache_arc,
+            &cache_key,
+            slot_idx,
+            language_version,
+            hash,
+        ) {
+            return Ok(cache_hit);
         }
 
         tracing::info!(slot = slot_idx, "Proceeding with OCR/Translation");
@@ -211,128 +177,21 @@ impl TranslationPipeline {
         });
         ctx.request_repaint();
 
-        let mut yolo_bubbles = Vec::new();
-        let mut raw_ocr_lines = Vec::new();
-        let mut bubble_detection_successful = false;
-
-        if let Some(ref detector) = yolo_detector {
-            if let Some(rgba_img) =
-                image::RgbaImage::from_raw(frame.width, frame.height, (*frame.data).clone())
-            {
-                let dynamic_img = image::DynamicImage::ImageRgba8(rgba_img);
-                if let Ok(mut bubbles) = detector.detect_bubbles(&dynamic_img) {
-                    if !bubbles.is_empty() {
-                        // Sort bubbles in natural reading order (Right-to-Left for CJK, Left-to-Right otherwise)
-                        bubbles.sort_by(|a, b| {
-                            let a_h = a.y2 - a.y1;
-                            let b_h = b.y2 - b.y1;
-                            let tolerance = a_h.min(b_h) * 0.4;
-                            let y_diff = (a.y1 - b.y1).abs();
-
-                            if y_diff > tolerance {
-                                a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
-                            } else {
-                                if jp_merge_vertical {
-                                    b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
-                                } else {
-                                    a.x1.partial_cmp(&b.x1).unwrap_or(std::cmp::Ordering::Equal)
-                                }
-                            }
-                        });
-
-                        bubble_detection_successful = true;
-                        for b in &bubbles {
-                            yolo_bubbles.push(OcrTextLine {
-                                text: String::new(),
-                                x: b.x1,
-                                y: b.y1,
-                                w: b.x2 - b.x1,
-                                h: b.y2 - b.y1,
-                            });
-
-                            // Add a small 6px padding to prevent boundaries clipping
-                            let pad = 6;
-                            let crop_x = (b.x1 - pad as f32).max(0.0) as u32;
-                            let crop_y = (b.y1 - pad as f32).max(0.0) as u32;
-                            let crop_w = ((b.x2 + pad as f32).min(frame.width as f32) as u32)
-                                .saturating_sub(crop_x);
-                            let crop_h = ((b.y2 + pad as f32).min(frame.height as f32) as u32)
-                                .saturating_sub(crop_y);
-
-                            if crop_w >= 5 && crop_h >= 5 {
-                                let cropped_frame =
-                                    crop_frame(&frame, crop_x, crop_y, crop_w, crop_h);
-
-                                // Perform full image pre-processing on the cropped speech bubble
-                                let (proc_data, proc_w, proc_h) =
-                                    crate::core::usecases::image_processor::process_image_for_ocr(
-                                        &cropped_frame.data,
-                                        cropped_frame.width,
-                                        cropped_frame.height,
-                                        &img_proc_cfg,
-                                    );
-                                let mut processed_crop = cropped_frame.clone();
-                                processed_crop.data = std::sync::Arc::new(proc_data);
-                                processed_crop.width = proc_w;
-                                processed_crop.height = proc_h;
-
-                                if let Ok(mut lines) =
-                                    ocr_engine.recognize_lines(processed_crop, source_lang.as_ref())
-                                {
-                                    let scale = img_proc_cfg.resize_scale;
-                                    for line in &mut lines {
-                                        if (scale - 1.0).abs() > 0.01 {
-                                            line.x /= scale;
-                                            line.y /= scale;
-                                            line.w /= scale;
-                                            line.h /= scale;
-                                        }
-                                        line.x += crop_x as f32;
-                                        line.y += crop_y as f32;
-                                        raw_ocr_lines.push(line.clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        if !bubble_detection_successful {
-            // Fallback: Perform Image pre-processing IN-PLACE on frame
-            let (proc_data, proc_w, proc_h) =
-                crate::core::usecases::image_processor::process_image_for_ocr(
-                    &frame.data,
-                    frame.width,
-                    frame.height,
-                    &img_proc_cfg,
-                );
-            let mut processed_frame = frame.clone();
-            processed_frame.data = std::sync::Arc::new(proc_data);
-            processed_frame.width = proc_w;
-            processed_frame.height = proc_h;
-
-            if let Ok(mut lines) = ocr_engine.recognize_lines(processed_frame, source_lang.as_ref())
-            {
-                if (img_proc_cfg.resize_scale - 1.0).abs() > 0.01 {
-                    let scale = img_proc_cfg.resize_scale;
-                    for line in &mut lines {
-                        line.x /= scale;
-                        line.y /= scale;
-                        line.w /= scale;
-                        line.h /= scale;
-                    }
-                }
-                raw_ocr_lines = lines;
-            }
-        }
+        let (mut raw_ocr_lines, yolo_bubbles, _bubble_detection_successful) =
+            crate::core::usecases::pipeline_ocr::perform_ocr(
+                &frame,
+                &ocr_engine,
+                source_lang.as_ref(),
+                yolo_detector.as_ref(),
+                &img_proc_cfg,
+                jp_merge_vertical,
+            );
 
         // Line-level Garbage Filtering
         raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
 
         let blocks =
-            crate::core::layout::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
+            crate::core::text_layout::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
 
         let mut ocr_lines = Vec::new();
         let mut block_sizes = Vec::new();
@@ -352,7 +211,7 @@ impl TranslationPipeline {
 
         // Helper check: Perfect Translation Memory Hit
         if let Some(memory_trans) =
-            crate::core::usecases::glossary_engine::GlossaryEngine::apply_translation_memory(
+            crate::core::usecases::glossary::GlossaryEngine::apply_translation_memory(
                 &ocr_text_base,
                 &glossary_entries,
             )
@@ -388,7 +247,7 @@ impl TranslationPipeline {
         // 1. Apply Pre-Translation Regex Engine Rules FIRST
         // This ensures space-separated words like "HA NAZO NO" are merged to "HANAZONO" BEFORE glossary looks for it.
         let (ocr_text_regex, regex_protected_map) =
-            crate::core::usecases::regex_engine::RegexEngine::apply_pre_rules(
+            crate::core::usecases::regex_rules::RegexEngine::apply_pre_rules(
                 &ocr_text_base,
                 &regex_rules,
             );
@@ -396,19 +255,19 @@ impl TranslationPipeline {
         // 2. Apply Glossary Engine Overrides and Protected words SECOND
         // Now Glossary will successfully catch "HANAZONO" and apply protection or guidance correctly!
         let (ocr_text, gloss_protected_map) =
-            crate::core::usecases::glossary_engine::GlossaryEngine::apply_pre_override(
+            crate::core::usecases::glossary::GlossaryEngine::apply_pre_override(
                 &ocr_text_regex,
                 &glossary_entries,
             );
 
         // Extract active glossary metadata for injection into AI Guidance prompt
         let active_glossary_entries =
-            crate::core::usecases::glossary_engine::GlossaryEngine::filter_active_entries(
+            crate::core::usecases::glossary::GlossaryEngine::filter_active_entries(
                 &ocr_text,
                 &glossary_entries,
             );
         let glossary_guidance_str =
-            crate::core::usecases::glossary_engine::GlossaryEngine::build_glossary_guidance(
+            crate::core::usecases::glossary::GlossaryEngine::build_glossary_guidance(
                 &active_glossary_entries,
             );
 
@@ -425,13 +284,13 @@ impl TranslationPipeline {
         let build_trans_lines = move |translated: &str| -> Vec<String> {
             // Decode Glossary protected masks first
             let decoded_gloss =
-                crate::core::usecases::glossary_engine::GlossaryEngine::apply_post_override(
+                crate::core::usecases::glossary::GlossaryEngine::apply_post_override(
                     translated,
                     &gloss_protected_map_inner,
                 );
 
             // Apply Regex Post rules and decode masks
-            let mut post_trans = crate::core::usecases::regex_engine::RegexEngine::apply_post_rules(
+            let mut post_trans = crate::core::usecases::regex_rules::RegexEngine::apply_post_rules(
                 &decoded_gloss,
                 &regex_rules_inner,
                 &regex_protected_map_inner,
@@ -439,7 +298,7 @@ impl TranslationPipeline {
 
             // Forcefully apply any missed Glossary entries (like CharacterName, Terms) on the final text
             // to serve as a 100% reliable post-translation enforcer.
-            post_trans = crate::core::usecases::glossary_engine::GlossaryEngine::apply_post_glossary_overrides(&post_trans, &glossary_entries_inner);
+            post_trans = crate::core::usecases::glossary::GlossaryEngine::apply_post_glossary_overrides(&post_trans, &glossary_entries_inner);
 
             let mut block_translations =
                 Self::parse_numbered_lines(&post_trans, blocks.len(), &txt_proc_cfg_inner);
@@ -494,7 +353,7 @@ impl TranslationPipeline {
 
             if let Some(cached_trans) = cached {
                 let mut fc = cache_arc.lock();
-                enforce_cache_limit(&mut fc, max_cache_entries);
+                crate::core::utils::enforce_cache_limit(&mut fc, max_cache_entries);
                 fc.insert(cache_key, (ocr_text.clone(), cached_trans.clone()));
 
                 let trans_lines = build_trans_lines(&cached_trans);
@@ -517,7 +376,7 @@ impl TranslationPipeline {
             .unwrap_or(false)
         {
             let mut cache = cache_arc.lock();
-            enforce_cache_limit(&mut cache, max_cache_entries);
+            crate::core::utils::enforce_cache_limit(&mut cache, max_cache_entries);
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
@@ -539,7 +398,7 @@ impl TranslationPipeline {
         });
         if is_trivial {
             let mut cache = cache_arc.lock();
-            enforce_cache_limit(&mut cache, max_cache_entries);
+            crate::core::utils::enforce_cache_limit(&mut cache, max_cache_entries);
             cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
             let trans_lines = build_trans_lines(&ocr_text);
             return Ok(BgResult::Done {
@@ -569,7 +428,7 @@ impl TranslationPipeline {
             ));
         }
         let context_hint = if contextual_translation {
-            crate::core::usecases::translation_runner::build_context_hint(
+            crate::core::usecases::translate_run::build_context_hint(
                 &context_segments,
                 context_window_size,
             )
@@ -577,7 +436,7 @@ impl TranslationPipeline {
             None
         };
         let context_hint_ref = context_hint.as_deref();
-        let translator_output = crate::core::usecases::translation_runner::translate_text(
+        let translator_output = crate::core::usecases::translate_run::translate_text(
             translator
                 .as_deref()
                 .context("No translator provider selected")?,
@@ -600,21 +459,19 @@ impl TranslationPipeline {
             .collect::<Vec<_>>()
             .join("\n");
 
-        {
-            let text_hash = crate::core::utils::fnv_hash_str(&ocr_text);
-            let text_cache_key = (
-                text_hash,
+        crate::core::usecases::pipeline_cache::update_cache(
+            &cache_arc,
+            &text_cache_arc,
+            cache_key,
+            (
+                crate::core::utils::fnv_hash_str(&ocr_text),
                 source_lang.as_ref().map(|l| l.0.clone()),
                 target_lang.0.clone(),
-            );
-            let mut frame_cache = cache_arc.lock();
-            enforce_cache_limit(&mut frame_cache, max_cache_entries);
-            frame_cache.insert(cache_key, (ocr_text.clone(), translated.clone()));
-            drop(frame_cache);
-            let mut text_cache = text_cache_arc.lock();
-            enforce_cache_limit(&mut text_cache, max_cache_entries);
-            text_cache.insert(text_cache_key, translated.clone());
-        }
+            ),
+            ocr_text.clone(),
+            translated.clone(),
+            max_cache_entries,
+        );
         Ok(BgResult::Done {
             slot_idx,
             language_version,
@@ -632,7 +489,7 @@ impl TranslationPipeline {
         ocr_count: usize,
         config: &crate::infrastructure::settings::TextProcessingSettings,
     ) -> Vec<String> {
-        let mut result = crate::core::prompt_builder::parse_translation_response(raw, ocr_count);
+        let mut result = crate::core::prompt::parse_translation_response(raw, ocr_count);
         for s in result.iter_mut() {
             *s = TextCleaner::clean(s, config);
         }
@@ -640,27 +497,8 @@ impl TranslationPipeline {
     }
 }
 
-fn crop_frame(frame: &FrameRgba, x: u32, y: u32, w: u32, h: u32) -> FrameRgba {
-    let mut data = Vec::with_capacity((w * h * 4) as usize);
-    for row in y..(y + h) {
-        let src_idx = (row * frame.width + x) as usize * 4;
-        let length = (w * 4) as usize;
-        if src_idx + length <= frame.data.len() {
-            data.extend_from_slice(&frame.data[src_idx..(src_idx + length)]);
-        } else {
-            data.resize(data.len() + length, 0);
-        }
-    }
-    FrameRgba {
-        width: w,
-        height: h,
-        data: std::sync::Arc::new(data),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
     use indexmap::IndexMap;
     use parking_lot::Mutex;
     use std::sync::Arc;
@@ -672,7 +510,7 @@ mod tests {
             let mut guard = cache.lock();
             guard.insert("key1", "val1");
             guard.insert("key2", "val2");
-            enforce_cache_limit(&mut guard, 5);
+            crate::core::utils::enforce_cache_limit(&mut guard, 5);
         }
         let guard = cache.lock();
         assert_eq!(guard.len(), 2);
@@ -693,7 +531,7 @@ mod tests {
             guard.insert("key5", "val5"); // Newest
 
             // Enforce limit of 3. It should evict 5 - 3 + 1 = 3 entries (key1, key2, key3).
-            enforce_cache_limit(&mut guard, 3);
+            crate::core::utils::enforce_cache_limit(&mut guard, 3);
         }
 
         let guard = cache.lock();

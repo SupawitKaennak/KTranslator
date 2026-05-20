@@ -1,1 +1,1 @@
-﻿pub mod screenshots_capture;
+pub mod screen;

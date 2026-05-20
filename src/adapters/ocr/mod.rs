@@ -1,7 +1,7 @@
-﻿pub mod builtin_paddle_ocr;
-pub mod manga109_yolo_ocr;
-pub mod nms_utils;
-pub mod ocr_factory;
-pub mod onnx_engine;
-pub mod windows_ocr;
-pub mod yolo_bubble_detector;
+pub mod paddle;
+pub mod manga;
+pub mod nms;
+pub mod factory;
+pub mod onnx;
+pub mod windows;
+pub mod yolo;
