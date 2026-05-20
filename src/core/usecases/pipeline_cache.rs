@@ -1,4 +1,4 @@
-use crate::core::pipeline_result::BgResult;
+use crate::core::pipeline_execution_result::BgResult;
 use crate::core::types::{TextTranslationCache, TranslationCache};
 use parking_lot::Mutex;
 use std::sync::Arc;

@@ -4,7 +4,7 @@ use eframe::egui;
 pub fn render_tab_overlay(
     ui: &mut egui::Ui,
     settings: &mut Settings,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
     download_progress: &crate::core::types::DownloadProgress,
     download_trigger_tx: &std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
 ) {
@@ -105,7 +105,7 @@ pub fn render_tab_overlay(
     );
 
     if settings.use_yolo_bubble {
-        let exists = crate::infrastructure::assets::check_bubble_yolo_exists();
+        let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
         if !exists {
             ui.add_space(8.0);
             if download_progress.is_downloading && download_progress.current_file.contains("Bubble")

@@ -8,8 +8,8 @@ use std::sync::Arc;
 use eframe::egui;
 use parking_lot::Mutex;
 
-use crate::core::slot::AppModel;
-use crate::core::slot::SlotRuntimeState;
+use crate::core::region_slot_state::AppModel;
+use crate::core::region_slot_state::SlotRuntimeState;
 use crate::core::types::{physical_px_to_logical_points, Rect};
 use crate::infrastructure::platform::PlatformServices;
 use crate::infrastructure::settings::Settings;
@@ -124,7 +124,7 @@ pub fn render_live_frame_viewport(
             .with_min_inner_size([150.0, 100.0])
             .with_mouse_passthrough(false),
         move |ctx, class| {
-            crate::ui::fonts::setup_fonts(ctx);
+            crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 return;
             }

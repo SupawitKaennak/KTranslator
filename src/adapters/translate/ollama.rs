@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::core::{ports::Translator, types::LanguageTag};
 
-use super::llm_shared;
+use super::llm_shared_utilities;
 
 #[derive(Clone)]
 pub struct OllamaTranslator {
@@ -21,7 +21,7 @@ impl OllamaTranslator {
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
         // Ollama uses a longer timeout (60s) since local models can be slow on first load
-        let client = llm_shared::build_client(60)?;
+        let client = llm_shared_utilities::build_client(60)?;
         Ok(Self {
             client,
             url: url.trim_end_matches('/').to_string(),
@@ -71,8 +71,8 @@ impl Translator for OllamaTranslator {
         context_hint: Option<&str>,
     ) -> Result<String, crate::core::error::KError> {
         let prompt =
-            llm_shared::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
-        let temp = llm_shared::get_temperature(self.behavior.as_ref(), 0.1);
+            llm_shared_utilities::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.1);
 
         self.call_ollama(&prompt.system, &prompt.user, temp)
     }

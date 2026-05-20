@@ -1,10 +1,10 @@
-use crate::core::slot::SlotRuntimeState;
+use crate::core::region_slot_state::SlotRuntimeState;
 use crate::core::{
-    slot::AppModel,
+    region_slot_state::AppModel,
     types::{LanguageTag, Rect},
 };
 use crate::infrastructure::settings::UiLanguage;
-use crate::ui::i18n::get_i18n;
+use crate::user_interface::i18n::get_i18n;
 use eframe::egui;
 
 pub struct SlotUiResponse {

@@ -1,5 +1,5 @@
 use crate::core::{
-    pipeline_result::BgResult, slot::AppModel, slot::SlotRuntimeState,
+    pipeline_execution_result::BgResult, region_slot_state::AppModel, region_slot_state::SlotRuntimeState,
     types::TranslationCache,
 };
 use parking_lot::Mutex;

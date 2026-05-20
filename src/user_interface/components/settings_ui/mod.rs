@@ -1,5 +1,5 @@
 use crate::infrastructure::settings::Settings;
-use crate::ui::i18n::get_i18n;
+use crate::user_interface::i18n::get_i18n;
 use eframe::egui;
 use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -8,22 +8,22 @@ use std::sync::Arc;
 mod ai_provider;
 mod debugging;
 mod general;
-mod image_proc;
+mod image_processing_tab;
 mod ocr;
 mod overlay;
 mod performance;
-mod text_proc;
-mod behavior;
+mod text_processing_tab;
+mod translation_behavior_tab;
 
 use ai_provider::render_tab_ai_provider;
 use debugging::render_tab_debugging;
 use general::render_tab_general;
-use image_proc::render_tab_image_processing;
+use image_processing_tab::render_tab_image_processing;
 use ocr::render_tab_ocr;
 use overlay::render_tab_overlay;
 use performance::render_tab_performance;
-use text_proc::render_tab_text_processing;
-use behavior::render_tab_translation_behavior;
+use text_processing_tab::render_tab_text_processing;
+use translation_behavior_tab::render_tab_translation_behavior;
 
 pub struct SettingsWindowResponse {
     pub close_clicked: bool,
@@ -58,10 +58,10 @@ enum SettingsTab {
 pub fn show_settings_window(
     ctx: &egui::Context,
     settings_arc: Arc<Mutex<Settings>>,
-    ctrl: &crate::core::usecases::settings_ctrl::SettingsController,
+    ctrl: &crate::core::usecases::settings_controller::SettingsController,
     download_progress: crate::core::types::DownloadProgress,
     download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
-    slots_runtime: &[crate::core::slot::SlotRuntimeState],
+    slots_runtime: &[crate::core::region_slot_state::SlotRuntimeState],
 ) -> SettingsWindowResponse {
     let close_flag = Arc::new(AtomicBool::new(false));
 

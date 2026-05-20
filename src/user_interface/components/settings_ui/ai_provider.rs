@@ -7,8 +7,8 @@ pub fn render_tab_ai_provider(
     ui: &mut egui::Ui,
     ctx: &egui::Context,
     settings: &mut Settings,
-    i18n: &crate::ui::i18n::I18n,
-    ctrl: &crate::core::usecases::settings_ctrl::SettingsController,
+    i18n: &crate::user_interface::i18n::I18n,
+    ctrl: &crate::core::usecases::settings_controller::SettingsController,
 ) {
     ui.heading(i18n.tab_ai_provider);
     ui.add_space(8.0);
@@ -185,7 +185,7 @@ pub fn render_tab_ai_provider(
 
 fn render_api_key_field(
     ui: &mut egui::Ui,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
     key: &mut String,
     models: &Arc<Mutex<Vec<String>>>,
     _fetching: &Arc<Mutex<bool>>,
@@ -201,7 +201,7 @@ fn render_api_key_field(
 
 fn render_model_dropdown(
     ui: &mut egui::Ui,
-    i18n: &crate::ui::i18n::I18n,
+    i18n: &crate::user_interface::i18n::I18n,
     id: &str,
     selected: &mut String,
     models: &Arc<Mutex<Vec<String>>>,

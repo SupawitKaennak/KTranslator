@@ -6,15 +6,15 @@ use parking_lot::Mutex;
 use crate::{
     adapters::translate::create_translator,
     core::{
-        coordinator::BackgroundCoordinator, slot::AppModel, slot::SlotRuntimeState,
-        dispatcher::ResultDispatcher,
+        coordinator::BackgroundCoordinator, region_slot_state::AppModel, region_slot_state::SlotRuntimeState,
+        background_result_dispatcher::ResultDispatcher,
     },
     infrastructure::settings::{save_settings, Settings},
-    ui::{
-        components::{settings::show_settings_window, slot_panel::render_slot_item},
+    user_interface::{
+        components::{settings_ui::show_settings_window, region_slot_panel::render_slot_item},
         i18n::get_i18n,
-        live_frame, overlay,
-        region_picker::{run_region_viewport, RegionOutcome, RegionOverlayState},
+        live_frame, transparent_overlay_renderer,
+        region_selection_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
     },
 };
 
@@ -29,13 +29,13 @@ pub struct App {
     /// true once when user opens Settings: try to fetch models from API
     pub(crate) settings_fetch_models_pending: bool,
     pub(crate) err_handler: crate::core::usecases::error_handler::ErrorHandler,
-    pub(crate) settings_ctrl: crate::core::usecases::settings_ctrl::SettingsController,
+    pub(crate) settings_ctrl: crate::core::usecases::settings_controller::SettingsController,
 
     /// Fullscreen region pick / adjust overlay (one at a time).
     pub(crate) region_session: Option<Arc<Mutex<RegionOverlayState>>>,
     pub(crate) region_finish: Arc<Mutex<Option<RegionOutcome>>>,
 
-    pub(crate) services: crate::ui::app_services::PipelineServices,
+    pub(crate) services: crate::user_interface::application_services::PipelineServices,
 
     // Background processing
     pub(crate) coordinator: BackgroundCoordinator,
@@ -44,18 +44,18 @@ pub struct App {
     /// Available displays for capturing (ID, Label)
     pub(crate) available_screens: Vec<(u32, String)>,
 
-    pub(crate) caches: crate::ui::app_services::AppCaches,
+    pub(crate) caches: crate::user_interface::application_services::AppCaches,
 
     /// Channel to signal error dismissal from the error viewport
     pub(crate) error_dismiss_tx: mpsc::Sender<()>,
     pub(crate) error_dismiss_rx: mpsc::Receiver<()>,
 
-    pub(crate) downloads: crate::ui::app_services::DownloadManager,
+    pub(crate) downloads: crate::user_interface::application_services::DownloadManager,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        crate::ui::app_init::build_app(cc)
+        crate::user_interface::application_initializer::build_app(cc)
     }
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
@@ -64,7 +64,7 @@ impl App {
             if !slot.popup_open {
                 continue;
             }
-            overlay::render_popup_viewport(ctx, i, &self.model);
+            transparent_overlay_renderer::render_popup_viewport(ctx, i, &self.model);
         }
     }
 
@@ -78,7 +78,7 @@ impl App {
                 self.slots_runtime.push(SlotRuntimeState::new());
             }
 
-            overlay::render_overlay_viewport(
+            transparent_overlay_renderer::render_overlay_viewport(
                 ctx,
                 i,
                 &self.model,
@@ -124,15 +124,15 @@ impl App {
             tokio::spawn(async move {
                 match engine_type {
                     crate::infrastructure::settings::OcrEngineType::MangaOCR => {
-                        let _ = crate::infrastructure::assets::download_models(tx).await;
+                        let _ = crate::infrastructure::asset_download_manager::download_models(tx).await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
                         let _ =
-                            crate::infrastructure::assets::download_ppocr_models(tx).await;
+                            crate::infrastructure::asset_download_manager::download_ppocr_models(tx).await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
                         let _ =
-                            crate::infrastructure::assets::download_bubble_yolo_model(tx)
+                            crate::infrastructure::asset_download_manager::download_bubble_yolo_model(tx)
                                 .await;
                     }
                     _ => {}
@@ -148,14 +148,14 @@ impl App {
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
                 let factory_type =
-                    crate::adapters::ocr::factory::OcrAdapterFactory::get_active_engine_type(
+                    crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
                         &self.settings,
                     );
                 if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR
                     || factory_type == crate::infrastructure::settings::OcrEngineType::BuiltinPaddle
                 {
                     let (new_engine, err_opt) =
-                        crate::adapters::ocr::factory::OcrAdapterFactory::create_engine(
+                        crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(
                             &self.settings,
                         );
                     self.services.ocr_engine = new_engine;
@@ -246,11 +246,11 @@ impl App {
         let updated = settings_arc.lock().clone();
         if updated != self.settings {
             let current_engine_type =
-                crate::adapters::ocr::factory::OcrAdapterFactory::get_active_engine_type(
+                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
                     &updated,
                 );
             let old_engine_type =
-                crate::adapters::ocr::factory::OcrAdapterFactory::get_active_engine_type(
+                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
                     &self.settings,
                 );
             let rebuild_ocr = current_engine_type != old_engine_type
@@ -292,7 +292,7 @@ impl App {
 
                 if rebuild_ocr {
                     let (new_engine, err_opt) =
-                        crate::adapters::ocr::factory::OcrAdapterFactory::create_engine(
+                        crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(
                             &self.settings,
                         );
                     self.services.ocr_engine = new_engine;

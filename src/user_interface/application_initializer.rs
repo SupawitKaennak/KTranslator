@@ -3,19 +3,19 @@ use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};
 
 use crate::{
-    adapters::{capture::screen::ScreenshotsCapture, translate::create_translator},
+    adapters::{capture::screenshots_crate_adapter::ScreenshotsCapture, translate::create_translator},
     core::{
         coordinator::BackgroundCoordinator,
-        slot::{AppModel, SlotRuntimeState},
+        region_slot_state::{AppModel, SlotRuntimeState},
     },
     infrastructure::{
         platform::{self, PlatformServices},
         settings::load_settings,
     },
-    ui::{
-        app::App,
-        app_services::{AppCaches, DownloadManager, PipelineServices},
-        fonts,
+    user_interface::{
+        application::App,
+        application_services::{AppCaches, DownloadManager, PipelineServices},
+        font_loader_setup,
     },
 };
 
@@ -27,7 +27,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
     //   • CJK           → Microsoft YaHei / MS Gothic / Malgun Gothic (Windows system)
     //   • Arabic/Hebrew → Arial / Tahoma (Windows system)
     //   • Devanagari    → Nirmala UI / Mangal (Windows system)
-    fonts::setup_fonts(&cc.egui_ctx);
+    font_loader_setup::setup_fonts(&cc.egui_ctx);
 
     let settings = load_settings().unwrap_or_default();
     let platform: Arc<dyn PlatformServices> = Arc::from(platform::create_platform());
@@ -61,7 +61,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
 
     let err_handler = crate::core::usecases::error_handler::ErrorHandler::new();
     let (ocr_engine, _) =
-        crate::adapters::ocr::factory::OcrAdapterFactory::create_engine(&settings);
+        crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(&settings);
 
     let (dt_tx, dt_rx) = std::sync::mpsc::channel();
     let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
@@ -92,7 +92,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
         show_settings: false,
         settings_fetch_models_pending: false,
         err_handler,
-        settings_ctrl: crate::core::usecases::settings_ctrl::SettingsController::new(),
+        settings_ctrl: crate::core::usecases::settings_controller::SettingsController::new(),
         region_session: None,
         region_finish: Arc::new(Mutex::new(None)),
         services,
