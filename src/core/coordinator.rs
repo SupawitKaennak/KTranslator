@@ -1,18 +1,36 @@
-use std::sync::{mpsc, Arc};
-use std::collections::HashMap;
-use parking_lot::Mutex;
 use crate::core::{
     model::AppModel,
-    ports::{FrameSource, Translator, OcrEngine},
+    ports::{FrameSource, OcrEngine, Translator},
     usecases::pipeline::TranslationPipeline,
     worker::{BgResult, SlotRuntimeState},
 };
+use parking_lot::Mutex;
+use std::sync::{mpsc, Arc};
+
+type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
+type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
+
+/// Tick interval for animation frames (e.g. scrolling text).
+const TICK_ANIMATION_MS: u64 = 50;
+/// Tick interval for hash-change follow-up.
+const TICK_HASH_FOLLOWUP_MS: u64 = 30;
+/// Tick interval for debounce polling (~60fps).
+const TICK_DEBOUNCE_POLL_MS: u64 = 16;
+/// Rate limit exponential backoff base (seconds).
+const RATE_LIMIT_BASE_SECS: u64 = 30;
+/// Bad request retry delay (milliseconds).
+const BAD_REQUEST_RETRY_MS: u64 = 10_000;
+/// Server/network error retry delay (milliseconds).
+const SERVER_ERROR_RETRY_MS: u64 = 5_000;
+/// Default error retry delay (milliseconds).
+const DEFAULT_ERROR_RETRY_MS: u64 = 3_000;
 
 pub struct BackgroundCoordinator {
     pub bg_tx: mpsc::Sender<BgResult>,
     pub bg_rx: mpsc::Receiver<BgResult>,
     pool: Mutex<threadpool::ThreadPool>,
-    yolo_bubble: Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>>>,
+    yolo_bubble:
+        Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector>>>>,
 }
 
 impl BackgroundCoordinator {
@@ -20,22 +38,27 @@ impl BackgroundCoordinator {
         let (bg_tx, bg_rx) = mpsc::channel();
         let pool = Mutex::new(threadpool::ThreadPool::new(4)); // Default 4 worker threads
         let yolo_bubble = Arc::new(Mutex::new(None));
-        Self { bg_tx, bg_rx, pool, yolo_bubble }
+        Self {
+            bg_tx,
+            bg_rx,
+            pool,
+            yolo_bubble,
+        }
     }
 
     pub fn now_ms() -> u64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
+            .unwrap_or_default()
             .as_millis() as u64
     }
 
     pub fn process_results(
         &self,
         model_arc: &Arc<Mutex<AppModel>>,
-        slots_runtime: &mut Vec<SlotRuntimeState>,
+        slots_runtime: &mut [SlotRuntimeState],
         err_handler: &crate::core::usecases::error_handler::ErrorHandler,
-        translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
+        translation_cache: &Arc<Mutex<TranslationCache>>,
         settings: &crate::infrastructure::settings::Settings,
     ) {
         while let Ok(result) = self.bg_rx.try_recv() {
@@ -49,260 +72,420 @@ impl BackgroundCoordinator {
                     ocr_lines,
                     trans_lines,
                     yolo_bubbles,
-                } => {
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        let mut model = model_arc.lock();
-                        let slot = match model.slots.get_mut(slot_idx) {
-                            Some(s) => s,
-                            None => continue,
-                        };
-
-                        if language_version != slot.language_version {
-                            runtime.busy = false;
-                            runtime.processing = false;
-                            runtime.first_unstable_at = 0; // Reset
-                            slot.next_tick_at_ms = 0;
-                            continue;
-                        }
-
-                        runtime.busy = false;
-                        runtime.processing = false;
-                        runtime.first_unstable_at = 0; // Reset on success
-                        runtime.status = "Ready".to_string();
-                        runtime.last_hash = frame_hash;
-
-                        let now = Self::now_ms();
-                        slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(500));
-
-                        let new_ocr = ocr_text.trim();
-                        let old_ocr = slot.last_ocr_text.trim();
-                        let realtime = &settings.realtime;
-
-                        if new_ocr.is_empty() {
-                            // ── Persistence Check ──
-                            if now < runtime.last_seen_text_at_ms + realtime.subtitle_persistence_ms {
-                                // Keep persistent subtitles on screen!
-                                let pers_trans = runtime.persistent_translation.lock().clone();
-                                let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
-                                let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
-                                
-                                if let Some(pt) = pers_trans {
-                                    slot.last_translation = pt;
-                                    slot.last_ocr_lines = pers_ocr;
-                                    slot.last_trans_lines = pers_trans_lines;
-                                } else {
-                                    slot.last_ocr_text.clear();
-                                    slot.last_translation.clear();
-                                    slot.last_ocr_lines.clear();
-                                    slot.last_trans_lines.clear();
-                                    slot.last_yolo_bubbles.clear();
-                                }
-                            } else {
-                                // Persistence expired, clear fully
-                                slot.last_ocr_text.clear();
-                                slot.last_translation.clear();
-                                slot.last_ocr_lines.clear();
-                                slot.last_trans_lines.clear();
-                                slot.last_yolo_bubbles.clear();
-                                *runtime.persistent_translation.lock() = None;
-                                runtime.persistent_ocr_lines.lock().clear();
-                                runtime.persistent_trans_lines.lock().clear();
-                            }
-                        } else {
-                            // ── Debounce Check (Typewriter effect) ──
-                            if new_ocr == runtime.last_stable_ocr_text.trim() {
-                                runtime.identical_frames_count = runtime.identical_frames_count.saturating_add(1);
-                            } else {
-                                runtime.last_stable_ocr_text = new_ocr.to_string();
-                                runtime.identical_frames_count = 1;
-                            }
-
-                            if runtime.identical_frames_count >= realtime.stability_threshold_frames {
-                                // Text is fully stable, render new translation!
-                                runtime.last_seen_text_at_ms = now; // Update timestamp for persistence
-                                
-                                if new_ocr != old_ocr {
-                                    slot.last_ocr_text = ocr_text.clone();
-                                    slot.last_translation = translated.clone();
-                                    slot.last_ocr_lines = ocr_lines.clone();
-                                    slot.last_trans_lines = trans_lines.clone();
-                                    slot.last_yolo_bubbles = yolo_bubbles.clone();
-
-                                    if !translated.trim().is_empty() {
-                                        let cap = settings.realtime.context_window_size.max(1) as usize;
-                                        runtime.recent_translations.push_back(translated.trim().to_string());
-                                        while runtime.recent_translations.len() > cap {
-                                            runtime.recent_translations.pop_front();
-                                        }
-                                    }
-
-                                    if settings.realtime.fade_smoothing {
-                                        runtime.overlay_fade_target = 1.0;
-                                        runtime.overlay_fade_alpha = 0.35;
-                                        runtime.last_overlay_fade_ms = now;
-                                    }
-
-                                    if frame_hash != 0 {
-                                        let cache_key = (frame_hash, slot.source_lang.as_ref().map(|l| l.0.clone()), slot.target_lang.0.clone());
-                                        translation_cache.lock().insert(cache_key, (ocr_text, translated.clone()));
-                                    }
-                                } else {
-                                    if !translated.trim().is_empty() {
-                                        slot.last_trans_lines = trans_lines.clone();
-                                        slot.last_ocr_lines = ocr_lines.clone();
-                                        slot.last_yolo_bubbles = yolo_bubbles.clone();
-                                        slot.last_translation = translated.clone();
-                                    }
-                                }
-
-                                // Save to persistence store
-                                if !slot.last_translation.trim().is_empty() {
-                                    *runtime.persistent_translation.lock() = Some(slot.last_translation.clone());
-                                    *runtime.persistent_ocr_lines.lock() = slot.last_ocr_lines.clone();
-                                    *runtime.persistent_trans_lines.lock() = slot.last_trans_lines.clone();
-                                }
-                            } else {
-                                // Still debouncing typewriter animation, keep displaying previous persistent text
-                                let pers_trans = runtime.persistent_translation.lock().clone();
-                                let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
-                                let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
-                                
-                                if let Some(pt) = pers_trans {
-                                    slot.last_translation = pt;
-                                    slot.last_ocr_lines = pers_ocr;
-                                    slot.last_trans_lines = pers_trans_lines;
-                                }
-                                // Force quick tick to read the next frame of the animation
-                                slot.next_tick_at_ms = now.saturating_add(50);
-                            }
-                        }
-                    }
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        runtime.error_streak = 0; // Reset error streak on success
-                        err_handler.dismiss(slot_idx);
-                    }
-                }
+                } => Self::handle_done(
+                    model_arc,
+                    slots_runtime,
+                    err_handler,
+                    translation_cache,
+                    settings,
+                    slot_idx,
+                    language_version,
+                    ocr_text,
+                    translated,
+                    frame_hash,
+                    ocr_lines,
+                    trans_lines,
+                    yolo_bubbles,
+                ),
                 BgResult::Unchanged { slot_idx } => {
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        runtime.busy = false;
-                        runtime.status = "Ready".to_string();
-                        runtime.first_unstable_at = 0; // Reset
-                    }
-                    let now = Self::now_ms();
-                    let mut model = model_arc.lock();
-                    if let Some(slot) = model.slots.get_mut(slot_idx) {
-                        slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(100)); // Reduced from 200ms
-                    }
+                    Self::handle_unchanged(model_arc, slots_runtime, slot_idx);
                 }
                 BgResult::HashChanged { slot_idx, new_hash } => {
-                    let mut model = model_arc.lock();
-                    let now = Self::now_ms();
-                    if let Some(slot) = model.slots.get_mut(slot_idx) {
-                        slot.stable_hash = new_hash;
-                        slot.stable_since_ms = now;
-                        slot.next_tick_at_ms = now.saturating_add(30); // Reduced from 150ms to 30ms for instant follow-up
-                    }
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        runtime.busy = false;
-                        // Initialize first_unstable_at if it's 0
-                        if runtime.first_unstable_at == 0 {
-                            runtime.first_unstable_at = now;
-                        }
-                    }
+                    Self::handle_hash_changed(model_arc, slots_runtime, slot_idx, new_hash);
                 }
                 BgResult::WaitingDebounce { slot_idx } => {
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        runtime.busy = false;
-                    }
-                    let mut model = model_arc.lock();
-                    if let Some(slot) = model.slots.get_mut(slot_idx) {
-                        slot.next_tick_at_ms = Self::now_ms() + 16; // 60fps responsive polling (16ms)
-                    }
+                    Self::handle_waiting_debounce(model_arc, slots_runtime, slot_idx);
                 }
-                BgResult::CacheHit { slot_idx, language_version, ocr_text, translated, frame_hash, ocr_lines, trans_lines, yolo_bubbles } => {
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        let mut model = model_arc.lock();
-                        let slot = match model.slots.get_mut(slot_idx) {
-                            Some(s) => s,
-                            None => continue,
-                        };
-
-                        if language_version != slot.language_version {
-                            runtime.busy = false;
-                            slot.next_tick_at_ms = 0;
-                            continue;
-                        }
-
-                        runtime.busy = false;
-                        runtime.processing = false;
-                        runtime.status = "Ready (Cached)".to_string();
-                        runtime.error_streak = 0; // Success case
-                        runtime.first_unstable_at = 0; // Reset
-                        runtime.last_hash = frame_hash;
-
-                        slot.last_ocr_text = ocr_text;
-                        slot.last_translation = translated.clone();
-                        slot.last_ocr_lines = ocr_lines; // Update positions!
-                        slot.last_yolo_bubbles = yolo_bubbles;
-                        
-                        // Re-align cached translation to the current OCR lines
-                        slot.last_trans_lines = trans_lines;
-
-                        slot.next_tick_at_ms = Self::now_ms() + slot.refresh_ms.max(200);
-                    }
-                }
+                BgResult::CacheHit {
+                    slot_idx,
+                    language_version,
+                    ocr_text,
+                    translated,
+                    frame_hash,
+                    ocr_lines,
+                    trans_lines,
+                    yolo_bubbles,
+                } => Self::handle_cache_hit(
+                    model_arc,
+                    slots_runtime,
+                    err_handler,
+                    slot_idx,
+                    language_version,
+                    ocr_text,
+                    translated,
+                    frame_hash,
+                    ocr_lines,
+                    trans_lines,
+                    yolo_bubbles,
+                ),
                 BgResult::StatusUpdate { slot_idx, status } => {
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        runtime.status = status;
-                        if runtime.status.contains("Scanning") || runtime.status.contains("AI") {
-                            runtime.processing = true;
-                        }
-                    }
+                    Self::handle_status_update(slots_runtime, slot_idx, status);
                 }
-                BgResult::Error { slot_idx, language_version, err } => {
-                    if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
-                        let mut model = model_arc.lock();
-                        let slot = match model.slots.get_mut(slot_idx) {
-                            Some(s) => s,
-                            None => continue,
-                        };
-
-                        runtime.busy = false;
-                        runtime.processing = false;
-                        runtime.status = "Error".to_string();
-                        runtime.error_streak = runtime.error_streak.saturating_add(1);
-
-                        let is_rate_limit = err.contains("quota") || err.contains("429") || err.contains("Too Many Requests");
-                        let is_bad_request = err.contains("400") || err.contains("parse") || err.contains("invalid");
-                        let is_server_err = err.contains("500") || err.contains("502") || err.contains("503") || err.contains("timeout");
-
-                        let (retry_delay_ms, friendly) = if is_rate_limit {
-                            // Exponential backoff for rate limits: 30s, 60s, 120s, 240s... max 10 mins
-                            let multiplier = 2u64.pow(runtime.error_streak.saturating_sub(1).min(5));
-                            let secs = 30 * multiplier;
-                            (secs * 1000, format!("Region {}: API rate limit hit — retrying in {secs}s", slot_idx + 1))
-                        } else if is_bad_request {
-                            let secs = 10;
-                            (10_000, format!("Region {}: Data format error — retrying in {secs}s", slot_idx + 1))
-                        } else if is_server_err {
-                            let secs = 5;
-                            (5_000, format!("Region {}: Server/Network error — retrying in {secs}s", slot_idx + 1))
-                        } else {
-                            let first_line = err.lines().next().unwrap_or(&err).trim().to_string();
-                            (3_000, format!("Region {}: {first_line}", slot_idx + 1))
-                        };
-                        
-                        err_handler.report_simple(friendly);
-                        
-                        if language_version == slot.language_version {
-                            slot.next_tick_at_ms = Self::now_ms() + retry_delay_ms;
-                        }
-                    }
-                }
+                BgResult::Error {
+                    slot_idx,
+                    language_version,
+                    err,
+                } => Self::handle_error(
+                    model_arc,
+                    slots_runtime,
+                    err_handler,
+                    slot_idx,
+                    language_version,
+                    err,
+                ),
             }
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Per-variant result handlers
+    // -----------------------------------------------------------------------
+
+    #[allow(clippy::too_many_arguments)]
+    fn handle_done(
+        model_arc: &Arc<Mutex<AppModel>>,
+        slots_runtime: &mut [SlotRuntimeState],
+        err_handler: &crate::core::usecases::error_handler::ErrorHandler,
+        translation_cache: &Arc<Mutex<TranslationCache>>,
+        settings: &crate::infrastructure::settings::Settings,
+        slot_idx: usize,
+        language_version: u32,
+        ocr_text: String,
+        translated: String,
+        frame_hash: u64,
+        ocr_lines: Vec<crate::core::ports::OcrTextLine>,
+        trans_lines: Vec<String>,
+        yolo_bubbles: Vec<crate::core::ports::OcrTextLine>,
+    ) {
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            let mut model = model_arc.lock();
+            let slot = match model.slots.get_mut(slot_idx) {
+                Some(s) => s,
+                None => return,
+            };
+
+            if language_version != slot.language_version {
+                runtime.busy = false;
+                runtime.processing = false;
+                runtime.first_unstable_at = 0;
+                slot.next_tick_at_ms = 0;
+                return;
+            }
+
+            runtime.busy = false;
+            runtime.processing = false;
+            runtime.first_unstable_at = 0;
+            runtime.status = "Ready".to_string();
+            runtime.last_hash = frame_hash;
+
+            let now = Self::now_ms();
+            slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(500));
+
+            let new_ocr = ocr_text.trim();
+            let old_ocr = slot.last_ocr_text.trim();
+            let realtime = &settings.realtime;
+
+            if new_ocr.is_empty() {
+                // ── Persistence Check ──
+                if now < runtime.last_seen_text_at_ms + realtime.subtitle_persistence_ms {
+                    let pers_trans = runtime.persistent_translation.lock().clone();
+                    let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
+                    let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
+
+                    if let Some(pt) = pers_trans {
+                        slot.last_translation = pt;
+                        slot.last_ocr_lines = pers_ocr;
+                        slot.last_trans_lines = pers_trans_lines;
+                    } else {
+                        slot.last_ocr_text.clear();
+                        slot.last_translation.clear();
+                        slot.last_ocr_lines.clear();
+                        slot.last_trans_lines.clear();
+                        slot.last_yolo_bubbles.clear();
+                    }
+                } else {
+                    slot.last_ocr_text.clear();
+                    slot.last_translation.clear();
+                    slot.last_ocr_lines.clear();
+                    slot.last_trans_lines.clear();
+                    slot.last_yolo_bubbles.clear();
+                    *runtime.persistent_translation.lock() = None;
+                    runtime.persistent_ocr_lines.lock().clear();
+                    runtime.persistent_trans_lines.lock().clear();
+                }
+            } else {
+                // ── Debounce Check (Typewriter effect) ──
+                if new_ocr == runtime.last_stable_ocr_text.trim() {
+                    runtime.identical_frames_count =
+                        runtime.identical_frames_count.saturating_add(1);
+                } else {
+                    runtime.last_stable_ocr_text = new_ocr.to_string();
+                    runtime.identical_frames_count = 1;
+                }
+
+                if runtime.identical_frames_count >= realtime.stability_threshold_frames {
+                    runtime.last_seen_text_at_ms = now;
+
+                    if new_ocr != old_ocr {
+                        slot.last_ocr_text = ocr_text.clone();
+                        slot.last_translation = translated.clone();
+                        slot.last_ocr_lines = ocr_lines.clone();
+                        slot.last_trans_lines = trans_lines.clone();
+                        slot.last_yolo_bubbles = yolo_bubbles.clone();
+
+                        if !translated.trim().is_empty() {
+                            let cap = settings.realtime.context_window_size.max(1) as usize;
+                            runtime
+                                .recent_translations
+                                .push_back(translated.trim().to_string());
+                            while runtime.recent_translations.len() > cap {
+                                runtime.recent_translations.pop_front();
+                            }
+                        }
+
+                        if settings.realtime.fade_smoothing {
+                            runtime.overlay_fade_target = 1.0;
+                            runtime.overlay_fade_alpha = 0.35;
+                            runtime.last_overlay_fade_ms = now;
+                        }
+
+                        if frame_hash != 0 {
+                            let cache_key = (
+                                frame_hash,
+                                slot.source_lang.as_ref().map(|l| l.0.clone()),
+                                slot.target_lang.0.clone(),
+                            );
+                            translation_cache
+                                .lock()
+                                .insert(cache_key, (ocr_text, translated.clone()));
+                        }
+                    } else if !translated.trim().is_empty() {
+                        slot.last_trans_lines = trans_lines.clone();
+                        slot.last_ocr_lines = ocr_lines.clone();
+                        slot.last_yolo_bubbles = yolo_bubbles.clone();
+                        slot.last_translation = translated.clone();
+                    }
+
+                    // Save to persistence store
+                    if !slot.last_translation.trim().is_empty() {
+                        *runtime.persistent_translation.lock() =
+                            Some(slot.last_translation.clone());
+                        *runtime.persistent_ocr_lines.lock() = slot.last_ocr_lines.clone();
+                        *runtime.persistent_trans_lines.lock() = slot.last_trans_lines.clone();
+                    }
+                } else {
+                    // Still debouncing typewriter animation
+                    let pers_trans = runtime.persistent_translation.lock().clone();
+                    let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
+                    let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
+
+                    if let Some(pt) = pers_trans {
+                        slot.last_translation = pt;
+                        slot.last_ocr_lines = pers_ocr;
+                        slot.last_trans_lines = pers_trans_lines;
+                    }
+                    slot.next_tick_at_ms = now.saturating_add(TICK_ANIMATION_MS);
+                }
+            }
+        }
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            runtime.error_streak = 0;
+            if let Some(err_id) = runtime.active_error_id.take() {
+                err_handler.dismiss(err_id);
+            }
+        }
+    }
+
+    fn handle_unchanged(
+        model_arc: &Arc<Mutex<AppModel>>,
+        slots_runtime: &mut [SlotRuntimeState],
+        slot_idx: usize,
+    ) {
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            runtime.busy = false;
+            runtime.status = "Ready".to_string();
+            runtime.first_unstable_at = 0;
+        }
+        let now = Self::now_ms();
+        let mut model = model_arc.lock();
+        if let Some(slot) = model.slots.get_mut(slot_idx) {
+            slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(100));
+        }
+    }
+
+    fn handle_hash_changed(
+        model_arc: &Arc<Mutex<AppModel>>,
+        slots_runtime: &mut [SlotRuntimeState],
+        slot_idx: usize,
+        new_hash: u64,
+    ) {
+        let mut model = model_arc.lock();
+        let now = Self::now_ms();
+        if let Some(slot) = model.slots.get_mut(slot_idx) {
+            slot.stable_hash = new_hash;
+            slot.stable_since_ms = now;
+            slot.next_tick_at_ms = now.saturating_add(TICK_HASH_FOLLOWUP_MS);
+        }
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            runtime.busy = false;
+            if runtime.first_unstable_at == 0 {
+                runtime.first_unstable_at = now;
+            }
+        }
+    }
+
+    fn handle_waiting_debounce(
+        model_arc: &Arc<Mutex<AppModel>>,
+        slots_runtime: &mut [SlotRuntimeState],
+        slot_idx: usize,
+    ) {
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            runtime.busy = false;
+        }
+        let mut model = model_arc.lock();
+        if let Some(slot) = model.slots.get_mut(slot_idx) {
+            slot.next_tick_at_ms = Self::now_ms() + TICK_DEBOUNCE_POLL_MS;
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn handle_cache_hit(
+        model_arc: &Arc<Mutex<AppModel>>,
+        slots_runtime: &mut [SlotRuntimeState],
+        err_handler: &crate::core::usecases::error_handler::ErrorHandler,
+        slot_idx: usize,
+        language_version: u32,
+        ocr_text: String,
+        translated: String,
+        frame_hash: u64,
+        ocr_lines: Vec<crate::core::ports::OcrTextLine>,
+        trans_lines: Vec<String>,
+        yolo_bubbles: Vec<crate::core::ports::OcrTextLine>,
+    ) {
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            let mut model = model_arc.lock();
+            let slot = match model.slots.get_mut(slot_idx) {
+                Some(s) => s,
+                None => return,
+            };
+
+            if language_version != slot.language_version {
+                runtime.busy = false;
+                slot.next_tick_at_ms = 0;
+                return;
+            }
+
+            runtime.busy = false;
+            runtime.processing = false;
+            runtime.status = "Ready (Cached)".to_string();
+            runtime.error_streak = 0;
+            if let Some(err_id) = runtime.active_error_id.take() {
+                err_handler.dismiss(err_id);
+            }
+            runtime.first_unstable_at = 0;
+            runtime.last_hash = frame_hash;
+
+            slot.last_ocr_text = ocr_text;
+            slot.last_translation = translated.clone();
+            slot.last_ocr_lines = ocr_lines;
+            slot.last_yolo_bubbles = yolo_bubbles;
+            slot.last_trans_lines = trans_lines;
+
+            slot.next_tick_at_ms = Self::now_ms() + slot.refresh_ms.max(200);
+        }
+    }
+
+    fn handle_status_update(
+        slots_runtime: &mut [SlotRuntimeState],
+        slot_idx: usize,
+        status: String,
+    ) {
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            runtime.status = status;
+            if runtime.status.contains("Scanning") || runtime.status.contains("AI") {
+                runtime.processing = true;
+            }
+        }
+    }
+
+    fn handle_error(
+        model_arc: &Arc<Mutex<AppModel>>,
+        slots_runtime: &mut [SlotRuntimeState],
+        err_handler: &crate::core::usecases::error_handler::ErrorHandler,
+        slot_idx: usize,
+        language_version: u32,
+        err: String,
+    ) {
+        if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+            let mut model = model_arc.lock();
+            let slot = match model.slots.get_mut(slot_idx) {
+                Some(s) => s,
+                None => return,
+            };
+
+            runtime.busy = false;
+            runtime.processing = false;
+            runtime.status = "Error".to_string();
+            runtime.error_streak = runtime.error_streak.saturating_add(1);
+
+            let is_rate_limit =
+                err.contains("quota") || err.contains("429") || err.contains("Too Many Requests");
+            let is_bad_request =
+                err.contains("400") || err.contains("parse") || err.contains("invalid");
+            let is_server_err = err.contains("500")
+                || err.contains("502")
+                || err.contains("503")
+                || err.contains("timeout");
+
+            let (retry_delay_ms, friendly) = if is_rate_limit {
+                let multiplier = 2u64.pow(runtime.error_streak.saturating_sub(1).min(5));
+                let secs = RATE_LIMIT_BASE_SECS * multiplier;
+                (
+                    secs * 1000,
+                    format!(
+                        "Region {}: API rate limit hit — retrying in {secs}s",
+                        slot_idx + 1
+                    ),
+                )
+            } else if is_bad_request {
+                (
+                    BAD_REQUEST_RETRY_MS,
+                    format!(
+                        "Region {}: Data format error — retrying in {}s",
+                        slot_idx + 1,
+                        BAD_REQUEST_RETRY_MS / 1000
+                    ),
+                )
+            } else if is_server_err {
+                (
+                    SERVER_ERROR_RETRY_MS,
+                    format!(
+                        "Region {}: Server/Network error — retrying in {}s",
+                        slot_idx + 1,
+                        SERVER_ERROR_RETRY_MS / 1000
+                    ),
+                )
+            } else {
+                let first_line = err.lines().next().unwrap_or(&err).trim().to_string();
+                (
+                    DEFAULT_ERROR_RETRY_MS,
+                    format!("Region {}: {first_line}", slot_idx + 1),
+                )
+            };
+
+            if let Some(old_err_id) = runtime.active_error_id.take() {
+                err_handler.dismiss(old_err_id);
+            }
+            let error_id = err_handler.report_simple(friendly);
+            runtime.active_error_id = Some(error_id);
+
+            if language_version == slot.language_version {
+                slot.next_tick_at_ms = Self::now_ms() + retry_delay_ms;
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
     pub fn tick(
         &self,
         model_arc: &Arc<Mutex<AppModel>>,
@@ -310,25 +493,31 @@ impl BackgroundCoordinator {
         capture: &Arc<dyn FrameSource>,
         ocr_engine: &Arc<dyn OcrEngine>,
         translator: &Option<Arc<dyn Translator + Send + Sync>>,
-        translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), (String, String)>>>,
-        text_translation_cache: &Arc<Mutex<HashMap<(u64, Option<String>, String), String>>>,
+        translation_cache: &Arc<Mutex<TranslationCache>>,
+        text_translation_cache: &Arc<Mutex<TextTranslationCache>>,
         settings: &crate::infrastructure::settings::Settings,
         platform: &Arc<dyn crate::infrastructure::platform::PlatformServices>,
         ctx: egui::Context,
     ) {
         // Dynamically apply user-configured worker thread counts
-        self.pool.lock().set_num_threads(settings.perf.worker_threads.max(1));
+        self.pool
+            .lock()
+            .set_num_threads(settings.perf.worker_threads.max(1));
 
         let now = Self::now_ms();
         let snapshot = { model_arc.lock().clone() };
-        if !snapshot.running { return; }
+        if !snapshot.running {
+            return;
+        }
 
         let yolo_detector = if settings.use_yolo_bubble {
             let mut guard = self.yolo_bubble.lock();
-            if guard.is_none() {
-                if crate::infrastructure::asset_manager::check_bubble_yolo_exists() {
-                    *guard = Some(Arc::new(crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector::new(settings.perf.gpu_backend)));
-                }
+            if guard.is_none() && crate::infrastructure::asset_manager::check_bubble_yolo_exists() {
+                *guard = Some(Arc::new(
+                    crate::adapters::ocr::yolo_bubble_detector::YoloBubbleDetector::new(
+                        settings.perf.gpu_backend,
+                    ),
+                ));
             }
             guard.clone()
         } else {
@@ -339,7 +528,9 @@ impl BackgroundCoordinator {
         let any_busy = !parallel_ocr && slots_runtime.iter().any(|r| r.busy);
 
         for (i, slot) in snapshot.slots.iter().enumerate() {
-            if !slot.enabled || slot.rect.is_none() { continue; }
+            if !slot.enabled || slot.rect.is_none() {
+                continue;
+            }
 
             if slots_runtime.len() <= i {
                 slots_runtime.push(SlotRuntimeState::new());
@@ -358,7 +549,7 @@ impl BackgroundCoordinator {
                 slots_runtime[i].recent_translations.clear();
                 translation_cache.lock().clear();
                 text_translation_cache.lock().clear();
-                
+
                 let mut model = model_arc.lock();
                 if let Some(m_slot) = model.slots.get_mut(i) {
                     m_slot.language_version = m_slot.language_version.wrapping_add(1);
@@ -379,7 +570,7 @@ impl BackgroundCoordinator {
             }
 
             slots_runtime[i].busy = true;
-            slots_runtime[i].processing = false; 
+            slots_runtime[i].processing = false;
             {
                 let mut m = model_arc.lock();
                 if let Some(s) = m.slots.get_mut(i) {
@@ -387,78 +578,95 @@ impl BackgroundCoordinator {
                 }
             }
 
-            let rect = slot.rect.unwrap();
-            let display_id = slot.display_id;
-            let source_lang = slot.source_lang.clone();
-            let target_lang = slot.target_lang.clone();
-            let capture = capture.clone();
-            let ocr_engine = ocr_engine.clone();
-            let translator = translator.clone();
-            let tx = self.bg_tx.clone();
-            let prev_hash = slots_runtime[i].last_hash;
-            let stable_hash = slot.stable_hash;
-            let stable_since_ms = slot.stable_since_ms;
-            let language_version = slot.language_version;
-            let cache_arc = translation_cache.clone();
-            let text_cache_arc = text_translation_cache.clone();
-            let first_unstable_at = slots_runtime[i].first_unstable_at;
-            let platform = platform.clone();
-            let smart_merge = settings.smart_merge;
-            let img_proc_cfg = settings.img_proc.clone();
-            let txt_proc_cfg = settings.txt_proc.clone();
-            let regex_rules = settings.regex_rules.clone();
-            let glossary_entries = settings.glossary_entries.clone();
-            let last_frame_arc = slots_runtime[i].last_frame.clone();
-            let max_cache_entries = settings.perf.max_cache_entries;
-            let enable_batching = settings.perf.enable_batching;
-            let context_segments: Vec<String> = slots_runtime[i]
-                .recent_translations
-                .iter()
-                .cloned()
-                .collect();
-            let contextual_translation = settings.trans_behavior.contextual_translation;
-            let context_window_size = settings.realtime.context_window_size;
-            let th_segmentation = settings.txt_proc.th_segmentation;
-            let jp_merge_vertical = settings.txt_proc.jp_merge_vertical;
+            let task = SlotTask {
+                context: crate::core::usecases::pipeline::PipelineContext {
+                    slot_idx: i,
+                    rect: slot.rect.unwrap(),
+                    display_id: slot.display_id,
+                    source_lang: slot.source_lang.clone(),
+                    target_lang: slot.target_lang.clone(),
+                    language_version: slot.language_version,
+                    capture: capture.clone(),
+                    ocr_engine: ocr_engine.clone(),
+                    translator: translator.clone(),
+                    platform: platform.clone(),
+                    yolo_detector: yolo_detector.clone(),
+                    prev_hash: slots_runtime[i].last_hash,
+                    stable_hash: slot.stable_hash,
+                    stable_since_ms: slot.stable_since_ms,
+                    first_unstable_at: slots_runtime[i].first_unstable_at,
+                    cache_arc: translation_cache.clone(),
+                    text_cache_arc: text_translation_cache.clone(),
+                    max_cache_entries: settings.perf.max_cache_entries,
+                    smart_merge: settings.smart_merge,
+                    img_proc_cfg: settings.img_proc.clone(),
+                    txt_proc_cfg: settings.txt_proc.clone(),
+                    regex_rules: settings.regex_rules.clone(),
+                    glossary_entries: settings.glossary_entries.clone(),
+                    jp_merge_vertical: settings.txt_proc.jp_merge_vertical,
+                    th_segmentation: settings.txt_proc.th_segmentation,
+                    enable_batching: settings.perf.enable_batching,
+                    context_segments: slots_runtime[i]
+                        .recent_translations
+                        .iter()
+                        .cloned()
+                        .collect(),
+                    contextual_translation: settings.trans_behavior.contextual_translation,
+                    context_window_size: settings.realtime.context_window_size,
+                    last_frame_arc: slots_runtime[i].last_frame.clone(),
+                    status_tx: self.bg_tx.clone(),
+                    ctx: ctx.clone(),
+                },
+            };
 
-            let yolo_detector = yolo_detector.clone();
-            let ctx_worker = ctx.clone();
             self.pool.lock().execute(move || {
-                ctx_worker.request_repaint();
-                let tx_for_panic = tx.clone();
-                let ctx_for_panic = ctx_worker.clone();
-                let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
-                    let tx_inner = tx.clone();
-                    let result = TranslationPipeline::execute_slot(
-                        i, rect, display_id, source_lang, target_lang,
-                        capture, ocr_engine, translator, prev_hash, stable_hash,
-                        stable_since_ms, language_version, cache_arc, text_cache_arc,
-                        first_unstable_at, smart_merge, img_proc_cfg, txt_proc_cfg, regex_rules, glossary_entries, last_frame_arc, tx_inner, ctx_worker.clone(),
-                        max_cache_entries, platform.clone(),
-                        enable_batching, context_segments, contextual_translation, context_window_size,
-                        th_segmentation, jp_merge_vertical, yolo_detector,
-                    );
-
-                    match result {
-                        Ok(res) => { 
-                            let _ = tx.send(res); 
-                            ctx_worker.request_repaint();
-                        }
-                        Err(e) => {
-                            let _ = tx.send(BgResult::Error { slot_idx: i, language_version, err: format!("{e:#}") });
-                            ctx_worker.request_repaint();
-                        }
-                    }
-                }));
-
-                if res.is_err() {
-                    let _ = tx_for_panic.send(BgResult::Error {
-                        slot_idx: i, language_version, err: "Background thread panicked (system error)".to_string(),
-                    });
-                    ctx_for_panic.request_repaint();
-                }
+                task.run();
             });
         }
     }
 }
 
+pub struct SlotTask {
+    pub context: crate::core::usecases::pipeline::PipelineContext,
+}
+
+impl SlotTask {
+    pub fn run(self) {
+        let tx = self.context.status_tx.clone();
+        let ctx_worker = self.context.ctx.clone();
+        let slot_idx = self.context.slot_idx;
+        let language_version = self.context.language_version;
+
+        let tx_for_panic = tx.clone();
+        let ctx_for_panic = ctx_worker.clone();
+
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {
+            let tx_inner = tx.clone();
+            let result = TranslationPipeline::execute_slot(self.context);
+
+            match result {
+                Ok(res) => {
+                    let _ = tx_inner.send(res);
+                    ctx_worker.request_repaint();
+                }
+                Err(e) => {
+                    let _ = tx_inner.send(BgResult::Error {
+                        slot_idx,
+                        language_version,
+                        err: format!("{e:#}"),
+                    });
+                    ctx_worker.request_repaint();
+                }
+            }
+        }));
+
+        if res.is_err() {
+            let _ = tx_for_panic.send(BgResult::Error {
+                slot_idx,
+                language_version,
+                err: "Background thread panicked (system error)".to_string(),
+            });
+            ctx_for_panic.request_repaint();
+        }
+    }
+}
