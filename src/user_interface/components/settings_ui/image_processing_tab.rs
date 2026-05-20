@@ -64,7 +64,7 @@ pub fn render_tab_image_processing(
 
     // Apply high-performance processing pipeline
     let (processed_data, pw, ph) =
-        crate::core::usecases::image_processor::process_image_for_ocr(raw_pixels, w, h, img_proc);
+        crate::core::usecases::image_processing_usecase::process_image_for_ocr(raw_pixels, w, h, img_proc);
 
     // Render Preview Texture on GUI
     let color_img =

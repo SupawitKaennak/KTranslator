@@ -4,23 +4,17 @@ use eframe::egui;
 use parking_lot::Mutex;
 
 use crate::{
-    adapters::{capture::screenshots_capture::ScreenshotsCapture, translate::create_translator},
+    adapters::translate::create_translator,
     core::{
-        coordinator::BackgroundCoordinator,
-        model::AppModel,
-        ports::{FrameSource, OcrEngine, Translator},
-        worker::SlotRuntimeState,
+        coordinator::BackgroundCoordinator, region_slot_state::AppModel, region_slot_state::SlotRuntimeState,
+        background_result_dispatcher::ResultDispatcher,
     },
-    infrastructure::{
-        platform::{self, PlatformServices},
-        settings::{load_settings, save_settings, Settings},
-    },
+    infrastructure::settings::{save_settings, Settings},
     user_interface::{
-        components::{settings_ui::show_settings_window, slot_ui::render_slot_item},
-        font_loader,
+        components::{settings_ui::show_settings_window, region_slot_panel::render_slot_item},
         i18n::get_i18n,
-        live_frame, overlay_renderer,
-        region_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
+        live_frame, transparent_overlay_renderer,
+        region_selection_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
     },
 };
 
@@ -28,159 +22,40 @@ use crate::{
 // App
 // ---------------------------------------------------------------------------
 
-type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
-type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
-
-pub struct PipelineServices {
-    pub capture: Arc<dyn FrameSource>,
-    pub platform: Arc<dyn PlatformServices>,
-    pub ocr_engine: Arc<dyn OcrEngine>,
-    pub translator: Option<Arc<dyn Translator + Send + Sync>>,
-}
-
-pub struct AppCaches {
-    pub translation: Arc<Mutex<TranslationCache>>,
-    pub text_translation: Arc<Mutex<TextTranslationCache>>,
-    pub last_cleanup_time: Arc<Mutex<u64>>,
-}
-
-pub struct DownloadManager {
-    pub trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
-    pub trigger_rx: std::sync::mpsc::Receiver<crate::infrastructure::settings::OcrEngineType>,
-    pub progress_rx: tokio::sync::mpsc::Receiver<crate::core::types::DownloadProgress>,
-    pub progress_tx: tokio::sync::mpsc::Sender<crate::core::types::DownloadProgress>,
-}
-
 pub struct App {
-    model: Arc<Mutex<AppModel>>,
-    settings: Settings,
-    show_settings: bool,
+    pub(crate) model: Arc<Mutex<AppModel>>,
+    pub(crate) settings: Settings,
+    pub(crate) show_settings: bool,
     /// true once when user opens Settings: try to fetch models from API
-    settings_fetch_models_pending: bool,
-    err_handler: crate::core::usecases::error_handler::ErrorHandler,
-    settings_ctrl: crate::core::usecases::settings_controller::SettingsController,
+    pub(crate) settings_fetch_models_pending: bool,
+    pub(crate) err_handler: crate::core::usecases::error_handler::ErrorHandler,
+    pub(crate) settings_ctrl: crate::core::usecases::settings_controller::SettingsController,
 
     /// Fullscreen region pick / adjust overlay (one at a time).
-    region_session: Option<Arc<Mutex<RegionOverlayState>>>,
-    region_finish: Arc<Mutex<Option<RegionOutcome>>>,
+    pub(crate) region_session: Option<Arc<Mutex<RegionOverlayState>>>,
+    pub(crate) region_finish: Arc<Mutex<Option<RegionOutcome>>>,
 
-    services: PipelineServices,
+    pub(crate) services: crate::user_interface::application_services::PipelineServices,
 
     // Background processing
-    coordinator: BackgroundCoordinator,
-    slots_runtime: Vec<SlotRuntimeState>,
+    pub(crate) coordinator: BackgroundCoordinator,
+    pub(crate) slots_runtime: Vec<SlotRuntimeState>,
 
     /// Available displays for capturing (ID, Label)
-    available_screens: Vec<(u32, String)>,
+    pub(crate) available_screens: Vec<(u32, String)>,
 
-    caches: AppCaches,
+    pub(crate) caches: crate::user_interface::application_services::AppCaches,
 
     /// Channel to signal error dismissal from the error viewport
-    error_dismiss_tx: mpsc::Sender<()>,
-    error_dismiss_rx: mpsc::Receiver<()>,
+    pub(crate) error_dismiss_tx: mpsc::Sender<()>,
+    pub(crate) error_dismiss_rx: mpsc::Receiver<()>,
 
-    downloads: DownloadManager,
+    pub(crate) downloads: crate::user_interface::application_services::DownloadManager,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // ── Font setup: multi-script support ─────────────────────────────
-        // egui's default fonts cover Latin, Cyrillic, and Greek.
-        // We add the following fallbacks so every translated script renders:
-        //   • Thai          → NotoSansThai (embedded, guaranteed)
-        //   • CJK           → Microsoft YaHei / MS Gothic / Malgun Gothic (Windows system)
-        //   • Arabic/Hebrew → Arial / Tahoma (Windows system)
-        //   • Devanagari    → Nirmala UI / Mangal (Windows system)
-        font_loader::setup_fonts(&cc.egui_ctx);
-
-        let settings = load_settings().unwrap_or_default();
-        let platform: Arc<dyn PlatformServices> = Arc::from(platform::create_platform());
-        platform.boost_process_priority();
-
-        let translator = create_translator(&settings);
-
-        let (err_tx, err_rx) = mpsc::channel();
-
-        if settings.dark_mode {
-            let mut visuals = egui::Visuals::dark();
-            visuals.window_corner_radius = 6.0.into();
-            visuals.widgets.noninteractive.corner_radius = 6.0.into();
-            visuals.widgets.inactive.corner_radius = 6.0.into();
-            visuals.widgets.hovered.corner_radius = 6.0.into();
-            visuals.widgets.active.corner_radius = 6.0.into();
-            visuals.widgets.open.corner_radius = 6.0.into();
-            cc.egui_ctx.set_visuals(visuals);
-        } else {
-            let mut visuals = egui::Visuals::light();
-            visuals.window_corner_radius = 6.0.into();
-            visuals.widgets.noninteractive.corner_radius = 6.0.into();
-            visuals.widgets.inactive.corner_radius = 6.0.into();
-            visuals.widgets.hovered.corner_radius = 6.0.into();
-            visuals.widgets.active.corner_radius = 6.0.into();
-            visuals.widgets.open.corner_radius = 6.0.into();
-            cc.egui_ctx.set_visuals(visuals);
-        }
-
-        let coordinator = BackgroundCoordinator::new();
-
-        let err_handler = crate::core::usecases::error_handler::ErrorHandler::new();
-        let (ocr_engine, _) =
-            crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(&settings);
-
-        let (dt_tx, dt_rx) = std::sync::mpsc::channel();
-        let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
-
-        let caches = AppCaches {
-            translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
-            text_translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
-            last_cleanup_time: Arc::new(Mutex::new(BackgroundCoordinator::now_ms())),
-        };
-
-        let downloads = DownloadManager {
-            trigger_tx: dt_tx,
-            trigger_rx: dt_rx,
-            progress_tx: dp_tx,
-            progress_rx: dp_rx,
-        };
-
-        let services = PipelineServices {
-            capture: Arc::new(ScreenshotsCapture::new()),
-            platform: platform.clone(),
-            ocr_engine,
-            translator,
-        };
-
-        Self {
-            model: Arc::new(Mutex::new(AppModel::new_default())),
-            settings,
-            show_settings: false,
-            settings_fetch_models_pending: false,
-            err_handler,
-            settings_ctrl: crate::core::usecases::settings_controller::SettingsController::new(),
-            region_session: None,
-            region_finish: Arc::new(Mutex::new(None)),
-            services,
-            coordinator,
-            slots_runtime: vec![SlotRuntimeState::new()],
-            available_screens: screenshots::Screen::all()
-                .unwrap_or_default()
-                .into_iter()
-                .map(|s| {
-                    let w = s.display_info.width;
-                    let h = s.display_info.height;
-                    let label = if s.display_info.is_primary {
-                        format!("Primary {}x{} (Screen {})", w, h, s.display_info.id)
-                    } else {
-                        format!("{}x{} (Screen {})", w, h, s.display_info.id)
-                    };
-                    (s.display_info.id, label)
-                })
-                .collect(),
-            caches,
-            error_dismiss_tx: err_tx,
-            error_dismiss_rx: err_rx,
-            downloads,
-        }
+        crate::user_interface::application_initializer::build_app(cc)
     }
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
@@ -189,7 +64,7 @@ impl App {
             if !slot.popup_open {
                 continue;
             }
-            overlay_renderer::render_popup_viewport(ctx, i, &self.model);
+            transparent_overlay_renderer::render_popup_viewport(ctx, i, &self.model);
         }
     }
 
@@ -203,7 +78,7 @@ impl App {
                 self.slots_runtime.push(SlotRuntimeState::new());
             }
 
-            overlay_renderer::render_overlay_viewport(
+            transparent_overlay_renderer::render_overlay_viewport(
                 ctx,
                 i,
                 &self.model,
@@ -234,7 +109,7 @@ impl App {
         }
 
         // 1a. Periodic cache cleanup based on memory_cleanup_interval_secs
-        let now = BackgroundCoordinator::now_ms();
+        let now = crate::core::utils::now_ms();
         let last_cleanup = *self.caches.last_cleanup_time.lock();
         let cleanup_interval_ms = self.settings.perf.memory_cleanup_interval_secs * 1000;
         if now.saturating_sub(last_cleanup) >= cleanup_interval_ms {
@@ -249,15 +124,15 @@ impl App {
             tokio::spawn(async move {
                 match engine_type {
                     crate::infrastructure::settings::OcrEngineType::MangaOCR => {
-                        let _ = crate::infrastructure::asset_manager::download_models(tx).await;
+                        let _ = crate::infrastructure::asset_download_manager::download_models(tx).await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
                         let _ =
-                            crate::infrastructure::asset_manager::download_ppocr_models(tx).await;
+                            crate::infrastructure::asset_download_manager::download_ppocr_models(tx).await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
                         let _ =
-                            crate::infrastructure::asset_manager::download_bubble_yolo_model(tx)
+                            crate::infrastructure::asset_download_manager::download_bubble_yolo_model(tx)
                                 .await;
                     }
                     _ => {}
@@ -273,14 +148,14 @@ impl App {
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
                 let factory_type =
-                    crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(
+                    crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
                         &self.settings,
                     );
                 if factory_type == crate::infrastructure::settings::OcrEngineType::MangaOCR
                     || factory_type == crate::infrastructure::settings::OcrEngineType::BuiltinPaddle
                 {
                     let (new_engine, err_opt) =
-                        crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(
+                        crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(
                             &self.settings,
                         );
                     self.services.ocr_engine = new_engine;
@@ -329,7 +204,8 @@ impl App {
         }
 
         // 2. Delegate background logic to coordinator
-        self.coordinator.process_results(
+        ResultDispatcher::process_results(
+            &self.coordinator.bg_rx,
             &self.model,
             &mut self.slots_runtime,
             &self.err_handler,
@@ -370,11 +246,11 @@ impl App {
         let updated = settings_arc.lock().clone();
         if updated != self.settings {
             let current_engine_type =
-                crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(
+                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
                     &updated,
                 );
             let old_engine_type =
-                crate::adapters::ocr::ocr_factory::OcrAdapterFactory::get_active_engine_type(
+                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
                     &self.settings,
                 );
             let rebuild_ocr = current_engine_type != old_engine_type
@@ -416,7 +292,7 @@ impl App {
 
                 if rebuild_ocr {
                     let (new_engine, err_opt) =
-                        crate::adapters::ocr::ocr_factory::OcrAdapterFactory::create_engine(
+                        crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(
                             &self.settings,
                         );
                     self.services.ocr_engine = new_engine;
@@ -754,7 +630,7 @@ impl eframe::App for App {
 
         let mut min_wait_ms = u64::MAX;
         if self.model.lock().running {
-            let now = BackgroundCoordinator::now_ms();
+            let now = crate::core::utils::now_ms();
             let m = self.model.lock();
             for (i, slot) in m.slots.iter().enumerate() {
                 if slot.enabled && slot.rect.is_some() && !self.slots_runtime[i].busy {
