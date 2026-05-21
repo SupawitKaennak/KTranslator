@@ -143,7 +143,6 @@ pub fn render_overlay_viewport(
                         let has_positions = !ocr_lines.is_empty();
 
                         if has_positions {
-                            let max_text_w = full_rect.width() - 8.0;
                             let mut last_bottom_y = full_rect.top();
 
                             let mut idx = 0;
@@ -167,35 +166,65 @@ pub fn render_overlay_viewport(
                                 }
 
                                 let chunks = crate::core::usecases::text_formatting_usecase::TextFormatter::create_chunks(&trans, block_lines.len());
+                                let raw_text = chunks.join("\n");
+                                let full_text = crate::core::usecases::text_formatting_usecase::TextFormatter::wrap_thai_text(&raw_text);
 
-                                if block_lines.len() > 1 {
-                                    // --- 1. Unified Background Mode (for Merged Sentences) ---
-                                    let mut union_rect: Option<egui::Rect> = None;
-                                    for line in &block_lines {
-                                        let r = egui::Rect::from_min_size(
-                                            egui::pos2(line.x / ppp, line.y / ppp),
-                                            egui::vec2(line.w / ppp, line.h / ppp)
+                                // Compute the tight bounding box of the OCR text characters
+                                let mut text_union_rect: Option<egui::Rect> = None;
+                                for line in &block_lines {
+                                    let r = egui::Rect::from_min_size(
+                                        egui::pos2(line.x / ppp, line.y / ppp),
+                                        egui::vec2(line.w / ppp, line.h / ppp)
+                                    );
+                                    text_union_rect = Some(text_union_rect.map_or(r, |acc| acc.union(r)));
+                                }
+
+                                if let Some(base_rect) = text_union_rect {
+                                    // 1. Try to find a matching YOLO/CRAFT bubble
+                                    let mut matched_bubble_rect: Option<egui::Rect> = None;
+                                    let center = base_rect.center();
+                                    for bubble in &yolo_bubbles {
+                                        let b_rect = egui::Rect::from_min_size(
+                                            egui::pos2(bubble.x / ppp, bubble.y / ppp),
+                                            egui::vec2(bubble.w / ppp, bubble.h / ppp)
                                         );
-                                        union_rect = Some(union_rect.map_or(r, |acc| acc.union(r)));
+                                        // If the text center is inside the bubble, or there is significant overlap
+                                        if b_rect.contains(center) || b_rect.intersects(base_rect) {
+                                            matched_bubble_rect = Some(b_rect);
+                                            break;
+                                        }
                                     }
 
-                                    if let Some(bg_rect) = union_rect {
-                                        let padded_bg = bg_rect.expand(overlay_padding);
-                                        painter.rect_filled(padded_bg, overlay_corner_radius, overlay_bg_color);
-                                        last_bottom_y = last_bottom_y.max(padded_bg.max.y);
+                                    // 2. Determine the final background rect
+                                    let mut is_bubble_mode = false;
+                                    let mut final_bg_rect = if let Some(b_rect) = matched_bubble_rect {
+                                        is_bubble_mode = true;
+                                        // Use the bubble exactly, but ensure it encompasses the text
+                                        b_rect.union(base_rect)
+                                    } else {
+                                        // Fallback: OCR Full Page or no bubble detected
+                                        if block_lines.len() > 1 {
+                                            is_bubble_mode = true;
+                                            // Add a bit more generous padding to simulate a bubble
+                                            base_rect.expand(overlay_padding * 1.5)
+                                        } else {
+                                            // Single strip mode
+                                            base_rect
+                                        }
+                                    };
 
-                                        // Render the whole joined text inside the union rect
-                                        let raw_text = chunks.join("\n");
-                                        let full_text = crate::core::usecases::text_formatting_usecase::TextFormatter::wrap_thai_text(&raw_text);
+                                    if is_bubble_mode {
+                                        // --- Unified / Bubble Mode ---
+                                        let bg_w = final_bg_rect.width().max(50.0);
                                         let font_size = overlay_settings.overlay_font_size;
-                                        let wrap_width = bg_rect.width().max(50.0);
-
+                                        
+                                        // Pre-layout to check height
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(
-                                                full_text,
+                                                full_text.clone(),
                                                 egui::FontId::proportional(font_size),
                                                 overlay_text_color,
-                                                wrap_width
+                                                bg_w - (overlay_padding * 2.0)
                                             );
                                             job.wrap.break_anywhere = false;
                                             job.halign = match overlay_settings.overlay_text_align {
@@ -206,28 +235,42 @@ pub fn render_overlay_viewport(
                                             f.layout_job(job)
                                         });
 
+                                        // If text is taller than the bubble, expand the bubble downwards
+                                        let required_h = galley.size().y + (overlay_padding * 2.0);
+                                        if final_bg_rect.height() < required_h {
+                                            final_bg_rect.set_bottom(final_bg_rect.top() + required_h);
+                                        }
+                                        
+                                        // For generated bubbles (no YOLO), ensure minimum width based on text
+                                        if matched_bubble_rect.is_none() && final_bg_rect.width() < galley.size().x + (overlay_padding * 2.0) {
+                                            let diff = (galley.size().x + (overlay_padding * 2.0)) - final_bg_rect.width();
+                                            final_bg_rect = final_bg_rect.expand2(egui::vec2(diff / 2.0, 0.0));
+                                        }
+
+                                        painter.rect_filled(final_bg_rect, overlay_corner_radius, overlay_bg_color);
+                                        last_bottom_y = last_bottom_y.max(final_bg_rect.max.y);
+
+                                        // PERFECT CENTERING
+                                        let text_y = final_bg_rect.center().y - (galley.size().y / 2.0);
                                         let text_x = match overlay_settings.overlay_text_align {
-                                            crate::infrastructure::settings::TextAlign::Left => bg_rect.left() + overlay_padding,
-                                            crate::infrastructure::settings::TextAlign::Center => bg_rect.center().x,
-                                            crate::infrastructure::settings::TextAlign::Right => bg_rect.right() - overlay_padding,
+                                            crate::infrastructure::settings::TextAlign::Left => final_bg_rect.left() + overlay_padding,
+                                            crate::infrastructure::settings::TextAlign::Center => final_bg_rect.center().x,
+                                            crate::infrastructure::settings::TextAlign::Right => final_bg_rect.right() - overlay_padding,
                                         };
 
-                                        let text_pos = egui::pos2(text_x, bg_rect.top() + overlay_padding);
+                                        let text_pos = egui::pos2(text_x, text_y);
                                         painter.galley(text_pos, galley, overlay_text_color);
-                                    }
-                                } else {
-                                    // --- 2. Individual Strip Mode (for Single Lines / Non-merged) ---
-                                    for (i, line) in block_lines.iter().enumerate() {
+
+                                    } else {
+                                        // --- Individual Strip Mode (Single Line, No Bubble) ---
+                                        let line = &block_lines[0];
                                         let line_h_points = line.h / ppp;
                                         let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
                                         let wrap_width = (line.w / ppp).max(30.0);
 
-                                        let chunk_text = chunks.get(i).cloned().unwrap_or_default();
-                                        let full_text = crate::core::usecases::text_formatting_usecase::TextFormatter::wrap_thai_text(&chunk_text);
-
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(
-                                                full_text,
+                                                full_text.clone(),
                                                 egui::FontId::proportional(font_size),
                                                 overlay_text_color,
                                                 wrap_width
@@ -253,8 +296,8 @@ pub fn render_overlay_viewport(
                                         painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
 
                                         if !galley.rows.is_empty() {
-                                            let text_y = start_y + (bg_h - galley.size().y) / 2.0;
-
+                                            // PERFECT CENTERING
+                                            let text_y = bg.center().y - (galley.size().y / 2.0);
                                             let text_x = match overlay_settings.overlay_text_align {
                                                 crate::infrastructure::settings::TextAlign::Left => bg.left() + overlay_padding/2.0,
                                                 crate::infrastructure::settings::TextAlign::Center => bg.center().x,
@@ -264,38 +307,6 @@ pub fn render_overlay_viewport(
                                             let text_pos = egui::pos2(text_x, text_y);
                                             painter.galley(text_pos, galley, overlay_text_color);
                                         }
-                                    }
-                                }
-
-                                // If the translation generated more chunks than original lines
-                                if chunks.len() > block_lines.len() {
-                                    let last_line = block_lines.last().unwrap();
-                                    let mut extra_y = last_bottom_y + 4.0;
-                                    for extra_chunk in &chunks[block_lines.len()..] {
-                                        let line_h_points = last_line.h / ppp;
-                                        let font_size = overlay_settings.overlay_font_size.min(line_h_points * 1.2).max(8.0);
-                                        let wrap_width = (max_text_w - (last_line.x / ppp) + full_rect.left()).max(100.0);
-                                        let galley = ctx.fonts(|f| {
-                                            f.layout(
-                                                extra_chunk.clone(),
-                                                egui::FontId::proportional(font_size),
-                                                overlay_text_color,
-                                                wrap_width,
-                                            )
-                                        });
-
-                                        let bg_w = (last_line.w / ppp).max(galley.size().x + (overlay_padding * 2.0)).min(wrap_width + (overlay_padding * 2.0));
-                                        let bg_h = galley.size().y + overlay_padding;
-                                        let bg = egui::Rect::from_min_size(
-                                            egui::pos2((last_line.x / ppp) - overlay_padding/2.0, extra_y),
-                                            egui::vec2(bg_w + overlay_padding, bg_h),
-                                        );
-                                        painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
-
-                                        let text_pos = egui::pos2(last_line.x / ppp, extra_y + overlay_padding/2.0);
-                                        painter.galley(text_pos, galley, overlay_text_color);
-                                        extra_y += bg_h + 4.0;
-                                        last_bottom_y = last_bottom_y.max(extra_y);
                                     }
                                 }
 
