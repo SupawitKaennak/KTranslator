@@ -47,8 +47,10 @@ impl YoloBubbleDetector {
             anyhow::bail!("YOLO Speech Bubble detector model not found at {}. Please download it in settings first.", resolved_path.display());
         }
 
-        let session =
-            super::onnx_inference_engine::OnnxEngine::create_session(&resolved_path, self.gpu_backend)?;
+        let session = super::onnx_inference_engine::OnnxEngine::create_session(
+            &resolved_path,
+            self.gpu_backend,
+        )?;
         *session_guard = Some(session);
         Ok(())
     }

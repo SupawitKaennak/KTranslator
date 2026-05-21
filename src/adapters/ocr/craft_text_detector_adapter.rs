@@ -184,12 +184,7 @@ impl CraftTextDetector {
                         }
                     }
 
-                    components.push((
-                        min_x as f32,
-                        min_y as f32,
-                        max_x as f32,
-                        max_y as f32,
-                    ));
+                    components.push((min_x as f32, min_y as f32, max_x as f32, max_y as f32));
                 }
             }
         }

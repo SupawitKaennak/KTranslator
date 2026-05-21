@@ -26,7 +26,8 @@ impl GeminiTranslator {
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
+        let client =
+            llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -104,8 +105,13 @@ impl Translator for GeminiTranslator {
             ));
         }
 
-        let prompt =
-            llm_shared_utilities::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let prompt = llm_shared_utilities::build_prompt(
+            text,
+            source,
+            target,
+            self.behavior.as_ref(),
+            context_hint,
+        );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.1);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
 
@@ -203,7 +209,10 @@ impl Translator for GeminiTranslator {
             .json(&body)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!("send generateContent request: {:?}", e))
+                crate::core::error::KError::Translation(format!(
+                    "send generateContent request: {:?}",
+                    e
+                ))
             })?;
 
         if !resp.status().is_success() {
@@ -215,7 +224,10 @@ impl Translator for GeminiTranslator {
         }
 
         let data: ResponseBody = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!("parse generateContent response: {:?}", e))
+            crate::core::error::KError::Translation(format!(
+                "parse generateContent response: {:?}",
+                e
+            ))
         })?;
 
         let corrected = data

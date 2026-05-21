@@ -161,10 +161,10 @@ pub fn check_craft_exists() -> bool {
             p = exe_dir.join(CRAFT_TEXT_DETECTOR_MODEL.path);
         }
     }
-    p.exists()
-        && fs::metadata(&p)
-            .map(|m| m.len() > 1 * 1024 * 1024)
-            .unwrap_or(false)
+    match fs::metadata(&p) {
+        Ok(m) => m.is_file() && m.len() > 1024 * 1024,
+        Err(_) => false,
+    }
 }
 
 pub use crate::core::types::DownloadProgress;
