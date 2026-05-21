@@ -62,6 +62,7 @@ pub struct PipelineContext {
     pub jp_merge_vertical: bool,
     pub th_segmentation: crate::infrastructure::settings::ThaiSegmentationMode,
     pub enable_batching: bool,
+    pub enable_llm_ocr_correction: bool,
 
     // --- Context/history ---
     pub context_segments: Vec<String>,
@@ -106,6 +107,7 @@ impl TranslationPipeline {
             jp_merge_vertical,
             th_segmentation,
             enable_batching,
+            enable_llm_ocr_correction,
             context_segments,
             contextual_translation,
             context_window_size,
@@ -213,7 +215,27 @@ impl TranslationPipeline {
             .map(|b| b.source_text.replace('\n', " "))
             .collect::<Vec<_>>()
             .join("\n");
-        let ocr_text_base = TextCleaner::clean(&raw_ocr_text, &txt_proc_cfg);
+        let mut ocr_text_base = TextCleaner::clean(&raw_ocr_text, &txt_proc_cfg);
+
+        // Optional: LLM OCR Correction
+        if enable_llm_ocr_correction {
+            if let Some(translator_arc) = &translator {
+                let _ = status_tx.send(BgResult::StatusUpdate {
+                    slot_idx,
+                    status: "Correcting OCR with LLM...".to_string(),
+                });
+                tracing::info!(slot = slot_idx, "Applying LLM OCR correction");
+                match translator_arc.correct_text(&ocr_text_base, source_lang.as_ref()) {
+                    Ok(corrected) => {
+                        tracing::debug!(slot = slot_idx, "OCR Corrected: {} -> {}", ocr_text_base, corrected);
+                        ocr_text_base = corrected;
+                    }
+                    Err(e) => {
+                        tracing::warn!(slot = slot_idx, "LLM OCR Correction failed: {:?}", e);
+                    }
+                }
+            }
+        }
 
         // Helper check: Perfect Translation Memory Hit
         if let Some(memory_trans) =
