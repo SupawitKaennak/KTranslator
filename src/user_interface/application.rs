@@ -568,9 +568,8 @@ impl eframe::App for App {
                     }
                     if resp.do_crop {
                         let display_id = model.slots[i].display_id;
-                        let existing_rect = model.slots[i].rect;
                         drop(model);
-                        match RegionOverlayState::start(i, display_id, ui.ctx(), existing_rect) {
+                        match RegionOverlayState::start(i, display_id, ui.ctx(), None) {
                             Ok(st) => {
                                 *self.region_finish.lock() = None;
                                 self.region_session = Some(Arc::new(Mutex::new(st)));
