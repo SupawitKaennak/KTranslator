@@ -3,7 +3,7 @@
 
 ---
 <img width="2290" height="1314" alt="{D0FD1C9F-76EE-40F6-ACDC-8BA0DBB8BCF9}" src="https://github.com/user-attachments/assets/55f7f3f6-4f9e-4e13-9b1d-b9f1ea110aba" /><br>
-<img width="2364" height="1265" alt="{5A9B19F6-D00B-4864-B056-41FC0FED722C}" src="https://github.com/user-attachments/assets/30cf32da-44ad-4686-9852-3028a4b82775" /><br>
+<img width="2245" height="1169" alt="{CB32388A-95A4-4669-BD83-F3F1FD8C83FF}" src="https://github.com/user-attachments/assets/800453ff-888a-4630-8f55-4d9b6b8de1ce" /><br>
 <img width="2562" height="1440" alt="{6E9BAEBF-E11A-4561-8FF7-583830210EDA}" src="https://github.com/user-attachments/assets/cee5db85-4186-4c21-8608-c5c676a4ff01" /><br>
 
 <a name="thai"></a>
