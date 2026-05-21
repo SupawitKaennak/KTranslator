@@ -9,153 +9,119 @@ pub fn render_tab_translation_behavior(
     ui.heading(i18n.tab_translation_behavior);
     ui.add_space(8.0);
 
-    let beh = &mut settings.trans_behavior;
+    let is_llm = settings.provider != crate::infrastructure::settings::TranslationProvider::Google;
 
-    super::section_header(ui, i18n.beh_prompt_cust);
-    ui.checkbox(
-        &mut beh.custom_prompts.enabled,
-        "Enable Custom AI Prompts Overrides",
-    );
-    if beh.custom_prompts.enabled {
-        ui.add_space(4.0);
-        egui::CollapsingHeader::new("Edit Prompt Templates")
-            .default_open(true)
-            .show(ui, |ui| {
-                ui.label(egui::RichText::new("Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}").small().color(egui::Color32::GRAY));
-                ui.add_space(6.0);
+    ui.add_enabled_ui(is_llm, |ui| {
+        let beh = &mut settings.trans_behavior;
 
-                ui.label("System Prompt (Role & Guidelines):");
-                ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.system_prompt).desired_rows(3).desired_width(f32::INFINITY));
-                ui.add_space(6.0);
-
-                ui.label("Single-line User Prompt Template:");
-                ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.single_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
-                ui.add_space(6.0);
-
-                ui.label("Multi-line Batch User Prompt Template:");
-                ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.multi_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
-                ui.add_space(4.0);
-
-                if ui.button("Reset to Default Prompts").clicked() {
-                    beh.custom_prompts = crate::infrastructure::settings::CustomPromptSettings {
-                        enabled: true,
-                        ..Default::default()
-                    };
-                }
-            });
-    }
-
-    ui.add_space(12.0);
-    ui.separator();
-    ui.add_space(8.0);
-
-    super::section_header(ui, i18n.beh_preset_modes);
-    ui.horizontal(|ui| {
-        ui.radio_value(
-            &mut beh.preset,
-            crate::infrastructure::settings::TranslationStylePreset::Standard,
-            "Standard",
-        );
-        ui.radio_value(
-            &mut beh.preset,
-            crate::infrastructure::settings::TranslationStylePreset::JrpgMode,
-            "JRPG Mode",
-        );
-        ui.radio_value(
-            &mut beh.preset,
-            crate::infrastructure::settings::TranslationStylePreset::AnimeSubtitle,
-            "Anime Subtitle",
-        );
-    });
-    ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.radio_value(
-            &mut beh.preset,
-            crate::infrastructure::settings::TranslationStylePreset::VisualNovel,
-            "Visual Novel",
-        );
-        ui.radio_value(
-            &mut beh.preset,
-            crate::infrastructure::settings::TranslationStylePreset::StreamerMode,
-            "Streamer Mode",
-        );
-    });
-
-    ui.add_space(12.0);
-    ui.separator();
-    ui.add_space(8.0);
-
-    super::section_header(ui, i18n.beh_sliders);
-    egui::Grid::new("behavior_sliders_grid")
-        .num_columns(2)
-        .spacing([20.0, 10.0])
-        .show(ui, |ui| {
-            ui.label("Style Balance:");
-            ui.add(
-                egui::Slider::new(&mut beh.literal_natural_slider, 0.0..=1.0)
-                    .text("Literal ↔ Natural"),
+        super::section_header(ui, i18n.beh_preset_modes);
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut beh.preset,
+                crate::infrastructure::settings::TranslationStylePreset::Standard,
+                "Standard",
             );
-            ui.end_row();
-
-            ui.label("AI Creativity:");
-            ui.add(egui::Slider::new(&mut beh.creativity, 0.0..=1.0).text("Low (Strict) ↔ High"));
-            ui.end_row();
+            ui.radio_value(
+                &mut beh.preset,
+                crate::infrastructure::settings::TranslationStylePreset::JrpgMode,
+                "JRPG Mode",
+            );
+            ui.radio_value(
+                &mut beh.preset,
+                crate::infrastructure::settings::TranslationStylePreset::AnimeSubtitle,
+                "Anime Subtitle",
+            );
+        });
+        ui.add_space(4.0);
+        ui.horizontal(|ui| {
+            ui.radio_value(
+                &mut beh.preset,
+                crate::infrastructure::settings::TranslationStylePreset::VisualNovel,
+                "Visual Novel",
+            );
+            ui.radio_value(
+                &mut beh.preset,
+                crate::infrastructure::settings::TranslationStylePreset::StreamerMode,
+                "Streamer Mode",
+            );
         });
 
-    ui.add_space(12.0);
-    ui.separator();
-    ui.add_space(8.0);
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
 
-    super::section_header(ui, i18n.beh_tone_rules);
-    ui.horizontal(|ui| {
-        ui.label("Voice Tone:");
-        egui::ComboBox::from_id_salt("tone_combobox")
-            .selected_text(format!("{:?}", beh.tone))
-            .show_ui(ui, |ui| {
-                ui.selectable_value(
-                    &mut beh.tone,
-                    crate::infrastructure::settings::TranslationTone::Auto,
-                    "Auto",
+        super::section_header(ui, i18n.beh_sliders);
+        egui::Grid::new("behavior_sliders_grid")
+            .num_columns(2)
+            .spacing([20.0, 10.0])
+            .show(ui, |ui| {
+                ui.label("Style Balance:");
+                ui.add(
+                    egui::Slider::new(&mut beh.literal_natural_slider, 0.0..=1.0)
+                        .text("Literal ↔ Natural"),
                 );
-                ui.selectable_value(
-                    &mut beh.tone,
-                    crate::infrastructure::settings::TranslationTone::Formal,
-                    "Formal / Polite",
-                );
-                ui.selectable_value(
-                    &mut beh.tone,
-                    crate::infrastructure::settings::TranslationTone::Casual,
-                    "Casual / Lively",
-                );
-                ui.selectable_value(
-                    &mut beh.tone,
-                    crate::infrastructure::settings::TranslationTone::Polite,
-                    "Standard Public Polite",
-                );
+                ui.end_row();
+
+                ui.label("AI Creativity:");
+                ui.add(egui::Slider::new(&mut beh.creativity, 0.0..=1.0).text("Low (Strict) ↔ High"));
+                ui.end_row();
+            });
+
+        ui.add_space(12.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        super::section_header(ui, i18n.beh_tone_rules);
+        ui.horizontal(|ui| {
+            ui.label("Voice Tone:");
+            egui::ComboBox::from_id_salt("tone_combobox")
+                .selected_text(format!("{:?}", beh.tone))
+                .show_ui(ui, |ui| {
+                    ui.selectable_value(
+                        &mut beh.tone,
+                        crate::infrastructure::settings::TranslationTone::Auto,
+                        "Auto",
+                    );
+                    ui.selectable_value(
+                        &mut beh.tone,
+                        crate::infrastructure::settings::TranslationTone::Formal,
+                        "Formal / Polite",
+                    );
+                    ui.selectable_value(
+                        &mut beh.tone,
+                        crate::infrastructure::settings::TranslationTone::Casual,
+                        "Casual / Lively",
+                    );
+                    ui.selectable_value(
+                        &mut beh.tone,
+                        crate::infrastructure::settings::TranslationTone::Polite,
+                        "Standard Public Polite",
+                    );
+                });
+        });
+
+        ui.add_space(10.0);
+        super::section_header(ui, i18n.beh_strict_pres);
+        egui::Grid::new("preservations_grid")
+            .num_columns(2)
+            .spacing([15.0, 8.0])
+            .show(ui, |ui| {
+                ui.checkbox(&mut beh.preserve_formatting, "Preserve Formatting");
+                ui.checkbox(&mut beh.preserve_line_breaks, "Preserve Line Breaks");
+                ui.end_row();
+
+                ui.checkbox(&mut beh.preserve_punctuation, "Preserve Punctuation");
+                ui.checkbox(&mut beh.preserve_honorifics, "Preserve Honorifics (-san)");
+                ui.end_row();
+
+                ui.checkbox(&mut beh.preserve_emojis, "Preserve Emojis / Kaomojis");
+                ui.checkbox(&mut beh.contextual_translation, "Contextual Adaptation");
+                ui.end_row();
+
+                ui.checkbox(&mut beh.profanity_filter, "Safe Profanity Filter");
+                ui.end_row();
             });
     });
-
-    ui.add_space(10.0);
-    super::section_header(ui, i18n.beh_strict_pres);
-    egui::Grid::new("preservations_grid")
-        .num_columns(2)
-        .spacing([15.0, 8.0])
-        .show(ui, |ui| {
-            ui.checkbox(&mut beh.preserve_formatting, "Preserve Formatting");
-            ui.checkbox(&mut beh.preserve_line_breaks, "Preserve Line Breaks");
-            ui.end_row();
-
-            ui.checkbox(&mut beh.preserve_punctuation, "Preserve Punctuation");
-            ui.checkbox(&mut beh.preserve_honorifics, "Preserve Honorifics (-san)");
-            ui.end_row();
-
-            ui.checkbox(&mut beh.preserve_emojis, "Preserve Emojis / Kaomojis");
-            ui.checkbox(&mut beh.contextual_translation, "Contextual Adaptation");
-            ui.end_row();
-
-            ui.checkbox(&mut beh.profanity_filter, "Safe Profanity Filter");
-            ui.end_row();
-        });
 
     ui.add_space(16.0);
     ui.separator();
@@ -199,17 +165,6 @@ pub fn render_tab_translation_behavior(
                 );
                 ui.label(
                     egui::RichText::new("Hold text after dialogue disappears")
-                        .small()
-                        .color(egui::Color32::GRAY),
-                );
-            });
-            ui.end_row();
-
-            ui.label("Context Memory:");
-            ui.horizontal(|ui| {
-                ui.add(egui::Slider::new(&mut real.context_window_size, 0..=5).text("Segments"));
-                ui.label(
-                    egui::RichText::new("Remember past chat history")
                         .small()
                         .color(egui::Color32::GRAY),
                 );

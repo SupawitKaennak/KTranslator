@@ -181,6 +181,61 @@ pub fn render_tab_ai_provider(
             ui.label("Using public Google Translate API. No API Key required.");
         }
     }
+
+    if settings.provider != TranslationProvider::Google {
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        super::section_header(ui, i18n.beh_prompt_cust);
+        ui.checkbox(
+            &mut settings.trans_behavior.custom_prompts.enabled,
+            "Enable Custom AI Prompts Overrides",
+        );
+        if settings.trans_behavior.custom_prompts.enabled {
+            ui.add_space(4.0);
+            egui::CollapsingHeader::new("Edit Prompt Templates")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new("Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}").small().color(egui::Color32::GRAY));
+                    ui.add_space(6.0);
+
+                    ui.label("System Prompt (Role & Guidelines):");
+                    ui.add(egui::TextEdit::multiline(&mut settings.trans_behavior.custom_prompts.system_prompt).desired_rows(3).desired_width(f32::INFINITY));
+                    ui.add_space(6.0);
+
+                    ui.label("Single-line User Prompt Template:");
+                    ui.add(egui::TextEdit::multiline(&mut settings.trans_behavior.custom_prompts.single_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
+                    ui.add_space(6.0);
+
+                    ui.label("Multi-line Batch User Prompt Template:");
+                    ui.add(egui::TextEdit::multiline(&mut settings.trans_behavior.custom_prompts.multi_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
+                    ui.add_space(4.0);
+
+                    if ui.button("Reset to Default Prompts").clicked() {
+                        settings.trans_behavior.custom_prompts = crate::infrastructure::settings::CustomPromptSettings {
+                            enabled: true,
+                            ..Default::default()
+                        };
+                    }
+                });
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        super::section_header(ui, "AI Memory & Context");
+        ui.horizontal(|ui| {
+            ui.label("Context Memory:");
+            ui.add(egui::Slider::new(&mut settings.realtime.context_window_size, 0..=5).text("Segments"));
+            ui.label(
+                egui::RichText::new("Remember past chat history for better contextual translation")
+                    .small()
+                    .color(egui::Color32::GRAY),
+            );
+        });
+    }
 }
 
 fn render_api_key_field(
