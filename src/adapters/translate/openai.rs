@@ -139,6 +139,77 @@ impl Translator for OpenAiTranslator {
 
         Ok(translated)
     }
+
+    fn correct_text(
+        &self,
+        text: &str,
+        _lang_hint: Option<&LanguageTag>,
+    ) -> Result<String, crate::core::error::KError> {
+        if self.base_url.is_empty() {
+            return Err(crate::core::error::KError::Translation(
+                "Custom OpenAI Base URL is empty".to_string(),
+            ));
+        }
+
+        let system = "You are an OCR error correction engine. Fix typos and garbled text in the following input. Return ONLY the corrected text. Do NOT translate it. Preserve the original formatting.";
+        let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
+
+        let req_body = OpenAiRequest {
+            model: self.model.clone(),
+            messages: vec![
+                OpenAiMessage {
+                    role: "system".to_string(),
+                    content: system.to_string(),
+                },
+                OpenAiMessage {
+                    role: "user".to_string(),
+                    content: text.to_string(),
+                },
+            ],
+            temperature: 0.1, // Low temperature for high deterministic accuracy
+            max_tokens,
+        };
+
+        let endpoint = format!("{}/chat/completions", self.base_url);
+
+        let mut req = self.client.post(&endpoint);
+        if !self.api_key.trim().is_empty() {
+            req = req.bearer_auth(self.api_key.trim());
+        }
+
+        let res = req.json(&req_body).send().map_err(|e| {
+            crate::core::error::KError::Translation(format!(
+                "OpenAI compatible request failed during OCR correction: {:?}",
+                e
+            ))
+        })?;
+
+        let status = res.status();
+        let body_text = res.text().unwrap_or_default();
+
+        if !status.is_success() {
+            return Err(crate::core::error::KError::Translation(format!(
+                "OpenAI API error during OCR correction {}: {}",
+                status, body_text
+            )));
+        }
+
+        let resp: OpenAiResponse = serde_json::from_str(&body_text).map_err(|e| {
+            crate::core::error::KError::Translation(format!(
+                "Failed to parse OpenAI API response: {}, response was: {}",
+                e, body_text
+            ))
+        })?;
+
+        let corrected = resp
+            .choices
+            .first()
+            .and_then(|c| c.message.as_ref())
+            .map(|m| m.content.trim().to_string())
+            .unwrap_or_default();
+
+        Ok(corrected)
+    }
 }
 
 #[derive(Debug, Serialize)]

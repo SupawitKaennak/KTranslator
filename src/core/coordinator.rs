@@ -15,6 +15,8 @@ pub struct BackgroundCoordinator {
     pool: Mutex<threadpool::ThreadPool>,
     yolo_bubble:
         Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>>>,
+    craft_text:
+        Arc<Mutex<Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>>>,
 }
 
 impl BackgroundCoordinator {
@@ -22,11 +24,13 @@ impl BackgroundCoordinator {
         let (bg_tx, bg_rx) = mpsc::channel();
         let pool = Mutex::new(threadpool::ThreadPool::new(4)); // Default 4 worker threads
         let yolo_bubble = Arc::new(Mutex::new(None));
+        let craft_text = Arc::new(Mutex::new(None));
         Self {
             bg_tx,
             bg_rx,
             pool,
             yolo_bubble,
+            craft_text,
         }
     }
 
@@ -55,11 +59,25 @@ impl BackgroundCoordinator {
             return;
         }
 
-        let yolo_detector = if settings.use_yolo_bubble {
+        let yolo_detector = if settings.use_yolo_bubble || settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble {
             let mut guard = self.yolo_bubble.lock();
             if guard.is_none() && crate::infrastructure::asset_download_manager::check_bubble_yolo_exists() {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector::new(
+                        settings.perf.gpu_backend,
+                    ),
+                ));
+            }
+            guard.clone()
+        } else {
+            None
+        };
+
+        let craft_detector = if settings.text_detector == crate::infrastructure::settings::TextDetectorMode::CraftRegion {
+            let mut guard = self.craft_text.lock();
+            if guard.is_none() && crate::infrastructure::asset_download_manager::check_craft_exists() {
+                *guard = Some(Arc::new(
+                    crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector::new(
                         settings.perf.gpu_backend,
                     ),
                 ));
@@ -136,6 +154,8 @@ impl BackgroundCoordinator {
                     translator: translator.clone(),
                     platform: platform.clone(),
                     yolo_detector: yolo_detector.clone(),
+                    craft_detector: craft_detector.clone(),
+                    text_detector_mode: settings.text_detector,
                     prev_hash: slots_runtime[i].last_hash,
                     stable_hash: slot.stable_hash,
                     stable_since_ms: slot.stable_since_ms,
@@ -151,6 +171,7 @@ impl BackgroundCoordinator {
                     jp_merge_vertical: settings.txt_proc.jp_merge_vertical,
                     th_segmentation: settings.txt_proc.th_segmentation,
                     enable_batching: settings.perf.enable_batching,
+                    enable_llm_ocr_correction: settings.enable_llm_ocr_correction,
                     context_segments: slots_runtime[i]
                         .recent_translations
                         .iter()
