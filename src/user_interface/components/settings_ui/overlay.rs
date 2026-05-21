@@ -176,7 +176,7 @@ pub fn render_tab_overlay(
                             egui::Color32::from_rgb(235, 120, 0),
                             "⚠ CRAFT Text Detector model is not installed.",
                         );
-                        if ui.button("Download (20MB)").clicked() {
+                        if ui.button("Download (83MB)").clicked() {
                             let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::CraftDetector);
                         }
                     });
