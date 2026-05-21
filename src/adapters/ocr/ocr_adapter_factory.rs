@@ -1,5 +1,6 @@
 use super::{
-    builtin_paddle_ocr_adapter::BuiltinPaddleOcr, manga_ocr_onnx_adapter::OnnxMangaRecognizer, windows_native_ocr_adapter::WindowsOcr,
+    builtin_paddle_ocr_adapter::BuiltinPaddleOcr, manga_ocr_onnx_adapter::OnnxMangaRecognizer,
+    windows_native_ocr_adapter::WindowsOcr,
 };
 use crate::core::ports::OcrEngine;
 use crate::infrastructure::settings::{OcrEngineType, OcrMode, Settings};

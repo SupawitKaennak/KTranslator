@@ -63,7 +63,9 @@ pub fn render_tab_translation_behavior(
                 ui.end_row();
 
                 ui.label("AI Creativity:");
-                ui.add(egui::Slider::new(&mut beh.creativity, 0.0..=1.0).text("Low (Strict) ↔ High"));
+                ui.add(
+                    egui::Slider::new(&mut beh.creativity, 0.0..=1.0).text("Low (Strict) ↔ High"),
+                );
                 ui.end_row();
             });
 

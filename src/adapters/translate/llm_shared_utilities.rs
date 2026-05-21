@@ -64,7 +64,9 @@ pub fn build_prompt(
     } else {
         None
     };
-    llm_prompt_builder::build_translation_prompt_with_behavior(&lines, source, target, behavior, ctx)
+    llm_prompt_builder::build_translation_prompt_with_behavior(
+        &lines, source, target, behavior, ctx,
+    )
 }
 
 /// Estimates the output token budget based on input text length.

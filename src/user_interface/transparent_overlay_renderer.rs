@@ -217,7 +217,7 @@ pub fn render_overlay_viewport(
                                         // --- Unified / Bubble Mode ---
                                         let bg_w = final_bg_rect.width().max(50.0);
                                         let font_size = overlay_settings.overlay_font_size;
-                                        
+
                                         // Pre-layout to check height
                                         let galley = ctx.fonts(|f| {
                                             let mut job = egui::text::LayoutJob::simple(
@@ -240,7 +240,7 @@ pub fn render_overlay_viewport(
                                         if final_bg_rect.height() < required_h {
                                             final_bg_rect.set_bottom(final_bg_rect.top() + required_h);
                                         }
-                                        
+
                                         // For generated bubbles (no YOLO), ensure minimum width based on text
                                         if matched_bubble_rect.is_none() && final_bg_rect.width() < galley.size().x + (overlay_padding * 2.0) {
                                             let diff = (galley.size().x + (overlay_padding * 2.0)) - final_bg_rect.width();

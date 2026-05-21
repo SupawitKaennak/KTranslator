@@ -45,14 +45,11 @@ pub fn perform_ocr(
                                 let y_diff = (a.y1 - b.y1).abs();
 
                                 if y_diff > tolerance {
-                                    a.y1.partial_cmp(&b.y1)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                    a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else if jp_merge_vertical {
-                                    b.x1.partial_cmp(&a.x1)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                    b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else {
-                                    a.x1.partial_cmp(&b.x1)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                    a.x1.partial_cmp(&b.x1).unwrap_or(std::cmp::Ordering::Equal)
                                 }
                             });
 
@@ -82,14 +79,11 @@ pub fn perform_ocr(
                                 let y_diff = (a.y1 - b.y1).abs();
 
                                 if y_diff > tolerance {
-                                    a.y1.partial_cmp(&b.y1)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                    a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else if jp_merge_vertical {
-                                    b.x1.partial_cmp(&a.x1)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                    b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else {
-                                    a.x1.partial_cmp(&b.x1)
-                                        .unwrap_or(std::cmp::Ordering::Equal)
+                                    a.x1.partial_cmp(&b.x1).unwrap_or(std::cmp::Ordering::Equal)
                                 }
                             });
 
@@ -124,10 +118,9 @@ pub fn perform_ocr(
                 .saturating_sub(crop_y);
 
             if crop_w >= 5 && crop_h >= 5 {
-                let cropped_frame =
-                    crate::core::usecases::image_processing_usecase::crop_frame(
-                        frame, crop_x, crop_y, crop_w, crop_h,
-                    );
+                let cropped_frame = crate::core::usecases::image_processing_usecase::crop_frame(
+                    frame, crop_x, crop_y, crop_w, crop_h,
+                );
 
                 let (proc_data, proc_w, proc_h) =
                     crate::core::usecases::image_processing_usecase::process_image_for_ocr(
@@ -141,9 +134,7 @@ pub fn perform_ocr(
                 processed_crop.width = proc_w;
                 processed_crop.height = proc_h;
 
-                if let Ok(mut lines) =
-                    ocr_engine.recognize_lines(processed_crop, source_lang)
-                {
+                if let Ok(mut lines) = ocr_engine.recognize_lines(processed_crop, source_lang) {
                     let scale = img_proc_cfg.resize_scale;
                     for line in &mut lines {
                         if (scale - 1.0).abs() > 0.01 {
@@ -191,4 +182,3 @@ pub fn perform_ocr(
 
     (raw_ocr_lines, yolo_bubbles, detection_successful)
 }
-

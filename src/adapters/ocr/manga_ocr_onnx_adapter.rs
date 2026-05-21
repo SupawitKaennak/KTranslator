@@ -77,11 +77,16 @@ impl OnnxMangaRecognizer {
             anyhow::bail!("Manga-OCR models not found. Please ensure the 'models' folder is present at {:?} or next to the .exe", resolved_path);
         }
 
-        let encoder =
-            super::onnx_inference_engine::OnnxEngine::create_session(&encoder_path, self.gpu_backend)?;
-        let decoder =
-            super::onnx_inference_engine::OnnxEngine::create_session(&decoder_path, self.gpu_backend)?;
-        let yolo = super::onnx_inference_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
+        let encoder = super::onnx_inference_engine::OnnxEngine::create_session(
+            &encoder_path,
+            self.gpu_backend,
+        )?;
+        let decoder = super::onnx_inference_engine::OnnxEngine::create_session(
+            &decoder_path,
+            self.gpu_backend,
+        )?;
+        let yolo =
+            super::onnx_inference_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
 
         let tokenizer = Tokenizer::from_file(tokenizer_path)
             .map_err(|e| anyhow::anyhow!("Tokenizer Error: {}", e))?;
