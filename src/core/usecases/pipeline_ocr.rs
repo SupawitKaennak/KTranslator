@@ -4,6 +4,7 @@ use crate::core::ports::{FrameRgba, OcrEngine, OcrTextLine};
 use crate::infrastructure::settings::{ImageProcessingSettings, TextDetectorMode};
 use std::sync::Arc;
 
+#[allow(clippy::too_many_arguments)]
 pub fn perform_ocr(
     frame: &FrameRgba,
     ocr_engine: &Arc<dyn OcrEngine>,
