@@ -5,25 +5,25 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-mod ai_provider;
-mod debugging;
-mod general;
+mod debugging_tab;
+mod general_tab;
 mod image_processing_tab;
-mod ocr;
-mod overlay;
-mod performance;
+mod ocr_engine_tab;
+mod overlay_setting_tab;
+mod performance_tuning_tab;
 mod text_processing_tab;
 mod translation_behavior_tab;
+mod translation_provider_tab;
 
-use ai_provider::render_tab_ai_provider;
-use debugging::render_tab_debugging;
-use general::render_tab_general;
+use debugging_tab::render_tab_debugging;
+use general_tab::render_tab_general;
 use image_processing_tab::render_tab_image_processing;
-use ocr::render_tab_ocr;
-use overlay::render_tab_overlay;
-use performance::render_tab_performance;
+use ocr_engine_tab::render_tab_ocr;
+use overlay_setting_tab::render_tab_overlay;
+use performance_tuning_tab::render_tab_performance;
 use text_processing_tab::render_tab_text_processing;
 use translation_behavior_tab::render_tab_translation_behavior;
+use translation_provider_tab::render_tab_ai_provider;
 
 pub struct SettingsWindowResponse {
     pub close_clicked: bool,
