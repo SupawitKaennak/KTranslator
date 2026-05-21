@@ -99,7 +99,7 @@ pub fn render_tab_overlay(
 
     ui.horizontal(|ui| {
         ui.label("Text Detector Mode:");
-        egui::ComboBox::from_id_source("text_detector_mode")
+        egui::ComboBox::from_id_salt("text_detector_mode")
             .selected_text(match settings.text_detector {
                 crate::infrastructure::settings::TextDetectorMode::None => "None (Full Frame)",
                 crate::infrastructure::settings::TextDetectorMode::YoloBubble => "YOLO Speech Bubble",
