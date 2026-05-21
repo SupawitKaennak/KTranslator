@@ -137,7 +137,7 @@ pub const BUBBLE_YOLO_MODEL: ModelAsset<'static> = ModelAsset {
 
 pub const CRAFT_TEXT_DETECTOR_MODEL: ModelAsset<'static> = ModelAsset {
     name: "CRAFT Text Detector",
-    url: "https://huggingface.co/parm-parm/craft-text-detector-onnx/resolve/main/craft_mlt_25k.onnx",
+    url: "https://huggingface.co/ml6team/craft-onnx/resolve/main/craft.onnx",
     path: "models/craft/craft.onnx",
 };
 
