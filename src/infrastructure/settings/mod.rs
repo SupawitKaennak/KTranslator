@@ -39,6 +39,7 @@ pub struct Settings {
     pub custom_openai_use_list: bool,
     pub dark_mode: bool,
     pub smart_merge: bool,
+    pub enable_llm_ocr_correction: bool,
     // Overlay Customization
     pub overlay_bg_color: [u8; 4],
     pub overlay_text_color: [u8; 4],
@@ -49,6 +50,7 @@ pub struct Settings {
 
     pub use_yolo_bubble: bool,
     pub show_yolo_debug_borders: bool,
+    pub text_detector: TextDetectorMode,
 
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
@@ -84,6 +86,7 @@ impl Default for Settings {
             custom_openai_use_list: false,
             dark_mode: true,
             smart_merge: false,
+            enable_llm_ocr_correction: false,
             overlay_bg_color: [0, 0, 0, 180], // Semi-transparent black
             overlay_text_color: [255, 255, 255, 255], // White
             overlay_font_size: 14.0,
@@ -92,6 +95,7 @@ impl Default for Settings {
             overlay_text_align: TextAlign::Center,
             use_yolo_bubble: false,
             show_yolo_debug_borders: false,
+            text_detector: TextDetectorMode::None,
             ui_language: UiLanguage::System,
             hide_from_capture: true,
             img_proc: ImageProcessingSettings::default(),

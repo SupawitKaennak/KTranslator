@@ -296,7 +296,7 @@ pub fn process_image_for_ocr(
         std::mem::swap(&mut buf_a, &mut buf_b);
     }
 
-    // 9. Resize Scale mapping
+    // 9. Resize Scale mapping (Bilinear Interpolation)
     let mut final_w = width;
     let mut final_h = height;
     if (config.resize_scale - 1.0).abs() > 0.01 {
@@ -304,25 +304,162 @@ pub fn process_image_for_ocr(
         final_h = (height as f32 * config.resize_scale).max(1.0) as u32;
         buf_b.resize((final_w * final_h * 4) as usize, 0);
         let orig_w = width as usize;
+        let orig_h = height as usize;
+        let inv_scale = 1.0 / config.resize_scale;
         for y in 0..final_h {
-            let orig_y = ((y as f32 / config.resize_scale) as usize).min(height as usize - 1);
+            let fy = (y as f32 * inv_scale).min((orig_h - 1) as f32);
+            let y0 = fy as usize;
+            let y1 = (y0 + 1).min(orig_h - 1);
+            let wy = fy - y0 as f32;
+            let wy_inv = 1.0 - wy;
             for x in 0..final_w {
-                let orig_x = ((x as f32 / config.resize_scale) as usize).min(width as usize - 1);
-                let src_idx = (orig_y * orig_w + orig_x) * 4;
+                let fx = (x as f32 * inv_scale).min((orig_w - 1) as f32);
+                let x0 = fx as usize;
+                let x1 = (x0 + 1).min(orig_w - 1);
+                let wx = fx - x0 as f32;
+                let wx_inv = 1.0 - wx;
+
+                let i00 = (y0 * orig_w + x0) * 4;
+                let i10 = (y0 * orig_w + x1) * 4;
+                let i01 = (y1 * orig_w + x0) * 4;
+                let i11 = (y1 * orig_w + x1) * 4;
+
                 let dst_idx = ((y * final_w + x) * 4) as usize;
-                buf_b[dst_idx] = buf_a[src_idx];
-                buf_b[dst_idx + 1] = buf_a[src_idx + 1];
-                buf_b[dst_idx + 2] = buf_a[src_idx + 2];
-                buf_b[dst_idx + 3] = buf_a[src_idx + 3];
+                for c in 0..4 {
+                    let v = buf_a[i00 + c] as f32 * wx_inv * wy_inv
+                        + buf_a[i10 + c] as f32 * wx * wy_inv
+                        + buf_a[i01 + c] as f32 * wx_inv * wy
+                        + buf_a[i11 + c] as f32 * wx * wy;
+                    buf_b[dst_idx + c] = v.clamp(0.0, 255.0) as u8;
+                }
             }
         }
         std::mem::swap(&mut buf_a, &mut buf_b);
     }
 
-    // Deskew: not yet implemented — requires affine transform or Hough-based rotation.
-    // Enabling the setting will have no effect until this is implemented.
-    if config.deskew {
-        tracing::debug!("Deskew requested but not yet implemented — passing through unchanged");
+    // 10. Deskew via Projection-Profile Angle Estimation
+    // Finds the dominant text skew angle by maximizing horizontal projection variance,
+    // then rotates the image back to horizontal using affine transform with bilinear interpolation.
+    if config.deskew && final_w > 4 && final_h > 4 {
+        let w = final_w as usize;
+        let h = final_h as usize;
+
+        // Build grayscale luminance buffer for angle estimation
+        let mut gray = vec![0u8; w * h];
+        for i in 0..(w * h) {
+            let idx = i * 4;
+            gray[i] = ((buf_a[idx] as u32 * 77
+                + buf_a[idx + 1] as u32 * 150
+                + buf_a[idx + 2] as u32 * 29)
+                >> 8) as u8;
+        }
+
+        // Sweep angles from -15.0 to +15.0 degrees in 0.5-degree steps.
+        // For each angle, compute the variance of the horizontal projection profile.
+        // The angle that yields the highest variance aligns text rows horizontally.
+        let mut best_angle: f32 = 0.0;
+        let mut best_variance: f64 = 0.0;
+
+        let cx = w as f32 / 2.0;
+        let cy = h as f32 / 2.0;
+
+        // Iterate candidate angles
+        let mut angle = -15.0_f32;
+        while angle <= 15.0 {
+            let rad = angle.to_radians();
+            let cos_a = rad.cos();
+            let sin_a = rad.sin();
+
+            // Accumulate horizontal projection (sum of dark pixels per row)
+            let mut projection = vec![0u32; h];
+            for row in 0..h {
+                let mut row_sum = 0u32;
+                for col in 0..w {
+                    // Reverse-map destination pixel to source
+                    let dx = col as f32 - cx;
+                    let dy = row as f32 - cy;
+                    let sx = (cos_a * dx + sin_a * dy + cx) as isize;
+                    let sy = (-sin_a * dx + cos_a * dy + cy) as isize;
+                    if sx >= 0 && sx < w as isize && sy >= 0 && sy < h as isize {
+                        // Invert: dark pixels contribute more (text is typically dark)
+                        row_sum += 255 - gray[sy as usize * w + sx as usize] as u32;
+                    }
+                }
+                projection[row] = row_sum;
+            }
+
+            // Compute variance of the projection
+            let n = h as f64;
+            let sum: f64 = projection.iter().map(|v| *v as f64).sum();
+            let mean = sum / n;
+            let variance: f64 = projection
+                .iter()
+                .map(|v| {
+                    let diff = *v as f64 - mean;
+                    diff * diff
+                })
+                .sum::<f64>()
+                / n;
+
+            if variance > best_variance {
+                best_variance = variance;
+                best_angle = angle;
+            }
+
+            angle += 0.5;
+        }
+
+        // Only apply rotation if the detected skew exceeds 0.3 degrees
+        if best_angle.abs() > 0.3 {
+            tracing::debug!(angle = %best_angle, "Deskew: rotating image to correct skew");
+
+            let rad = (-best_angle).to_radians(); // negate to correct
+            let cos_a = rad.cos();
+            let sin_a = rad.sin();
+
+            buf_b.resize(buf_a.len(), 255);
+            // Fill with white background
+            for chunk in buf_b.chunks_exact_mut(4) {
+                chunk[0] = 255;
+                chunk[1] = 255;
+                chunk[2] = 255;
+                chunk[3] = 255;
+            }
+
+            for dy in 0..h {
+                for dx in 0..w {
+                    let fx = cos_a * (dx as f32 - cx) + sin_a * (dy as f32 - cy) + cx;
+                    let fy = -sin_a * (dx as f32 - cx) + cos_a * (dy as f32 - cy) + cy;
+
+                    // Bilinear sample from source
+                    if fx >= 0.0 && fx < (w - 1) as f32 && fy >= 0.0 && fy < (h - 1) as f32 {
+                        let x0 = fx as usize;
+                        let y0 = fy as usize;
+                        let x1 = x0 + 1;
+                        let y1 = y0 + 1;
+                        let wx = fx - x0 as f32;
+                        let wy = fy - y0 as f32;
+                        let wx_inv = 1.0 - wx;
+                        let wy_inv = 1.0 - wy;
+
+                        let i00 = (y0 * w + x0) * 4;
+                        let i10 = (y0 * w + x1) * 4;
+                        let i01 = (y1 * w + x0) * 4;
+                        let i11 = (y1 * w + x1) * 4;
+                        let dst = (dy * w + dx) * 4;
+
+                        for c in 0..4 {
+                            let v = buf_a[i00 + c] as f32 * wx_inv * wy_inv
+                                + buf_a[i10 + c] as f32 * wx * wy_inv
+                                + buf_a[i01 + c] as f32 * wx_inv * wy
+                                + buf_a[i11 + c] as f32 * wx * wy;
+                            buf_b[dst + c] = v.clamp(0.0, 255.0) as u8;
+                        }
+                    }
+                }
+            }
+            std::mem::swap(&mut buf_a, &mut buf_b);
+        }
     }
 
     let result = (buf_a.clone(), final_w, final_h);

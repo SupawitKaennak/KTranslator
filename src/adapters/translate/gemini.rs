@@ -164,6 +164,73 @@ impl Translator for GeminiTranslator {
 
         Ok(translated)
     }
+
+    fn correct_text(
+        &self,
+        text: &str,
+        _lang_hint: Option<&LanguageTag>,
+    ) -> Result<String, crate::core::error::KError> {
+        if self.api_key.trim().is_empty() {
+            return Err(crate::core::error::KError::Translation(
+                "Gemini API key is empty".to_string(),
+            ));
+        }
+
+        let system = "You are an OCR error correction engine. Fix typos and garbled text in the following input. Return ONLY the corrected text. Do NOT translate it. Preserve the original formatting.";
+        let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
+
+        let body = RequestBody {
+            system_instruction: Some(Content {
+                parts: vec![Part {
+                    text: system.to_string(),
+                }],
+            }),
+            contents: vec![Content {
+                parts: vec![Part {
+                    text: text.to_string(),
+                }],
+            }],
+            generation_config: Some(GenerationConfig {
+                temperature: Some(0.1), // Low temperature for high deterministic accuracy
+                max_output_tokens: Some(max_tokens),
+            }),
+        };
+
+        let resp = self
+            .client
+            .post(self.endpoint())
+            .query(&[("key", &self.api_key)])
+            .json(&body)
+            .send()
+            .map_err(|e| {
+                crate::core::error::KError::Translation(format!("send generateContent request: {:?}", e))
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            return Err(crate::core::error::KError::Translation(format!(
+                "Gemini API error during OCR correction: {status} {body}"
+            )));
+        }
+
+        let data: ResponseBody = resp.json().map_err(|e| {
+            crate::core::error::KError::Translation(format!("parse generateContent response: {:?}", e))
+        })?;
+
+        let corrected = data
+            .candidates
+            .first()
+            .and_then(|c| c.content.parts.first())
+            .map(|p| p.text.trim().to_string())
+            .ok_or_else(|| {
+                crate::core::error::KError::Translation(
+                    "Gemini returned no candidates during OCR correction".to_string(),
+                )
+            })?;
+
+        Ok(corrected)
+    }
 }
 
 #[derive(Serialize)]

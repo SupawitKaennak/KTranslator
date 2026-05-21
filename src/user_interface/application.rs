@@ -135,6 +135,11 @@ impl App {
                             crate::infrastructure::asset_download_manager::download_bubble_yolo_model(tx)
                                 .await;
                     }
+                    crate::infrastructure::settings::OcrEngineType::CraftDetector => {
+                        let _ =
+                            crate::infrastructure::asset_download_manager::download_craft_model(tx)
+                                .await;
+                    }
                     _ => {}
                 }
             });
