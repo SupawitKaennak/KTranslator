@@ -17,6 +17,7 @@ pub enum OcrEngineType {
     BuiltinPaddle,
     MangaOCR,
     BubbleYOLO,
+    CraftDetector,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -88,4 +89,14 @@ pub enum ThaiSegmentationMode {
     Standard,
     DictionaryAssisted,
     SyllableLevel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum TextDetectorMode {
+    /// No text detector — OCR runs on full frame or user-defined region
+    None,
+    /// YOLO Bubble Detector — optimized for manga/comic speech bubbles
+    YoloBubble,
+    /// CRAFT Text Detector — precise character-level text region detection
+    CraftRegion,
 }

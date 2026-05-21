@@ -45,7 +45,9 @@ impl OcrAdapterFactory {
                 None,
             ),
             OcrEngineType::Windows => (Arc::new(WindowsOcr::new()), None),
-            OcrEngineType::BubbleYOLO => (Arc::new(WindowsOcr::new()), None),
+            OcrEngineType::BubbleYOLO | OcrEngineType::CraftDetector => {
+                (Arc::new(WindowsOcr::new()), None)
+            }
         }
     }
 }
