@@ -70,8 +70,13 @@ impl Translator for OllamaTranslator {
         target: &LanguageTag,
         context_hint: Option<&str>,
     ) -> Result<String, crate::core::error::KError> {
-        let prompt =
-            llm_shared_utilities::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let prompt = llm_shared_utilities::build_prompt(
+            text,
+            source,
+            target,
+            self.behavior.as_ref(),
+            context_hint,
+        );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.1);
 
         self.call_ollama(&prompt.system, &prompt.user, temp)

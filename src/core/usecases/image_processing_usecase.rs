@@ -346,9 +346,9 @@ pub fn process_image_for_ocr(
 
         // Build grayscale luminance buffer for angle estimation
         let mut gray = vec![0u8; w * h];
-        for i in 0..(w * h) {
+        for (i, pixel) in gray.iter_mut().enumerate().take(w * h) {
             let idx = i * 4;
-            gray[i] = ((buf_a[idx] as u32 * 77
+            *pixel = ((buf_a[idx] as u32 * 77
                 + buf_a[idx + 1] as u32 * 150
                 + buf_a[idx + 2] as u32 * 29)
                 >> 8) as u8;
@@ -372,20 +372,22 @@ pub fn process_image_for_ocr(
 
             // Accumulate horizontal projection (sum of dark pixels per row)
             let mut projection = vec![0u32; h];
-            for row in 0..h {
+            for (row, proj) in projection.iter_mut().enumerate().take(h) {
                 let mut row_sum = 0u32;
                 for col in 0..w {
                     // Reverse-map destination pixel to source
                     let dx = col as f32 - cx;
                     let dy = row as f32 - cy;
-                    let sx = (cos_a * dx + sin_a * dy + cx) as isize;
-                    let sy = (-sin_a * dx + cos_a * dy + cy) as isize;
+                    let sx = (dx * cos_a - dy * sin_a + cx).round() as isize;
+                    let sy = (dx * sin_a + dy * cos_a + cy).round() as isize;
+
                     if sx >= 0 && sx < w as isize && sy >= 0 && sy < h as isize {
-                        // Invert: dark pixels contribute more (text is typically dark)
-                        row_sum += 255 - gray[sy as usize * w + sx as usize] as u32;
+                        let idx = sy as usize * w + sx as usize;
+                        // Invert so dark pixels contribute to the sum
+                        row_sum += 255 - gray[idx] as u32;
                     }
                 }
-                projection[row] = row_sum;
+                *proj = row_sum;
             }
 
             // Compute variance of the projection

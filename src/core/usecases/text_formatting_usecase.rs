@@ -1,4 +1,4 @@
-﻿/// Formats text specifically for overlay display, enforcing Thai character integrity
+/// Formats text specifically for overlay display, enforcing Thai character integrity
 /// and auto-calculating optimal distribution chunks.
 pub struct TextFormatter;
 
@@ -11,7 +11,6 @@ impl TextFormatter {
 
         let mut out = String::with_capacity(text.len() * 2);
         let chars: Vec<char> = text.chars().collect();
-        let has_spaces = text.contains(' ');
 
         for i in 0..chars.len() {
             let c = chars[i];
@@ -36,10 +35,7 @@ impl TextFormatter {
 
                 if next_is_mark || is_cluster {
                     out.push('\u{2060}');
-                } else if next_is_leading
-                    || curr_is_ending
-                    || (!has_spaces && c != ' ' && c != '\n')
-                {
+                } else if next_is_leading || curr_is_ending || (c != ' ' && c != '\n') {
                     out.push('\u{200B}');
                 } else if next != ' ' && next != '\n' && c != ' ' {
                     out.push('\u{2060}');

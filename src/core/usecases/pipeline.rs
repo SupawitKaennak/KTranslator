@@ -38,8 +38,10 @@ pub struct PipelineContext {
     pub ocr_engine: Arc<dyn OcrEngine>,
     pub translator: Option<Arc<dyn Translator + Send + Sync>>,
     pub platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
-    pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>,
-    pub craft_detector: Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>,
+    pub yolo_detector:
+        Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>,
+    pub craft_detector:
+        Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>,
     pub text_detector_mode: crate::infrastructure::settings::TextDetectorMode,
 
     // --- Hash/stability state ---
@@ -198,8 +200,11 @@ impl TranslationPipeline {
         // Line-level Garbage Filtering
         raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
 
-        let blocks =
-            crate::core::text_layout_analyzer::build_blocks(raw_ocr_lines, smart_merge, jp_merge_vertical);
+        let blocks = crate::core::text_layout_analyzer::build_blocks(
+            raw_ocr_lines,
+            smart_merge,
+            jp_merge_vertical,
+        );
 
         let mut ocr_lines = Vec::new();
         let mut block_sizes = Vec::new();
@@ -227,7 +232,12 @@ impl TranslationPipeline {
                 tracing::info!(slot = slot_idx, "Applying LLM OCR correction");
                 match translator_arc.correct_text(&ocr_text_base, source_lang.as_ref()) {
                     Ok(corrected) => {
-                        tracing::debug!(slot = slot_idx, "OCR Corrected: {} -> {}", ocr_text_base, corrected);
+                        tracing::debug!(
+                            slot = slot_idx,
+                            "OCR Corrected: {} -> {}",
+                            ocr_text_base,
+                            corrected
+                        );
                         ocr_text_base = corrected;
                     }
                     Err(e) => {
@@ -318,11 +328,12 @@ impl TranslationPipeline {
                 );
 
             // Apply Regex Post rules and decode masks
-            let mut post_trans = crate::core::usecases::regex_replacement_engine::RegexEngine::apply_post_rules(
-                &decoded_gloss,
-                &regex_rules_inner,
-                &regex_protected_map_inner,
-            );
+            let mut post_trans =
+                crate::core::usecases::regex_replacement_engine::RegexEngine::apply_post_rules(
+                    &decoded_gloss,
+                    &regex_rules_inner,
+                    &regex_protected_map_inner,
+                );
 
             // Forcefully apply any missed Glossary entries (like CharacterName, Terms) on the final text
             // to serve as a 100% reliable post-translation enforcer.
@@ -517,7 +528,8 @@ impl TranslationPipeline {
         ocr_count: usize,
         config: &crate::infrastructure::settings::TextProcessingSettings,
     ) -> Vec<String> {
-        let mut result = crate::core::llm_prompt_builder::parse_translation_response(raw, ocr_count);
+        let mut result =
+            crate::core::llm_prompt_builder::parse_translation_response(raw, ocr_count);
         for s in result.iter_mut() {
             *s = TextCleaner::clean(s, config);
         }

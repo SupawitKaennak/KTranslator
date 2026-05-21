@@ -5,7 +5,7 @@ pub mod components;
 mod font_loader_setup;
 pub mod i18n;
 mod live_frame;
-mod transparent_overlay_renderer;
 mod region_selection_overlay;
+mod transparent_overlay_renderer;
 
 pub use application::App;
