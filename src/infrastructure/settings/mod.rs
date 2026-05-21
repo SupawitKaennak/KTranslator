@@ -49,6 +49,7 @@ pub struct Settings {
 
     pub use_yolo_bubble: bool,
     pub show_yolo_debug_borders: bool,
+    pub text_detector: TextDetectorMode,
 
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
@@ -92,6 +93,7 @@ impl Default for Settings {
             overlay_text_align: TextAlign::Center,
             use_yolo_bubble: false,
             show_yolo_debug_borders: false,
+            text_detector: TextDetectorMode::None,
             ui_language: UiLanguage::System,
             hide_from_capture: true,
             img_proc: ImageProcessingSettings::default(),

@@ -94,48 +94,98 @@ pub fn render_tab_overlay(
         });
 
     ui.add_space(16.0);
-    super::section_header(ui, "YOLO Speech Bubble Detection (Manga-Bubble-YOLO)");
+    super::section_header(ui, "Advanced Text Detection Models");
     ui.add_space(4.0);
 
-    ui.checkbox(&mut settings.use_yolo_bubble, i18n.use_yolo_bubble);
+    ui.horizontal(|ui| {
+        ui.label("Text Detector Mode:");
+        egui::ComboBox::from_id_source("text_detector_mode")
+            .selected_text(match settings.text_detector {
+                crate::infrastructure::settings::TextDetectorMode::None => "None (Full Frame)",
+                crate::infrastructure::settings::TextDetectorMode::YoloBubble => "YOLO Speech Bubble",
+                crate::infrastructure::settings::TextDetectorMode::CraftRegion => "CRAFT Text Region",
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::None,
+                    "None (Full Frame)",
+                );
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::YoloBubble,
+                    "YOLO Speech Bubble",
+                );
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::CraftRegion,
+                    "CRAFT Text Region",
+                );
+            });
+    });
+
+    // Synchronize legacy `use_yolo_bubble` setting
+    settings.use_yolo_bubble = settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble;
+
     ui.add_space(4.0);
     ui.checkbox(
         &mut settings.show_yolo_debug_borders,
-        i18n.show_yolo_debug_borders,
+        "Show Detection Borders (Debug)",
     );
 
-    if settings.use_yolo_bubble {
-        let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
-        if !exists {
-            ui.add_space(8.0);
-            if download_progress.is_downloading && download_progress.current_file.contains("Bubble")
-            {
-                ui.horizontal(|ui| {
-                    ui.spinner();
-                    ui.label(format!(
-                        "Downloading model: {}",
-                        download_progress.current_file
-                    ));
-                });
-                ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+    match settings.text_detector {
+        crate::infrastructure::settings::TextDetectorMode::YoloBubble => {
+            let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
+            if !exists {
+                ui.add_space(8.0);
+                if download_progress.is_downloading && download_progress.current_file.contains("Bubble") {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(format!("Downloading model: {}", download_progress.current_file));
+                    });
+                    ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(235, 120, 0),
+                            "⚠ YOLO Speech Bubble model (yolo26n.onnx) is not installed.",
+                        );
+                        if ui.button("Download (6MB)").clicked() {
+                            let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
+                        }
+                    });
+                }
             } else {
-                ui.horizontal(|ui| {
-                    ui.colored_label(
-                        egui::Color32::from_rgb(235, 120, 0),
-                        "⚠ YOLO Speech Bubble model (yolo26n.onnx) is not installed.",
-                    );
-                    if ui.button("Download (6MB)").clicked() {
-                        let _ = download_trigger_tx
-                            .send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
-                    }
-                });
+                ui.add_space(8.0);
+                ui.colored_label(egui::Color32::from_rgb(0, 180, 50), "✅ YOLO Speech Bubble model installed.");
             }
-        } else {
-            ui.add_space(8.0);
-            ui.colored_label(
-                egui::Color32::from_rgb(0, 180, 50),
-                "✅ YOLO Speech Bubble model installed.",
-            );
         }
+        crate::infrastructure::settings::TextDetectorMode::CraftRegion => {
+            let exists = crate::infrastructure::asset_download_manager::check_craft_exists();
+            if !exists {
+                ui.add_space(8.0);
+                if download_progress.is_downloading && download_progress.current_file.contains("CRAFT") {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(format!("Downloading model: {}", download_progress.current_file));
+                    });
+                    ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(235, 120, 0),
+                            "⚠ CRAFT Text Detector model is not installed.",
+                        );
+                        if ui.button("Download (20MB)").clicked() {
+                            let _ = download_trigger_tx.send(crate::infrastructure::settings::OcrEngineType::CraftDetector);
+                        }
+                    });
+                }
+            } else {
+                ui.add_space(8.0);
+                ui.colored_label(egui::Color32::from_rgb(0, 180, 50), "✅ CRAFT Text Detector model installed.");
+            }
+        }
+        _ => {}
     }
 }

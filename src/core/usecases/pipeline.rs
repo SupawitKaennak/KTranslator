@@ -39,6 +39,8 @@ pub struct PipelineContext {
     pub translator: Option<Arc<dyn Translator + Send + Sync>>,
     pub platform: Arc<dyn crate::infrastructure::platform::PlatformServices>,
     pub yolo_detector: Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>,
+    pub craft_detector: Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>,
+    pub text_detector_mode: crate::infrastructure::settings::TextDetectorMode,
 
     // --- Hash/stability state ---
     pub prev_hash: u64,
@@ -87,6 +89,8 @@ impl TranslationPipeline {
             translator,
             platform,
             yolo_detector,
+            craft_detector,
+            text_detector_mode,
             prev_hash,
             stable_hash,
             stable_since_ms,
@@ -183,6 +187,8 @@ impl TranslationPipeline {
                 &ocr_engine,
                 source_lang.as_ref(),
                 yolo_detector.as_ref(),
+                craft_detector.as_ref(),
+                text_detector_mode,
                 &img_proc_cfg,
                 jp_merge_vertical,
             );
