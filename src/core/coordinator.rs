@@ -171,6 +171,7 @@ impl BackgroundCoordinator {
                     jp_merge_vertical: settings.txt_proc.jp_merge_vertical,
                     th_segmentation: settings.txt_proc.th_segmentation,
                     enable_batching: settings.perf.enable_batching,
+                    enable_llm_ocr_correction: settings.enable_llm_ocr_correction,
                     context_segments: slots_runtime[i]
                         .recent_translations
                         .iter()
