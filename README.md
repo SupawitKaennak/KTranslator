@@ -2,7 +2,7 @@
 [ภาษาไทย (Thai)](#thai) | [English](#english)
 
 ---
-<img width="2290" height="1314" alt="{D0FD1C9F-76EE-40F6-ACDC-8BA0DBB8BCF9}" src="https://github.com/user-attachments/assets/55f7f3f6-4f9e-4e13-9b1d-b9f1ea110aba" /><br>
+<img width="2224" height="1273" alt="{8CC55020-FC4D-4E16-8253-203BCC310802}" src="https://github.com/user-attachments/assets/62e3778c-a057-40d7-896b-7b2ff30cfb69" /><br>
 <img width="2245" height="1169" alt="{CB32388A-95A4-4669-BD83-F3F1FD8C83FF}" src="https://github.com/user-attachments/assets/800453ff-888a-4630-8f55-4d9b6b8de1ce" /><br>
 <img width="2562" height="1440" alt="{6E9BAEBF-E11A-4561-8FF7-583830210EDA}" src="https://github.com/user-attachments/assets/cee5db85-4186-4c21-8608-c5c676a4ff01" /><br>
 
