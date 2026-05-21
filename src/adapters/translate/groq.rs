@@ -20,7 +20,8 @@ impl GroqTranslator {
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
+        let client =
+            llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
         Ok(Self {
             client,
             api_key,
@@ -78,8 +79,13 @@ impl Translator for GroqTranslator {
             ));
         }
 
-        let prompt =
-            llm_shared_utilities::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let prompt = llm_shared_utilities::build_prompt(
+            text,
+            source,
+            target,
+            self.behavior.as_ref(),
+            context_hint,
+        );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.2);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
 
@@ -167,7 +173,10 @@ impl Translator for GroqTranslator {
             .json(&req)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!("send groq correction request: {:?}", e))
+                crate::core::error::KError::Translation(format!(
+                    "send groq correction request: {:?}",
+                    e
+                ))
             })?;
 
         if !resp.status().is_success() {
@@ -179,7 +188,10 @@ impl Translator for GroqTranslator {
         }
 
         let data: GroqChatResponse = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!("parse groq correction response: {:?}", e))
+            crate::core::error::KError::Translation(format!(
+                "parse groq correction response: {:?}",
+                e
+            ))
         })?;
         let out = data
             .choices

@@ -13,10 +13,12 @@ pub struct BackgroundCoordinator {
     pub bg_tx: mpsc::Sender<BgResult>,
     pub bg_rx: mpsc::Receiver<BgResult>,
     pool: Mutex<threadpool::ThreadPool>,
-    yolo_bubble:
-        Arc<Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>>>,
-    craft_text:
-        Arc<Mutex<Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>>>,
+    yolo_bubble: Arc<
+        Mutex<Option<Arc<crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector>>>,
+    >,
+    craft_text: Arc<
+        Mutex<Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>>,
+    >,
 }
 
 impl BackgroundCoordinator {
@@ -59,9 +61,14 @@ impl BackgroundCoordinator {
             return;
         }
 
-        let yolo_detector = if settings.use_yolo_bubble || settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble {
+        let yolo_detector = if settings.use_yolo_bubble
+            || settings.text_detector
+                == crate::infrastructure::settings::TextDetectorMode::YoloBubble
+        {
             let mut guard = self.yolo_bubble.lock();
-            if guard.is_none() && crate::infrastructure::asset_download_manager::check_bubble_yolo_exists() {
+            if guard.is_none()
+                && crate::infrastructure::asset_download_manager::check_bubble_yolo_exists()
+            {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector::new(
                         settings.perf.gpu_backend,
@@ -73,9 +80,13 @@ impl BackgroundCoordinator {
             None
         };
 
-        let craft_detector = if settings.text_detector == crate::infrastructure::settings::TextDetectorMode::CraftRegion {
+        let craft_detector = if settings.text_detector
+            == crate::infrastructure::settings::TextDetectorMode::CraftRegion
+        {
             let mut guard = self.craft_text.lock();
-            if guard.is_none() && crate::infrastructure::asset_download_manager::check_craft_exists() {
+            if guard.is_none()
+                && crate::infrastructure::asset_download_manager::check_craft_exists()
+            {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector::new(
                         settings.perf.gpu_backend,

@@ -6,15 +6,16 @@ use parking_lot::Mutex;
 use crate::{
     adapters::translate::create_translator,
     core::{
-        coordinator::BackgroundCoordinator, region_slot_state::AppModel, region_slot_state::SlotRuntimeState,
-        background_result_dispatcher::ResultDispatcher,
+        background_result_dispatcher::ResultDispatcher, coordinator::BackgroundCoordinator,
+        region_slot_state::AppModel, region_slot_state::SlotRuntimeState,
     },
     infrastructure::settings::{save_settings, Settings},
     user_interface::{
-        components::{settings_ui::show_settings_window, region_slot_panel::render_slot_item},
+        components::{region_slot_panel::render_slot_item, settings_ui::show_settings_window},
         i18n::get_i18n,
-        live_frame, transparent_overlay_renderer,
+        live_frame,
         region_selection_overlay::{run_region_viewport, RegionOutcome, RegionOverlayState},
+        transparent_overlay_renderer,
     },
 };
 
@@ -124,11 +125,15 @@ impl App {
             tokio::spawn(async move {
                 match engine_type {
                     crate::infrastructure::settings::OcrEngineType::MangaOCR => {
-                        let _ = crate::infrastructure::asset_download_manager::download_models(tx).await;
+                        let _ = crate::infrastructure::asset_download_manager::download_models(tx)
+                            .await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
                         let _ =
-                            crate::infrastructure::asset_download_manager::download_ppocr_models(tx).await;
+                            crate::infrastructure::asset_download_manager::download_ppocr_models(
+                                tx,
+                            )
+                            .await;
                     }
                     crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
                         let _ =

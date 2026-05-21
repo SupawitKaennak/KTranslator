@@ -228,7 +228,10 @@ pub fn render_tab_ai_provider(
         super::section_header(ui, "AI Memory & Context");
         ui.horizontal(|ui| {
             ui.label("Context Memory:");
-            ui.add(egui::Slider::new(&mut settings.realtime.context_window_size, 0..=5).text("Segments"));
+            ui.add(
+                egui::Slider::new(&mut settings.realtime.context_window_size, 0..=5)
+                    .text("Segments"),
+            );
             ui.label(
                 egui::RichText::new("Remember past chat history for better contextual translation")
                     .small()
