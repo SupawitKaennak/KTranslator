@@ -3,7 +3,9 @@ use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};
 
 use crate::{
-    adapters::{capture::screenshots_crate_adapter::ScreenshotsCapture, translate::create_translator},
+    adapters::{
+        capture::screenshots_crate_adapter::ScreenshotsCapture, translate::create_translator,
+    },
     core::{
         coordinator::BackgroundCoordinator,
         region_slot_state::{AppModel, SlotRuntimeState},

@@ -1,6 +1,6 @@
 use crate::core::{
-    pipeline_execution_result::BgResult, region_slot_state::AppModel, region_slot_state::SlotRuntimeState,
-    types::TranslationCache,
+    pipeline_execution_result::BgResult, region_slot_state::AppModel,
+    region_slot_state::SlotRuntimeState, types::TranslationCache,
 };
 use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};

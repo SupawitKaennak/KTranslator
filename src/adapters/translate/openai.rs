@@ -22,7 +22,8 @@ impl OpenAiTranslator {
         model: String,
         behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
     ) -> Result<Self> {
-        let client = llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
+        let client =
+            llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
         let base_url = base_url.trim_end_matches('/').to_string();
 
         Ok(Self {
@@ -78,8 +79,13 @@ impl Translator for OpenAiTranslator {
             ));
         }
 
-        let prompt =
-            llm_shared_utilities::build_prompt(text, source, target, self.behavior.as_ref(), context_hint);
+        let prompt = llm_shared_utilities::build_prompt(
+            text,
+            source,
+            target,
+            self.behavior.as_ref(),
+            context_hint,
+        );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.3);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
 
