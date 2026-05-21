@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
@@ -135,6 +135,12 @@ pub const BUBBLE_YOLO_MODEL: ModelAsset<'static> = ModelAsset {
     path: "models/bubble-yolo/yolo26n.onnx",
 };
 
+pub const CRAFT_TEXT_DETECTOR_MODEL: ModelAsset<'static> = ModelAsset {
+    name: "CRAFT Text Detector",
+    url: "https://huggingface.co/ml6team/craft-onnx/resolve/main/craft.onnx",
+    path: "models/craft/craft.onnx",
+};
+
 pub fn check_bubble_yolo_exists() -> bool {
     let mut p = PathBuf::from(BUBBLE_YOLO_MODEL.path);
     if let Ok(exe_path) = std::env::current_exe() {
@@ -145,6 +151,19 @@ pub fn check_bubble_yolo_exists() -> bool {
     p.exists()
         && fs::metadata(&p)
             .map(|m| m.len() > 5 * 1024 * 1024)
+            .unwrap_or(false)
+}
+
+pub fn check_craft_exists() -> bool {
+    let mut p = PathBuf::from(CRAFT_TEXT_DETECTOR_MODEL.path);
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            p = exe_dir.join(CRAFT_TEXT_DETECTOR_MODEL.path);
+        }
+    }
+    p.exists()
+        && fs::metadata(&p)
+            .map(|m| m.len() > 1 * 1024 * 1024)
             .unwrap_or(false)
 }
 
@@ -365,6 +384,23 @@ pub async fn download_bubble_yolo_model(
     let _ = progress_tx
         .send(DownloadProgress {
             current_file: "Bubble YOLO model downloaded successfully!".to_string(),
+            progress: 1.0,
+            is_downloading: false,
+            error: None,
+        })
+        .await;
+
+    Ok(())
+}
+
+pub async fn download_craft_model(
+    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+) -> Result<()> {
+    download_asset_list(&[CRAFT_TEXT_DETECTOR_MODEL], &progress_tx).await?;
+
+    let _ = progress_tx
+        .send(DownloadProgress {
+            current_file: "CRAFT Text Detector model downloaded successfully!".to_string(),
             progress: 1.0,
             is_downloading: false,
             error: None,

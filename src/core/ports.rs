@@ -1,4 +1,4 @@
-﻿use crate::core::error::KError;
+use crate::core::error::KError;
 use crate::core::types::{LanguageTag, Rect};
 
 #[derive(Debug, Clone)]
@@ -55,6 +55,12 @@ pub trait Translator: Send + Sync {
         target: &LanguageTag,
         context_hint: Option<&str>,
     ) -> Result<String, KError>;
+
+    /// Optional: Post-process OCR text to fix character recognition errors based on language context.
+    /// Default implementation simply returns the input text unmodified.
+    fn correct_text(&self, text: &str, _lang_hint: Option<&LanguageTag>) -> Result<String, KError> {
+        Ok(text.to_string())
+    }
 
     /// Optional: Translate directly from an image frame (Vision mode)
     #[allow(dead_code)]

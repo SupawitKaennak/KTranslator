@@ -129,6 +129,67 @@ impl Translator for GroqTranslator {
 
         Ok(out.trim().to_string())
     }
+
+    fn correct_text(
+        &self,
+        text: &str,
+        _lang_hint: Option<&LanguageTag>,
+    ) -> Result<String, crate::core::error::KError> {
+        if self.api_key.trim().is_empty() {
+            return Err(crate::core::error::KError::Translation(
+                "Groq API key is empty".to_string(),
+            ));
+        }
+
+        let system = "You are an OCR error correction engine. Fix typos and garbled text in the following input. Return ONLY the corrected text. Do NOT translate it. Preserve the original formatting.";
+        let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
+
+        let req = GroqChatRequest {
+            model: self.model.clone(),
+            messages: vec![
+                GroqMessage {
+                    role: "system".to_string(),
+                    content: system.to_string(),
+                },
+                GroqMessage {
+                    role: "user".to_string(),
+                    content: text.to_string(),
+                },
+            ],
+            temperature: 0.1, // Low temperature for high deterministic accuracy
+            max_tokens,
+        };
+
+        let resp = self
+            .client
+            .post("https://api.groq.com/openai/v1/chat/completions")
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(&req)
+            .send()
+            .map_err(|e| {
+                crate::core::error::KError::Translation(format!("send groq correction request: {:?}", e))
+            })?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let body = resp.text().unwrap_or_default();
+            return Err(crate::core::error::KError::Translation(format!(
+                "Groq error during OCR correction: {status} {body}"
+            )));
+        }
+
+        let data: GroqChatResponse = resp.json().map_err(|e| {
+            crate::core::error::KError::Translation(format!("parse groq correction response: {:?}", e))
+        })?;
+        let out = data
+            .choices
+            .into_iter()
+            .next()
+            .map(|c| c.message.content)
+            .unwrap_or_default();
+
+        Ok(out.trim().to_string())
+    }
 }
 
 #[derive(Serialize)]

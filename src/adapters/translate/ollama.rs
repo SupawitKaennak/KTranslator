@@ -76,6 +76,15 @@ impl Translator for OllamaTranslator {
 
         self.call_ollama(&prompt.system, &prompt.user, temp)
     }
+
+    fn correct_text(
+        &self,
+        text: &str,
+        _lang_hint: Option<&LanguageTag>,
+    ) -> Result<String, crate::core::error::KError> {
+        let system = "You are an OCR error correction engine. Fix typos and garbled text in the following input. Return ONLY the corrected text. Do NOT translate it. Preserve the original formatting.";
+        self.call_ollama(system, text, 0.1)
+    }
 }
 
 impl OllamaTranslator {

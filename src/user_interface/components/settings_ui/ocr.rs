@@ -275,4 +275,22 @@ pub fn render_tab_ocr(
             }
         }
     }
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    super::section_header(ui, "LLM OCR Post-processing");
+    ui.add_space(4.0);
+
+    ui.checkbox(
+        &mut settings.enable_llm_ocr_correction,
+        "Use LLM to correct OCR typos before translation",
+    );
+    if settings.enable_llm_ocr_correction {
+        ui.colored_label(
+            egui::Color32::from_rgb(255, 180, 100),
+            "⚠ Warning: This requires calling the LLM API twice per frame, which doubles latency and token usage.",
+        );
+    }
 }
