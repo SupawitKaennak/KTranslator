@@ -135,7 +135,7 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
 - **ONNX Runtime (ort crate)**: รันไทม์ข้ามแพลตฟอร์มสำหรับรันโมเดลปัญญาประดิษฐ์ พัฒนาโดย Microsoft
 - **PaddleOCR**: ชุดโมเดลตรวจจับและจำแนกอักษร พัฒนาโดย PaddlePaddle (Baidu)
 - **oar-ocr**: ไลบรารีอ้างอิงและประมวลผลสำหรับนำโมเดล PaddleOCR และ Manga-OCR มารันบน ONNX ในภาษา Rust
-- **Manga-OCR**: โมเดลสแกนตัวหนังสือภาษาญี่ปุ่น พัฒนาโดย Kha-Lai อ้างอิงชุดข้อมูลโครงสร้างจากโครงการ Manga109
+- **Manga-OCR**: โมเดลสแกนตัวหนังสือภาษาญี่ปุ่น พัฒนาโดย **kha-white** (แปลงเป็นเวอร์ชัน ONNX โดย **l0wgear**) อ้างอิงชุดข้อมูลโครงสร้างจากโครงการ Manga109
 - **wordninja**: โค้ดสำหรับแยกคำภาษาอังกฤษประมวลผลจากความถี่คำใน Wikipedia พัฒนาโดย Derek Anderson
 - **dxgcap / screenshots**: ไลบรารีสำหรับจับภาพหน้าจอผ่าน Windows Desktop Duplication API
 
@@ -145,7 +145,7 @@ KTranslator V2 utilizes tools, models, and libraries from the following projects
 - **ONNX Runtime (ort crate)**: A cross-platform machine learning accelerator developed by Microsoft.
 - **PaddleOCR**: Deep learning optical character recognition toolkits developed by PaddlePaddle (Baidu).
 - **oar-ocr**: A Rust wrapper library enabling PaddleOCR and Manga-OCR execution via ONNX Runtime.
-- **Manga-OCR**: A Japanese OCR model developed by Kha-Lai, utilizing datasets from the Manga109 project.
+- **Manga-OCR**: A Japanese OCR model developed by **kha-white** (converted to ONNX by **l0wgear**), utilizing datasets from the Manga109 project.
 - **wordninja**: An English text segmenter based on Wikipedia unigram frequencies, developed by Derek Anderson.
 - **dxgcap / screenshots**: Screen capturing libraries utilizing the Windows Desktop Duplication API.
 
