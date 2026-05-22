@@ -405,6 +405,7 @@ impl OcrEngine for OnnxMangaRecognizer {
                 y: final_y,
                 w: final_w,
                 h: final_h,
+                bubble_idx: None,
             });
         }
 

@@ -1,4 +1,4 @@
-﻿use parking_lot::Mutex;
+use parking_lot::Mutex;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -199,6 +199,7 @@ impl OcrEngine for BuiltinPaddleOcr {
                     y: min_y,
                     w: (max_x - min_x).max(1.0),
                     h: (max_y - min_y).max(1.0),
+                    bubble_idx: None,
                 });
             }
         }

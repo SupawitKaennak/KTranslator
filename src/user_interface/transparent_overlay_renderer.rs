@@ -182,16 +182,32 @@ pub fn render_overlay_viewport(
                                 if let Some(base_rect) = text_union_rect {
                                     // 1. Try to find a matching YOLO/CRAFT bubble
                                     let mut matched_bubble_rect: Option<egui::Rect> = None;
-                                    let center = base_rect.center();
-                                    for bubble in &yolo_bubbles {
-                                        let b_rect = egui::Rect::from_min_size(
-                                            egui::pos2(bubble.x / ppp, bubble.y / ppp),
-                                            egui::vec2(bubble.w / ppp, bubble.h / ppp)
-                                        );
-                                        // If the text center is inside the bubble, or there is significant overlap
-                                        if b_rect.contains(center) || b_rect.intersects(base_rect) {
-                                            matched_bubble_rect = Some(b_rect);
-                                            break;
+
+                                    // Primary: Use exact bubble index if available
+                                    if let Some(first_line) = block_lines.first() {
+                                        if let Some(b_idx) = first_line.bubble_idx {
+                                            if let Some(bubble) = yolo_bubbles.get(b_idx) {
+                                                matched_bubble_rect = Some(egui::Rect::from_min_size(
+                                                    egui::pos2(bubble.x / ppp, bubble.y / ppp),
+                                                    egui::vec2(bubble.w / ppp, bubble.h / ppp)
+                                                ));
+                                            }
+                                        }
+                                    }
+
+                                    // Fallback: Use spatial intersection for raw OCR lines
+                                    if matched_bubble_rect.is_none() {
+                                        let center = base_rect.center();
+                                        for bubble in &yolo_bubbles {
+                                            let b_rect = egui::Rect::from_min_size(
+                                                egui::pos2(bubble.x / ppp, bubble.y / ppp),
+                                                egui::vec2(bubble.w / ppp, bubble.h / ppp)
+                                            );
+                                            // If the text center is inside the bubble, or there is significant overlap
+                                            if b_rect.contains(center) || b_rect.intersects(base_rect) {
+                                                matched_bubble_rect = Some(b_rect);
+                                                break;
+                                            }
                                         }
                                     }
 
