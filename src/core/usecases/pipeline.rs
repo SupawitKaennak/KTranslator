@@ -358,12 +358,22 @@ impl TranslationPipeline {
             }
             let mut trans_lines = Vec::new();
             for (block_idx, size) in block_sizes.iter().enumerate() {
-                trans_lines.push(
-                    block_translations
-                        .get(block_idx)
-                        .cloned()
-                        .unwrap_or_default(),
-                );
+                let mut trans_str = block_translations
+                    .get(block_idx)
+                    .cloned()
+                    .unwrap_or_default();
+
+                if trans_str.trim().is_empty() {
+                    // Fallback to original text if LLM dropped this block to prevent background merging
+                    if block_idx < blocks.len() {
+                        trans_str = blocks[block_idx].source_text.clone();
+                    }
+                    if trans_str.trim().is_empty() {
+                        trans_str = "\u{200B}".to_string(); // Zero-width space to force block break
+                    }
+                }
+
+                trans_lines.push(trans_str);
                 for _ in 1..*size {
                     trans_lines.push(String::new());
                 }
