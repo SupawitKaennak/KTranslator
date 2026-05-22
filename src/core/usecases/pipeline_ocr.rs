@@ -61,6 +61,7 @@ pub fn perform_ocr(
                                     y: b.y1,
                                     w: b.x2 - b.x1,
                                     h: b.y2 - b.y1,
+                                    bubble_idx: None,
                                 });
                             }
                         }
@@ -95,6 +96,7 @@ pub fn perform_ocr(
                                     y: r.y1,
                                     w: r.x2 - r.x1,
                                     h: r.y2 - r.y1,
+                                    bubble_idx: None,
                                 });
                             }
                         }
@@ -108,7 +110,7 @@ pub fn perform_ocr(
     // If detection was successful, crop each detected region and run OCR on it
     let yolo_bubbles = detection_boxes.clone();
     if detection_successful {
-        for region in &detection_boxes {
+        for (b_idx, region) in detection_boxes.iter().enumerate() {
             let pad = 6;
             let crop_x = (region.x - pad as f32).max(0.0) as u32;
             let crop_y = (region.y - pad as f32).max(0.0) as u32;
@@ -146,6 +148,7 @@ pub fn perform_ocr(
                         }
                         line.x += crop_x as f32;
                         line.y += crop_y as f32;
+                        line.bubble_idx = Some(b_idx);
                         current_group.push(line.clone());
                     }
                     if !current_group.is_empty() {

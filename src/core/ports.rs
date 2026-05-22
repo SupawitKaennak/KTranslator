@@ -20,6 +20,7 @@ pub struct OcrTextLine {
     #[allow(dead_code)] // kept for future text-wrapping / overflow detection
     pub w: f32,
     pub h: f32,
+    pub bubble_idx: Option<usize>, // Track parent YOLO/CRAFT bubble to prevent background merging
 }
 
 /// A block of OCR text grouped together (e.g. a paragraph or speech bubble).
