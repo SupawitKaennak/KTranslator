@@ -54,14 +54,6 @@
      - Ollama: ดาวน์โหลดเซิร์ฟเวอร์และโมเดลจาก [Ollama.com](https://ollama.com/)
      - OpenAI / Custom: ขอคีย์จาก [OpenAI Platform](https://platform.openai.com/) หรือ [OpenRouter](https://openrouter.ai/)
 
-### วิธีใช้งาน
-1. รันไฟล์ `ktranslator.exe` เพื่อเปิดโปรแกรม
-2. คลิกปุ่มตั้งค่า (ฟันเฟือง) เพื่อเลือกภาษาต้นทาง-ปลายทาง, เอนจิน OCR และตั้งค่าผู้ให้บริการแปลภาษา
-3. กดปุ่ม **Add Region** แล้วใช้เมาส์ลากครอบพื้นที่บนหน้าจอที่ต้องการ
-4. กดปุ่ม **Start Translate** เพื่อเริ่มรอบการจับภาพและประมวลผล
-5. หากต้องการให้ข้อความแสดงทับตำแหน่งเดิม ให้กดสวิตช์เปิดใช้งาน **Overlay Mode**
-6. ข้อความจะอัปเดตอัตโนมัติเมื่อเนื้อหาบนหน้าจอในกรอบมีการเปลี่ยนแปลง
-
 ---
 
 <a name="english"></a>
@@ -111,14 +103,6 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
      - Groq: Obtain an API key from [Groq Console](https://console.groq.com/).
      - Ollama: Download the server and models from [Ollama.com](https://ollama.com/).
      - OpenAI / Custom: Obtain an API key from [OpenAI Platform](https://platform.openai.com/) or [OpenRouter](https://openrouter.ai/).
-
-### Usage Instructions
-1. Run the `ktranslator.exe` executable.
-2. Click the Settings button (gear icon) to configure source and target languages, select the OCR engine, and choose the translation provider.
-3. Click **Add Region** and click-and-drag to define the target area on the screen.
-4. Click **Start Translate** to begin the capture loop.
-5. Toggle **Overlay Mode** to project the translated text directly onto the bounding box area.
-6. The translations will automatically update whenever the content within the bounding box changes.
 
 ---
 
