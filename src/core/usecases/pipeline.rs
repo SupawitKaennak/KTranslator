@@ -185,7 +185,7 @@ impl TranslationPipeline {
         });
         ctx.request_repaint();
 
-        let (mut raw_ocr_lines, yolo_bubbles, _bubble_detection_successful) =
+        let (mut grouped_ocr_lines, yolo_bubbles, _bubble_detection_successful) =
             crate::core::usecases::pipeline_ocr::perform_ocr(
                 &frame,
                 &ocr_engine,
@@ -197,14 +197,21 @@ impl TranslationPipeline {
                 jp_merge_vertical,
             );
 
-        // Line-level Garbage Filtering
-        raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
+        // Line-level Garbage Filtering per group
+        for group in &mut grouped_ocr_lines {
+            group.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
+        }
+        grouped_ocr_lines.retain(|g| !g.is_empty());
 
-        let blocks = crate::core::text_layout_analyzer::build_blocks(
-            raw_ocr_lines,
-            smart_merge,
-            jp_merge_vertical,
-        );
+        let mut blocks = Vec::new();
+        for group in grouped_ocr_lines {
+            let mut group_blocks = crate::core::text_layout_analyzer::build_blocks(
+                group,
+                smart_merge,
+                jp_merge_vertical,
+            );
+            blocks.append(&mut group_blocks);
+        }
 
         let mut ocr_lines = Vec::new();
         let mut block_sizes = Vec::new();

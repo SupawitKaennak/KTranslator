@@ -14,9 +14,9 @@ pub fn perform_ocr(
     text_detector_mode: TextDetectorMode,
     img_proc_cfg: &ImageProcessingSettings,
     jp_merge_vertical: bool,
-) -> (Vec<OcrTextLine>, Vec<OcrTextLine>, bool) {
+) -> (Vec<Vec<OcrTextLine>>, Vec<OcrTextLine>, bool) {
     let mut detection_boxes = Vec::new();
-    let mut raw_ocr_lines = Vec::new();
+    let mut grouped_ocr_lines = Vec::new();
     let mut detection_successful = false;
 
     // Convert frame to DynamicImage once if any detector is active
@@ -135,6 +135,7 @@ pub fn perform_ocr(
                 processed_crop.height = proc_h;
 
                 if let Ok(mut lines) = ocr_engine.recognize_lines(processed_crop, source_lang) {
+                    let mut current_group = Vec::new();
                     let scale = img_proc_cfg.resize_scale;
                     for line in &mut lines {
                         if (scale - 1.0).abs() > 0.01 {
@@ -145,7 +146,10 @@ pub fn perform_ocr(
                         }
                         line.x += crop_x as f32;
                         line.y += crop_y as f32;
-                        raw_ocr_lines.push(line.clone());
+                        current_group.push(line.clone());
+                    }
+                    if !current_group.is_empty() {
+                        grouped_ocr_lines.push(current_group);
                     }
                 }
             }
@@ -176,9 +180,11 @@ pub fn perform_ocr(
                     line.h /= scale;
                 }
             }
-            raw_ocr_lines = lines;
+            if !lines.is_empty() {
+                grouped_ocr_lines.push(lines);
+            }
         }
     }
 
-    (raw_ocr_lines, yolo_bubbles, detection_successful)
+    (grouped_ocr_lines, yolo_bubbles, detection_successful)
 }
