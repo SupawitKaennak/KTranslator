@@ -1,4 +1,4 @@
-﻿use anyhow::Result;
+use anyhow::Result;
 use image::{ImageBuffer, Rgba};
 use std::future::IntoFuture;
 use std::sync::Arc;
@@ -390,6 +390,7 @@ impl OcrEngineTrait for WindowsOcr {
                     y: min_y / scale,
                     w: (max_x - min_x) / scale,
                     h: (max_y - min_y) / scale,
+                    bubble_idx: None,
                 });
             }
         }
