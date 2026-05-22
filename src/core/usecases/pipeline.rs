@@ -185,7 +185,7 @@ impl TranslationPipeline {
         });
         ctx.request_repaint();
 
-        let (mut raw_ocr_lines, yolo_bubbles, _bubble_detection_successful) =
+        let (mut grouped_ocr_lines, yolo_bubbles, _bubble_detection_successful) =
             crate::core::usecases::pipeline_ocr::perform_ocr(
                 &frame,
                 &ocr_engine,
@@ -197,14 +197,21 @@ impl TranslationPipeline {
                 jp_merge_vertical,
             );
 
-        // Line-level Garbage Filtering
-        raw_ocr_lines.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
+        // Line-level Garbage Filtering per group
+        for group in &mut grouped_ocr_lines {
+            group.retain(|l| TextCleaner::is_line_valid(&l.text, &txt_proc_cfg));
+        }
+        grouped_ocr_lines.retain(|g| !g.is_empty());
 
-        let blocks = crate::core::text_layout_analyzer::build_blocks(
-            raw_ocr_lines,
-            smart_merge,
-            jp_merge_vertical,
-        );
+        let mut blocks = Vec::new();
+        for group in grouped_ocr_lines {
+            let mut group_blocks = crate::core::text_layout_analyzer::build_blocks(
+                group,
+                smart_merge,
+                jp_merge_vertical,
+            );
+            blocks.append(&mut group_blocks);
+        }
 
         let mut ocr_lines = Vec::new();
         let mut block_sizes = Vec::new();
@@ -351,12 +358,22 @@ impl TranslationPipeline {
             }
             let mut trans_lines = Vec::new();
             for (block_idx, size) in block_sizes.iter().enumerate() {
-                trans_lines.push(
-                    block_translations
-                        .get(block_idx)
-                        .cloned()
-                        .unwrap_or_default(),
-                );
+                let mut trans_str = block_translations
+                    .get(block_idx)
+                    .cloned()
+                    .unwrap_or_default();
+
+                if trans_str.trim().is_empty() {
+                    // Fallback to original text if LLM dropped this block to prevent background merging
+                    if block_idx < blocks.len() {
+                        trans_str = blocks[block_idx].source_text.clone();
+                    }
+                    if trans_str.trim().is_empty() {
+                        trans_str = "\u{200B}".to_string(); // Zero-width space to force block break
+                    }
+                }
+
+                trans_lines.push(trans_str);
                 for _ in 1..*size {
                     trans_lines.push(String::new());
                 }
