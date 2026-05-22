@@ -41,7 +41,9 @@ async fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_transparent(true)
-            .with_icon(std::sync::Arc::new(icon_data)),
+            .with_icon(std::sync::Arc::new(icon_data))
+            .with_always_on_top()
+            .with_resizable(false),
         ..Default::default()
     };
     eframe::run_native(
