@@ -1,4 +1,4 @@
-﻿use crate::core::ports::{OcrTextBlock, OcrTextLine};
+use crate::core::ports::{OcrTextBlock, OcrTextLine};
 
 fn get_char_size(line: &OcrTextLine) -> f32 {
     // The height of a text line bounding box is generally the most reliable
@@ -22,7 +22,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         // 1. Horizontal Stack Case (separate vertical columns in the same bubble)
         let y_overlap_len = (a.y + a.h).min(b.y + b.h) - a.y.max(b.y);
         let shorter_h = a.h.min(b.h);
-        let has_y_overlap = y_overlap_len > 0.0 && (y_overlap_len / shorter_h) > 0.4;
+        let has_y_overlap = y_overlap_len > 0.0 && (y_overlap_len / shorter_h) > 0.6; // Stricter Y overlap
 
         let x_gap = if a.x + a.w < b.x {
             b.x - (a.x + a.w)
@@ -31,12 +31,13 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         } else {
             0.0
         };
-        let close_horizontally = x_gap < char_size * 1.2;
+        let close_horizontally = x_gap < char_size * 0.8; // Stricter X gap
 
         if has_y_overlap && close_horizontally {
             // Extra column separation guard: if separate vertical columns are too far, don't merge
             let x_dist = (a.x - b.x).abs();
-            if x_dist > char_size * 1.6 {
+            if x_dist > char_size * 1.2 {
+                // Stricter distance
                 return false;
             }
             return true;
@@ -54,7 +55,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         } else {
             0.0
         };
-        let close_vertically = y_gap < char_size * 1.5;
+        let close_vertically = y_gap < char_size * 1.0; // Stricter Y gap
 
         if has_x_overlap && close_vertically {
             return true;
@@ -64,7 +65,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         // 1. Vertical Stack Case (standard lines stacked one below the other)
         let x_overlap_len = (a.x + a.w).min(b.x + b.w) - a.x.max(b.x);
         let narrower_w = a.w.min(b.w);
-        let has_x_overlap = x_overlap_len > 0.0 && (x_overlap_len / narrower_w) > 0.3; // Align horizontally
+        let has_x_overlap = x_overlap_len > 0.0 && (x_overlap_len / narrower_w) > 0.4; // Stricter horizontal alignment
 
         let y_gap = if a.y + a.h < b.y {
             b.y - (a.y + a.h)
@@ -73,7 +74,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         } else {
             0.0
         };
-        let close_vertically = y_gap < char_size * 0.8; // Tight vertical space in standard text
+        let close_vertically = y_gap < char_size * 0.6; // Stricter vertical space in standard text
 
         if has_x_overlap && close_vertically {
             return true;
@@ -82,7 +83,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         // 2. Same Line Segment Case (split words or horizontally adjacent inline text on the SAME line)
         let y_overlap_len = (a.y + a.h).min(b.y + b.h) - a.y.max(b.y);
         let shorter_h = a.h.min(b.h);
-        let has_y_overlap = y_overlap_len > 0.0 && (y_overlap_len / shorter_h) > 0.6; // High vertical alignment (same line)
+        let has_y_overlap = y_overlap_len > 0.0 && (y_overlap_len / shorter_h) > 0.7; // Higher vertical alignment (same line)
 
         // Calculate horizontal overlap
         let x_overlap_len = (a.x + a.w).min(b.x + b.w) - a.x.max(b.x);
@@ -98,8 +99,8 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
 
         // Strict inline checking:
         // 1. Must NOT have any horizontal overlap (if they overlap in X, they are separate overlapping columns/bubbles).
-        // 2. The horizontal gap must be very small (less than 45% of the average character size).
-        let close_horizontally = !has_x_overlap && x_gap > 0.0 && x_gap < char_size * 0.45;
+        // 2. The horizontal gap must be very small (less than 35% of the average character size).
+        let close_horizontally = !has_x_overlap && x_gap > 0.0 && x_gap < char_size * 0.35; // Stricter gap
 
         if has_y_overlap && close_horizontally {
             return true;
