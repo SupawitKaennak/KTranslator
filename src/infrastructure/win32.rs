@@ -4,9 +4,7 @@ use std::ptr;
 #[cfg(target_os = "windows")]
 use windows::Win32::Foundation::{COLORREF, HWND};
 #[cfg(target_os = "windows")]
-use windows::Win32::Graphics::Gdi::{
-    CombineRgn, CreateRectRgn, DeleteObject, SetWindowRgn, RGN_XOR,
-};
+use windows::Win32::Graphics::Gdi::SetWindowRgn;
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::{
     GetCurrentProcess, SetPriorityClass, ABOVE_NORMAL_PRIORITY_CLASS,
@@ -14,6 +12,7 @@ use windows::Win32::System::Threading::{
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, SetLayeredWindowAttributes, LWA_ALPHA, LWA_COLORKEY,
+    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_LAYERED,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -39,26 +38,19 @@ pub fn find_window(window_title: &str) -> Option<isize> {
     None
 }
 
-/// Excludes or includes a window from screen capture (no transparency attributes).
-pub fn set_hide_from_capture(hwnd_raw: isize, hide: bool) {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let hwnd = HWND(hwnd_raw as *mut _);
-        if hide {
-            let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
-        } else {
-            let _ = SetWindowDisplayAffinity(hwnd, WDA_NONE);
-        }
-    }
-    let _ = hwnd_raw;
-    let _ = hide;
-}
+
+
 
 /// Applies transparency color-key and capture exclusion to a window.
 pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
     #[cfg(target_os = "windows")]
     unsafe {
         let hwnd = HWND(hwnd_raw as *mut _);
+
+        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        if (ex_style & WS_EX_LAYERED.0 as i32) == 0 {
+            let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED.0 as i32);
+        }
 
         // Apply color key for transparency (Black 0x000000 is our key)
         let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_COLORKEY | LWA_ALPHA);
@@ -74,41 +66,29 @@ pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
     let _ = hide_from_capture;
 }
 
-/// Hollow window region: only the border ring receives mouse hits; center is click-through.
-/// Borders can be specified individually for each side.
-pub fn set_hollow_window_region(
-    hwnd_raw: isize,
-    width: i32,
-    height: i32,
-    top: i32,
-    left: i32,
-    right: i32,
-    bottom: i32,
-) {
+/// Sets the global window alpha transparency, preserving the color key.
+pub fn set_window_alpha(hwnd_raw: isize, alpha: u8) {
     #[cfg(target_os = "windows")]
     unsafe {
         let hwnd = HWND(hwnd_raw as *mut _);
-        let outer = CreateRectRgn(0, 0, width, height);
-        // Create the "hole" in the middle
-        let inner = CreateRectRgn(left, top, width - right, height - bottom);
-        let frame = CreateRectRgn(0, 0, 0, 0);
-
-        if outer.0.is_null() || inner.0.is_null() || frame.0.is_null() {
-            if !outer.0.is_null() {
-                let _ = DeleteObject(outer.into());
-            }
-            if !inner.0.is_null() {
-                let _ = DeleteObject(inner.into());
-            }
-            return;
+        let ex_style = GetWindowLongW(hwnd, GWL_EXSTYLE);
+        if (ex_style & WS_EX_LAYERED.0 as i32) == 0 {
+            let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED.0 as i32);
         }
-
-        let _ = CombineRgn(Some(frame), Some(outer), Some(inner), RGN_XOR);
-        let _ = SetWindowRgn(hwnd, Some(frame), true);
-        let _ = DeleteObject(outer.into());
-        let _ = DeleteObject(inner.into());
+        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_COLORKEY | LWA_ALPHA);
     }
-    let _ = (hwnd_raw, width, height, top, left, right, bottom);
+    let _ = hwnd_raw;
+    let _ = alpha;
+}
+
+/// Clears the custom window region, restoring the window to solid (no holes).
+pub fn clear_window_region(hwnd_raw: isize) {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let hwnd = HWND(hwnd_raw as *mut _);
+        let _ = SetWindowRgn(hwnd, None, true);
+    }
+    let _ = hwnd_raw;
 }
 
 /// Boosts the current process priority to Above Normal to ensure
