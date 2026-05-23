@@ -12,7 +12,7 @@ use windows::Win32::System::Threading::{
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowW, SetLayeredWindowAttributes, LWA_ALPHA, LWA_COLORKEY,
-    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_LAYERED, WINDOW_LONG_PTR_INDEX,
+    GetWindowLongW, SetWindowLongW, GWL_EXSTYLE, WS_EX_LAYERED,
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -38,20 +38,6 @@ pub fn find_window(window_title: &str) -> Option<isize> {
     None
 }
 
-/// Excludes or includes a window from screen capture (no transparency attributes).
-pub fn set_hide_from_capture(hwnd_raw: isize, hide: bool) {
-    #[cfg(target_os = "windows")]
-    unsafe {
-        let hwnd = HWND(hwnd_raw as *mut _);
-        if hide {
-            let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
-        } else {
-            let _ = SetWindowDisplayAffinity(hwnd, WDA_NONE);
-        }
-    }
-    let _ = hwnd_raw;
-    let _ = hide;
-}
 
 
 
