@@ -307,33 +307,69 @@ impl TextCleaner {
         if config.enable_wordninja {
             let mut segmented_words = Vec::new();
             for token in s.split_whitespace() {
-                // Split any token ≥7 chars that is mostly English letters using dictionary lookup.
-                // Wordninja's dictionary is lowercase-only, so we normalize before splitting.
                 let alpha_count = token.chars().filter(|c| c.is_ascii_alphabetic()).count();
-                if token.len() >= 7 && alpha_count >= 5 {
-                    let is_all_upper = token
-                        .chars()
-                        .filter(|c| c.is_ascii_alphabetic())
-                        .all(|c| c.is_ascii_uppercase());
-                    let lower = token.to_lowercase();
-                    let parts = wordninja::DEFAULT_MODEL.split(&lower);
-                    // Only accept if the dictionary split it AND all parts are ≥2 chars
-                    // (reject splits that produce single-letter fragments like "a", "i")
-                    let all_parts_valid = parts.len() > 1 && parts.iter().all(|p| p.len() >= 2);
-                    if all_parts_valid {
-                        for p in parts {
-                            if is_all_upper {
-                                segmented_words.push(p.to_uppercase());
-                            } else {
-                                segmented_words.push(p.to_string());
+                // Lower threshold to 5 chars to catch words like WHATDO (6) or CANYOU (6)
+                if token.len() >= 5 && alpha_count >= 4 {
+                    let first_alpha = token.find(|c: char| c.is_ascii_alphabetic());
+                    let last_alpha = token.rfind(|c: char| c.is_ascii_alphabetic());
+                    
+                    if let (Some(start), Some(end)) = (first_alpha, last_alpha) {
+                        let prefix = &token[..start];
+                        let suffix = &token[end + 1..];
+                        let core = &token[start..=end];
+                        
+                        let has_internal_punct = core.chars().any(|c| !c.is_ascii_alphabetic() && c != '\'');
+                        
+                        if !has_internal_punct {
+                            let is_all_upper = core.chars().filter(|c| c.is_ascii_alphabetic()).all(|c| c.is_ascii_uppercase());
+                            let lower = core.to_lowercase();
+                            let parts = wordninja::DEFAULT_MODEL.split(&lower);
+                            
+                            // Allow valid 1-letter English words like "a", "i", "o" and common contractions
+                            let all_parts_valid = parts.len() > 1 && parts.iter().all(|p| {
+                                p.len() >= 2 || matches!(p.as_ref(), "a" | "i" | "o" | "s" | "t" | "m" | "d")
+                            });
+                            
+                            if all_parts_valid {
+                                let mut joined = String::new();
+                                for p in parts {
+                                    if !joined.is_empty() { joined.push(' '); }
+                                    if is_all_upper {
+                                        joined.push_str(&p.to_uppercase());
+                                    } else {
+                                        let mut c = p.chars();
+                                        if let Some(first) = c.next() {
+                                            joined.push(first); // Kept simple, true case restoration is hard
+                                            joined.push_str(c.as_str());
+                                        }
+                                    }
+                                }
+                                segmented_words.push(format!("{}{}{}", prefix, joined, suffix));
+                                continue;
                             }
                         }
-                    } else {
-                        segmented_words.push(token.to_string());
                     }
-                } else {
-                    segmented_words.push(token.to_string());
                 }
+                
+                // Fallback for missing spaces after punctuation (e.g., "C.I.D.FOR?")
+                let mut fixed_token = String::new();
+                let chars: Vec<char> = token.chars().collect();
+                for i in 0..chars.len() {
+                    fixed_token.push(chars[i]);
+                    if i + 1 < chars.len() {
+                        let c1 = chars[i];
+                        let c2 = chars[i + 1];
+                        if (c1 == '.' || c1 == ',' || c1 == '?' || c1 == '!') && c2.is_ascii_alphabetic() {
+                            // Check if it's an acronym like C.I.D. (where the next letter is followed by another dot)
+                            let is_acronym = c1 == '.' && i + 2 < chars.len() && chars[i + 2] == '.';
+                            if !is_acronym {
+                                fixed_token.push(' ');
+                            }
+                        }
+                    }
+                }
+                
+                segmented_words.push(fixed_token);
             }
             s = segmented_words.join(" ");
         }
