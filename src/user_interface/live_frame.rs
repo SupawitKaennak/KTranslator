@@ -46,16 +46,8 @@ fn hit_zone(full: egui::Rect, p: egui::Pos2) -> Option<Zone> {
         }
     }
 
-    // Border areas (draggable)
-    if p.y < full.top() + BORDER
-        || p.y > full.bottom() - BORDER
-        || p.x < full.left() + BORDER
-        || p.x > full.right() - BORDER
-    {
-        return Some(Zone::Move);
-    }
-
-    None
+    // Body area (draggable anywhere inside)
+    Some(Zone::Move)
 }
 
 fn cursor_for(zone: Zone) -> egui::CursorIcon {
@@ -135,19 +127,36 @@ pub fn render_live_frame_viewport(
                 egui::Id::new(("live_frame", slot_idx)),
             ));
 
+            let mut is_hovered = false;
+            if let Some(raw) = platform_svc.find_window_by_title(&title) {
+                #[cfg(windows)]
+                unsafe {
+                    use windows::Win32::UI::WindowsAndMessaging::{GetWindowRect, GetCursorPos};
+                    use windows::Win32::Foundation::{RECT, POINT, HWND};
+                    let hwnd = HWND(raw as *mut _);
+                    let mut rect = RECT::default();
+                    let mut pt = POINT::default();
+                    if GetWindowRect(hwnd, &mut rect).is_ok() && GetCursorPos(&mut pt).is_ok() {
+                        is_hovered = pt.x >= rect.left && pt.x <= rect.right && pt.y >= rect.top && pt.y <= rect.bottom;
+                    }
+                }
+            }
+
+            if is_hovered {
+                // We use RGB(25, 25, 25) so LWA_COLORKEY does not make it fully transparent.
+                // It is far enough from pure black to prevent rounding errors causing pixel holes.
+                // The global window alpha will be lowered to create the glass effect, and it will catch clicks.
+                painter.rect_filled(full, 0.0, egui::Color32::from_rgb(25, 25, 25));
+            } else {
+                // Pure black triggers LWA_COLORKEY, making the center 100% transparent and click-through.
+                painter.rect_filled(full, 0.0, egui::Color32::BLACK);
+            }
+
+            // Keep polling so we can detect mouse entering/leaving
+            ctx.request_repaint_after(std::time::Duration::from_millis(30));
+
             let accent = egui::Color32::from_rgb(0, 255, 128);
 
-            // Draw a subtle "glow" border (Inside only to avoid Win32 clipping)
-            for i in 1..5 {
-                let alpha = (100 / i) as u8; // Increased alpha from 60
-                let stroke_w = (i as f32) * 4.0; // Increased step to 4.0 to cover 16px total glow
-                painter.rect_stroke(
-                    full,
-                    0.0,
-                    egui::Stroke::new(stroke_w, accent.gamma_multiply(alpha as f32 / 255.0)),
-                    egui::StrokeKind::Inside,
-                );
-            }
             // Main solid border - matched to BORDER width for perfect visual feedback
             painter.rect_stroke(
                 full,
@@ -155,24 +164,6 @@ pub fn render_live_frame_viewport(
                 egui::Stroke::new(BORDER, accent),
                 egui::StrokeKind::Inside,
             );
-
-            // Use an almost-invisible but solid color for draggable areas (Alpha 1)
-            // We use a faint version of the accent color to blend in perfectly.
-            let invisible_drag_color = accent.gamma_multiply(1.0 / 255.0);
-
-            // Fill draggable areas with invisible-solid color
-            let top_border =
-                egui::Rect::from_min_max(full.min, egui::pos2(full.max.x, full.min.y + BORDER));
-            let left_border =
-                egui::Rect::from_min_max(full.min, egui::pos2(full.min.x + BORDER, full.max.y));
-            let right_border =
-                egui::Rect::from_min_max(egui::pos2(full.max.x - BORDER, full.min.y), full.max);
-            let bottom_border =
-                egui::Rect::from_min_max(egui::pos2(full.min.x, full.max.y - BORDER), full.max);
-            painter.rect_filled(top_border, 0.0, invisible_drag_color);
-            painter.rect_filled(left_border, 0.0, invisible_drag_color);
-            painter.rect_filled(right_border, 0.0, invisible_drag_color);
-            painter.rect_filled(bottom_border, 0.0, invisible_drag_color);
 
             let pointer = ctx.input(|i| i.pointer.latest_pos());
             if let Some(p) = pointer {
@@ -281,26 +272,27 @@ pub fn render_live_frame_viewport(
             ctx.data_mut(|d| d.insert_temp(last_rect_id, current_r));
 
             if let Some(raw) = platform_svc.find_window_by_title(&title) {
-                let w_px = (full.width() * ppp).round() as i32;
-                let h_px = (full.height() * ppp).round() as i32;
-                let b_px = (BORDER * ppp).round() as i32;
-
-                // We use set_hollow_window_region for robust click-through
-                crate::infrastructure::win32::set_hollow_window_region(
-                    raw, w_px, h_px, b_px, b_px, b_px, b_px,
-                );
+                // Ensure the window region is solid so the entire frame catches mouse events.
+                // This removes any hollow region previously applied.
+                crate::infrastructure::win32::clear_window_region(raw);
 
                 let cached = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
-                if raw != cached {
-                    crate::infrastructure::win32::apply_overlay_attributes(raw, hide_capture);
-                    hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
-                }
-
+                let current_hide = hide_capture;
                 let last_hide_id = egui::Id::new(("last_hide", slot_idx));
                 let last_hide = ctx.data(|d| d.get_temp::<bool>(last_hide_id));
-                if last_hide != Some(hide_capture) {
-                    crate::infrastructure::win32::set_hide_from_capture(raw, hide_capture);
-                    ctx.data_mut(|d| d.insert_temp(last_hide_id, hide_capture));
+
+                if raw != cached || last_hide != Some(current_hide) {
+                    crate::infrastructure::win32::apply_overlay_attributes(raw, current_hide);
+                    hwnd_cache.store(raw, std::sync::atomic::Ordering::Relaxed);
+                    ctx.data_mut(|d| d.insert_temp(last_hide_id, current_hide));
+                }
+
+                let alpha = if is_hovered { 120 } else { 255 };
+                let last_alpha_id = egui::Id::new(("last_alpha", slot_idx));
+                let last_alpha = ctx.data(|d| d.get_temp::<u8>(last_alpha_id));
+                if last_alpha != Some(alpha) {
+                    crate::infrastructure::win32::set_window_alpha(raw, alpha);
+                    ctx.data_mut(|d| d.insert_temp(last_alpha_id, alpha));
                 }
             }
         },
