@@ -12,6 +12,8 @@ async fn main() -> eframe::Result<()> {
 
     tracing_subscriber::fmt().with_env_filter(filter).init();
 
+
+
     tracing::info!("KTranslator starting up...");
     #[cfg(windows)]
     {
