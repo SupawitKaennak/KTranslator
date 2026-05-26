@@ -115,6 +115,7 @@ pub struct I18n {
     pub txt_regex: &'static str,
     pub txt_wordninja: &'static str,
     pub txt_ocr_merge: &'static str,
+    pub txt_spell_correction: &'static str,
 
     // Image Processing headers
     pub img_binarize: &'static str,
@@ -327,6 +328,7 @@ const EN: I18n = I18n {
     txt_regex: "Regex Replacement Engine",
     txt_wordninja: "Dictionary-Based Tokenizer (Wordninja)",
     txt_ocr_merge: "OCR Fragment Merger (Merge isolated letters)",
+    txt_spell_correction: "Spell Correction (SymSpell \u{2014} English only)",
     img_binarize: "Binarize Threshold",
     img_adaptive: "Adaptive Threshold",
     img_contrast: "Contrast Enhancement",
@@ -535,6 +537,7 @@ const TH: I18n = I18n {
     txt_regex: "กฎการแทนที่ด้วย Regex",
     txt_wordninja: "ระบบสับคำอัจฉริยะด้วยพจนานุกรม (Wordninja)",
     txt_ocr_merge: "ระบบผสานตัวอักษรเดี่ยว OCR (ลดปัญหากล่องข้อความแยกตัวอักษร)",
+    txt_spell_correction: "ระบบแก้คำผิดอัตโนมัติ (SymSpell \u{2014} ภาษาอังกฤษเท่านั้น)",
     img_binarize: "ระดับการแปลงภาพขาวดำ (Binarize)",
     img_adaptive: "การปรับเกณฑ์แสงเฉพาะจุด (Adaptive Threshold)",
     img_contrast: "เพิ่มความเปรียบต่าง (Contrast)",
