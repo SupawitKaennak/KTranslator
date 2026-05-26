@@ -374,6 +374,13 @@ impl TextCleaner {
             s = segmented_words.join(" ");
         }
 
+        // --- SymSpell Spell Correction ---
+        // Runs after wordninja to fix remaining OCR typos before translation.
+        // Only processes Latin-script (English) text.
+        if config.enable_spell_correction {
+            s = crate::core::spell_correction::correct_line(&s);
+        }
+
         s
     }
 
