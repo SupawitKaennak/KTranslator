@@ -17,6 +17,7 @@ pub struct TextProcessingSettings {
     pub punctuation_normalization: bool,
     pub enable_wordninja: bool,
     pub enable_ocr_merge: bool,
+    pub enable_spell_correction: bool,
 
     // ── Language-Specific Processing ──
     pub jp_merge_vertical: bool,
@@ -48,6 +49,7 @@ impl Default for TextProcessingSettings {
             punctuation_normalization: true,
             enable_wordninja: false,
             enable_ocr_merge: true,
+            enable_spell_correction: false,
 
             jp_merge_vertical: true,
             jp_kana_normalization: true,

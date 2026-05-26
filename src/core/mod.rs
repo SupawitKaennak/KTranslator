@@ -6,6 +6,7 @@ pub mod llm_prompt_builder;
 pub mod pipeline_execution_result;
 pub mod ports;
 pub mod region_slot_state;
+pub mod spell_correction;
 pub mod text_cleaning_pipeline;
 pub mod text_layout_analyzer;
 pub mod types;
