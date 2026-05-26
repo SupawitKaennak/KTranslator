@@ -30,6 +30,7 @@ ort = { version = "2.0.0-rc.12", features = ["copy-dylibs", "directml", "cuda", 
 tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 wordninja = "0.1"
+symspell = "0.5"
 oar-ocr = "0.6"
 
 
