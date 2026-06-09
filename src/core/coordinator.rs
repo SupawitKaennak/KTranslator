@@ -19,26 +19,6 @@ pub struct BackgroundCoordinator {
     craft_text: Arc<
         Mutex<Option<Arc<crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector>>>,
     >,
-    pasted_frames: Arc<Mutex<std::collections::HashMap<usize, crate::core::ports::FrameRgba>>>,
-}
-
-struct PasteFrameSource {
-    delegate: Arc<dyn FrameSource>,
-    pasted_frame: Option<crate::core::ports::FrameRgba>,
-}
-
-impl FrameSource for PasteFrameSource {
-    fn capture_frame(
-        &self,
-        rect: &crate::core::types::Rect,
-        display_id: u32,
-    ) -> Result<crate::core::ports::FrameRgba, crate::core::KError> {
-        if let Some(ref frame) = self.pasted_frame {
-            Ok(frame.clone())
-        } else {
-            self.delegate.capture_frame(rect, display_id)
-        }
-    }
 }
 
 impl BackgroundCoordinator {
@@ -47,19 +27,13 @@ impl BackgroundCoordinator {
         let pool = Mutex::new(threadpool::ThreadPool::new(4)); // Default 4 worker threads
         let yolo_bubble = Arc::new(Mutex::new(None));
         let craft_text = Arc::new(Mutex::new(None));
-        let pasted_frames = Arc::new(Mutex::new(std::collections::HashMap::new()));
         Self {
             bg_tx,
             bg_rx,
             pool,
             yolo_bubble,
             craft_text,
-            pasted_frames,
         }
-    }
-
-    pub fn paste_frame(&self, slot_idx: usize, frame: crate::core::ports::FrameRgba) {
-        self.pasted_frames.lock().insert(slot_idx, frame);
     }
 
     #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
@@ -169,16 +143,6 @@ impl BackgroundCoordinator {
                 continue;
             }
 
-            let pasted_frame = self.pasted_frames.lock().remove(&i);
-            let capture_source: Arc<dyn FrameSource> = if let Some(frame) = pasted_frame {
-                Arc::new(PasteFrameSource {
-                    delegate: capture.clone(),
-                    pasted_frame: Some(frame),
-                })
-            } else {
-                capture.clone()
-            };
-
             slots_runtime[i].busy = true;
             slots_runtime[i].processing = false;
             {
@@ -196,7 +160,7 @@ impl BackgroundCoordinator {
                     source_lang: slot.source_lang.clone(),
                     target_lang: slot.target_lang.clone(),
                     language_version: slot.language_version,
-                    capture: capture_source,
+                    capture: capture.clone(),
                     ocr_engine: ocr_engine.clone(),
                     translator: translator.clone(),
                     platform: platform.clone(),
