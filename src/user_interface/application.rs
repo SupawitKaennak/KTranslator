@@ -426,30 +426,6 @@ impl eframe::App for App {
         self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
-        // Handle Ctrl+V / Cmd+V for pasting image from clipboard
-        if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::V)) {
-            if let Ok(mut clipboard) = arboard::Clipboard::new() {
-                if let Ok(img) = clipboard.get_image() {
-                    let frame = crate::core::ports::FrameRgba {
-                        width: img.width as u32,
-                        height: img.height as u32,
-                        data: std::sync::Arc::new(img.bytes.into_owned()),
-                    };
-                    let mut model = self.model.lock();
-                    if let Some((idx, slot)) = model.slots.iter_mut().enumerate().find(|(_, s)| s.enabled) {
-                        self.coordinator.paste_frame(idx, frame);
-                        slot.next_tick_at_ms = 0;
-                        slot.stable_hash = 0;
-                        if idx < self.slots_runtime.len() {
-                            self.slots_runtime[idx].last_hash = 0;
-                        }
-                        ctx.request_repaint();
-                        tracing::info!("Pasted image from clipboard into slot {}", idx);
-                    }
-                }
-            }
-        }
-
         if let Some(sess) = &self.region_session {
             run_region_viewport(
                 ctx,
