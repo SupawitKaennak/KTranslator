@@ -107,6 +107,8 @@ use std::sync::Arc;
 pub struct SlotRuntimeState {
     /// True if the slot has a background task running (capture or API)
     pub busy: bool,
+    /// Timestamp (ms) when `busy` was last set to true — used for timeout recovery
+    pub busy_since_ms: u64,
     /// True if the slot is currently waiting for an AI response
     pub processing: bool,
     /// Human-readable status shown in the UI
@@ -151,6 +153,7 @@ impl SlotRuntimeState {
     pub fn new() -> Self {
         Self {
             busy: false,
+            busy_since_ms: 0,
             processing: false,
             status: "Idle".to_string(),
             last_hash: 0,
