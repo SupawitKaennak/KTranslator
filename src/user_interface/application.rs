@@ -652,5 +652,13 @@ impl eframe::App for App {
         if min_wait_ms != u64::MAX {
             ctx.request_repaint_after(std::time::Duration::from_millis(min_wait_ms.max(5)));
         }
+
+        // Keep polling while any slot has a background task running.
+        // Without this, eframe may sleep and never call update() to collect results,
+        // causing busy=true to deadlock indefinitely.
+        let any_slot_busy = self.slots_runtime.iter().any(|r| r.busy);
+        if any_slot_busy {
+            ctx.request_repaint_after(std::time::Duration::from_millis(80));
+        }
     }
 }
