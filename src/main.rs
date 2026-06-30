@@ -46,6 +46,7 @@ async fn main() -> eframe::Result<()> {
             .with_icon(std::sync::Arc::new(icon_data))
             .with_always_on_top()
             .with_resizable(false),
+        hardware_acceleration: eframe::HardwareAcceleration::Off,
         ..Default::default()
     };
     eframe::run_native(
