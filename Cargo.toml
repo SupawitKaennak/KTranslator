@@ -16,7 +16,6 @@ parking_lot = "0.12"
 indexmap = "2"
 directories = "6"
 screenshots = "0.8"
-dxgcap = "0.2.4"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 base64 = "0.22"
 regex = "1"
