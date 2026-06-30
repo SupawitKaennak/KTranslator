@@ -10,7 +10,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "blocking"] }
-eframe = { version = "0.31", features = ["default_fonts"] }
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
 egui = "0.31"
 parking_lot = "0.12"
 indexmap = "2"
