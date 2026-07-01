@@ -103,7 +103,7 @@ impl App {
     // Background processing: capture → compare → OCR+Translate (if changed)
     // -----------------------------------------------------------------------
 
-    fn tick_background(&mut self, ctx: &egui::Context) {
+    fn tick_background(&mut self, ctx: &egui::Context) -> bool {
         // 1. Process pending signals from popups/error window
         while self.error_dismiss_rx.try_recv().is_ok() {
             self.err_handler.clear_all();
@@ -214,7 +214,7 @@ impl App {
         }
 
         // 2. Delegate background logic to coordinator
-        ResultDispatcher::process_results(
+        let processed_any = ResultDispatcher::process_results(
             &self.coordinator.bg_rx,
             &self.model,
             &mut self.slots_runtime,
@@ -235,6 +235,8 @@ impl App {
             &self.services.platform,
             ctx.clone(),
         );
+        
+        processed_any
     }
 
     fn ui_settings(&mut self, ctx: &egui::Context) {
@@ -423,7 +425,7 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let i18n = get_i18n(self.settings.ui_language);
-        self.tick_background(ctx);
+        let processed_any = self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
         if let Some(sess) = &self.region_session {
@@ -659,6 +661,16 @@ impl eframe::App for App {
         let any_slot_busy = self.slots_runtime.iter().any(|r| r.busy);
         if any_slot_busy {
             ctx.request_repaint_after(std::time::Duration::from_millis(80));
+        }
+        
+        // Force repaint of all child viewports if we are actively processing or just received data
+        if any_slot_busy || processed_any {
+            let num_slots = self.model.lock().slots.len();
+            for i in 0..num_slots {
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("overlay_{}", i)));
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
+            }
         }
     }
 }
