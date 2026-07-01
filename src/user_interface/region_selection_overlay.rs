@@ -249,7 +249,10 @@ pub fn run_region_viewport(
     let i18n = crate::user_interface::i18n::get_i18n(lang);
     let title = i18n.region_title;
 
-    ctx.show_viewport_immediate(
+    let state_clone = state.clone();
+    let outcome_clone = outcome.clone();
+    
+    ctx.show_viewport_deferred(
         egui::ViewportId::from_hash_of("screen_translator_region_overlay"),
         egui::ViewportBuilder::default()
             .with_title(title)
@@ -257,15 +260,16 @@ pub fn run_region_viewport(
             .with_decorations(false)
             .with_resizable(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop),
-        |ctx, class| {
+        move |ctx, class| {
+            let i18n = crate::user_interface::i18n::get_i18n(lang);
             crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::Window::new(i18n.region).show(ctx, |ui| {
-                    region_content(ui, &state, &outcome, i18n);
+                    region_content(ui, &state_clone, &outcome_clone, i18n);
                 });
             } else {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    region_content(ui, &state, &outcome, i18n);
+                    region_content(ui, &state_clone, &outcome_clone, i18n);
                 });
             }
         },

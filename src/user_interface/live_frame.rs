@@ -105,7 +105,7 @@ pub fn render_live_frame_viewport(
     let hide_capture = settings.hide_from_capture;
     let platform_svc = platform.clone();
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(&title)
