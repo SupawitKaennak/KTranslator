@@ -316,17 +316,16 @@ impl App {
 
             // Request immediate repaint to show live update results on screen
             ctx.request_repaint();
-            let num_slots = self.model.lock().slots.len();
-            for i in 0..num_slots {
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
-            }
         }
 
         if resp.close_clicked {
             self.show_settings = false;
             self.settings_ctrl.end_edit();
+            ctx.send_viewport_cmd_to(
+                egui::ViewportId::from_hash_of("settings_viewport"),
+                egui::ViewportCommand::Close,
+            );
+            ctx.request_repaint();
         }
     }
 
@@ -554,12 +553,6 @@ impl eframe::App for App {
                             }
                             self.caches.translation.lock().clear();
                             self.caches.text_translation.lock().clear();
-                            let num_slots = model.slots.len();
-                            for i in 0..num_slots {
-                                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
-                                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
-                                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
-                            }
                             self.settings_ctrl.reset_models_cache();
                         }
                     });
