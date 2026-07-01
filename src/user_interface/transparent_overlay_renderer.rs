@@ -42,6 +42,11 @@ pub fn render_overlay_viewport(
             runtime
                 .overlay_hwnd
                 .store(0, std::sync::atomic::Ordering::Relaxed);
+
+            // Clear cached state so it can become visible again if re-opened
+            ctx.data_mut(|d| {
+                d.remove::<bool>(egui::Id::new(("first_frame", slot_idx)));
+            });
         }
         return;
     }
