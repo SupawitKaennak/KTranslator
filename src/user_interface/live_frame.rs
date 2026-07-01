@@ -90,7 +90,7 @@ pub fn render_live_frame_viewport(
 
             // Clear cached states so that when re-opened, it forces the correct initial position
             ctx.data_mut(|d| {
-                d.remove::<bool>(egui::Id::new(("first_frame", slot_idx)));
+                d.remove::<bool>(egui::Id::new(("live_first_frame", slot_idx)));
                 d.remove::<Rect>(egui::Id::new(("last_rect", slot_idx)));
                 d.remove::<Rect>(egui::Id::new(("last_physical_rect", slot_idx)));
                 d.remove::<f64>(egui::Id::new(("ignore_until", slot_idx)));
@@ -134,10 +134,10 @@ pub fn render_live_frame_viewport(
             }
 
             let first_frame = ctx
-                .data(|d| d.get_temp::<bool>(egui::Id::new(("first_frame", slot_idx))))
+                .data(|d| d.get_temp::<bool>(egui::Id::new(("live_first_frame", slot_idx))))
                 .is_none();
             if first_frame {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("first_frame", slot_idx)), false));
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("live_first_frame", slot_idx)), false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
 
