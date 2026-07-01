@@ -103,7 +103,7 @@ impl App {
     // Background processing: capture → compare → OCR+Translate (if changed)
     // -----------------------------------------------------------------------
 
-    fn tick_background(&mut self, ctx: &egui::Context) -> bool {
+    fn tick_background(&mut self, ctx: &egui::Context) -> (bool, bool) {
         // 1. Process pending signals from popups/error window
         while self.error_dismiss_rx.try_recv().is_ok() {
             self.err_handler.clear_all();
@@ -180,8 +180,8 @@ impl App {
             ctx.request_repaint();
         }
 
+        let mut requires_repaint = false;
         if self.settings.realtime.fade_smoothing {
-            let mut requires_repaint = false;
             for rt in &mut self.slots_runtime {
                 if rt.last_overlay_fade_ms == 0 {
                     rt.last_overlay_fade_ms = now;
@@ -236,7 +236,7 @@ impl App {
             ctx.clone(),
         );
         
-        processed_any
+        (processed_any, requires_repaint)
     }
 
     fn ui_settings(&mut self, ctx: &egui::Context) {
@@ -434,8 +434,12 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let i18n = get_i18n(self.settings.ui_language);
-        let _processed_any = self.tick_background(ctx);
+        let (processed_any, animating_fade) = self.tick_background(ctx);
         self.ui_error_popup(ctx);
+
+        // Track if user interacted with UI to trigger a child sync (e.g. clicked Clear Cache)
+        let ui_interacted = ctx.is_using_pointer() || ctx.wants_keyboard_input() || ctx.input(|i| i.pointer.any_click());
+        let should_sync_children = processed_any || animating_fade || ui_interacted;
 
         if let Some(sess) = &self.region_session {
             run_region_viewport(
@@ -676,21 +680,25 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(80));
         }
         
-        // Sync all active child viewports to match the state of the main window.
-        let m = self.model.lock();
-        let num_slots = m.slots.len();
-        for i in 0..num_slots {
-            let slot = &m.slots[i];
-            if slot.enabled {
-                if slot.rect.is_some() {
-                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
+        // Sync active child viewports only when their visual state might have changed.
+        // This avoids spamming wgpu with 144+ repaint requests per second unnecessarily,
+        // which was causing severe lock contention, stuttering, and eventual GPU deadlocks.
+        if should_sync_children {
+            let m = self.model.lock();
+            let num_slots = m.slots.len();
+            for i in 0..num_slots {
+                let slot = &m.slots[i];
+                if slot.enabled {
+                    if slot.rect.is_some() {
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
+                    }
+                    if slot.overlay_mode && slot.rect.is_some() {
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
+                    }
                 }
-                if slot.overlay_mode && slot.rect.is_some() {
-                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
+                if slot.popup_open {
+                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
                 }
-            }
-            if slot.popup_open {
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
             }
         }
     }
