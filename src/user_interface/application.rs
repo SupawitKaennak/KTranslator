@@ -180,6 +180,20 @@ impl App {
             ctx.request_repaint();
         }
 
+        // 1. Delegate background logic to coordinator (Process Results FIRST)
+        let processed_any = ResultDispatcher::process_results(
+            &self.coordinator.bg_rx,
+            &self.model,
+            &mut self.slots_runtime,
+            &self.err_handler,
+            &self.caches.translation,
+            &self.settings,
+        );
+
+        if processed_any {
+            ctx.request_repaint(); // Wake up main window immediately to start fade animation
+        }
+
         let mut requires_repaint = false;
         if self.settings.realtime.fade_smoothing {
             for rt in &mut self.slots_runtime {
@@ -212,16 +226,6 @@ impl App {
                 ctx.request_repaint();
             }
         }
-
-        // 2. Delegate background logic to coordinator
-        let processed_any = ResultDispatcher::process_results(
-            &self.coordinator.bg_rx,
-            &self.model,
-            &mut self.slots_runtime,
-            &self.err_handler,
-            &self.caches.translation,
-            &self.settings,
-        );
 
         self.coordinator.tick(
             &self.model,

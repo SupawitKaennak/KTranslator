@@ -158,6 +158,7 @@ pub fn show_settings_window(
             // ── Right Content Panel ──
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut settings = settings_inner.lock();
+                let initial_settings = settings.clone();
                 let i18n = get_i18n(settings.ui_language);
 
                 egui::ScrollArea::vertical().show(ui, |ui| match active_tab {
@@ -195,15 +196,14 @@ pub fn show_settings_window(
                     ),
                     SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
                 });
-            });
 
-            // If the user is dragging sliders or clicking in the settings window,
-            // notify the main window to sync the child viewports (like overlay) so 
-            // settings take effect in real-time.
-            if ctx.is_using_pointer() {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
-                ctx.request_repaint_of(egui::ViewportId::ROOT);
-            }
+                // If any setting was actually modified, notify the main window to sync 
+                // the child viewports (like overlay) so settings take effect in real-time.
+                if *settings != initial_settings {
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
+                    ctx.request_repaint_of(egui::ViewportId::ROOT);
+                }
+            });
         },
     );
 
