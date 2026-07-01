@@ -434,7 +434,7 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let i18n = get_i18n(self.settings.ui_language);
-        let processed_any = self.tick_background(ctx);
+        let _processed_any = self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
         if let Some(sess) = &self.region_session {
@@ -676,14 +676,15 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(80));
         }
         
-        // Force repaint of all child viewports if we are actively processing or just received data
-        if any_slot_busy || processed_any {
-            let num_slots = self.model.lock().slots.len();
-            for i in 0..num_slots {
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
-            }
+        // Sync all child viewports to match the state of the main window.
+        // Whenever the main window processes an event (e.g. user clicks Clear Cache, 
+        // toggles settings, or background tick fires), we force children to repaint immediately
+        // so they don't lag behind or feel unresponsive.
+        let num_slots = self.model.lock().slots.len();
+        for i in 0..num_slots {
+            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
+            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
+            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
         }
     }
 }
