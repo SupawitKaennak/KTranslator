@@ -114,6 +114,14 @@ pub fn render_live_frame_viewport(
             .with_always_on_top()
             .with_active(true)
             .with_min_inner_size([150.0, 100.0])
+            .with_inner_size(egui::vec2(
+                snap_logical(r.w, ppp),
+                snap_logical(r.h, ppp),
+            ))
+            .with_position(egui::pos2(
+                snap_logical(r.x, ppp),
+                snap_logical(r.y, ppp),
+            ))
             .with_mouse_passthrough(false),
         move |ctx, class| {
             crate::user_interface::font_loader_setup::setup_fonts(ctx);
@@ -162,6 +170,16 @@ pub fn render_live_frame_viewport(
                 full,
                 0.0,
                 egui::Stroke::new(BORDER, accent),
+                egui::StrokeKind::Inside,
+            );
+
+            // Invisible hit-testing border so the user can easily grab corners/edges for resizing.
+            // wgpu alpha compositing means fully transparent pixels pass mouse clicks to the game.
+            // Alpha=1 is visually invisible but opaque enough for Windows to catch mouse events.
+            painter.rect_stroke(
+                full,
+                0.0,
+                egui::Stroke::new(HANDLE * 2.0, egui::Color32::from_rgba_premultiplied(1, 1, 1, 1)),
                 egui::StrokeKind::Inside,
             );
 
