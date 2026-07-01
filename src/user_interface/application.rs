@@ -439,7 +439,9 @@ impl eframe::App for App {
 
         // Track if user interacted with UI to trigger a child sync (e.g. clicked Clear Cache)
         let ui_interacted = ctx.is_using_pointer() || ctx.wants_keyboard_input() || ctx.input(|i| i.pointer.any_click());
-        let should_sync_children = processed_any || animating_fade || ui_interacted;
+        // Settings window can also request a sync by setting this flag
+        let force_sync = ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new("force_sync_children"))).unwrap_or(false);
+        let should_sync_children = processed_any || animating_fade || ui_interacted || force_sync;
 
         if let Some(sess) = &self.region_session {
             run_region_viewport(
