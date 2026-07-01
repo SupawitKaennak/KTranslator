@@ -94,7 +94,7 @@ pub fn show_settings_window(
         get_i18n(s.ui_language)
     };
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(format!("KTranslator - {}", i18n.settings))

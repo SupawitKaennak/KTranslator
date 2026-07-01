@@ -336,7 +336,7 @@ impl App {
             .map(|e| e.message)
             .collect();
 
-        ctx.show_viewport_immediate(
+        ctx.show_viewport_deferred(
             viewport_id,
             egui::ViewportBuilder::default()
                 .with_title("KTranslator - Error Report")

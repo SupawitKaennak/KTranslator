@@ -55,8 +55,9 @@ pub fn render_overlay_viewport(
     let platform_svc = platform.clone();
     let fade_alpha = runtime.overlay_fade_alpha;
     let fade_smoothing = overlay_settings.realtime.fade_smoothing;
+    let last_capture_hide = runtime.last_capture_hide.clone();
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(&title)
@@ -426,7 +427,7 @@ pub fn render_overlay_viewport(
             if let Some(raw) = platform_svc.find_window_by_title(&title_inner) {
                 let cached_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
                 let current_hide = overlay_settings.hide_from_capture;
-                let mut last_hide = runtime.last_capture_hide.lock();
+                let mut last_hide = last_capture_hide.lock();
 
                 if raw != cached_hwnd || *last_hide != Some(current_hide) {
                     crate::infrastructure::win32::apply_overlay_attributes(raw, current_hide);
@@ -448,7 +449,7 @@ pub fn render_popup_viewport(
     let viewport_id = egui::ViewportId::from_hash_of(format!("popup_{}", slot_idx));
     let model_arc_inner = model_arc.clone();
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(&title)
