@@ -53,8 +53,6 @@ pub fn render_overlay_viewport(
     let hwnd_cache = runtime.overlay_hwnd.clone();
     let overlay_settings = settings.clone();
     let platform_svc = platform.clone();
-    let fade_alpha = runtime.overlay_fade_alpha;
-    let fade_smoothing = overlay_settings.realtime.fade_smoothing;
     let last_capture_hide = runtime.last_capture_hide.clone();
 
     ctx.show_viewport_deferred(
@@ -118,25 +116,20 @@ pub fn render_overlay_viewport(
                             txt_r = 12; txt_g = 12; txt_b = 12;
                         }
 
-                        let fade_mul = if fade_smoothing {
-                            fade_alpha.clamp(0.0, 1.0)
-                        } else {
-                            1.0
-                        };
-                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0 * fade_mul;
+                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
                         let overlay_bg_color = egui::Color32::from_rgba_premultiplied(
                             (bg_r as f32 * bg_a) as u8,
                             (bg_g as f32 * bg_a) as u8,
                             (bg_b as f32 * bg_a) as u8,
-                            (overlay_settings.overlay_bg_color[3] as f32 * fade_mul) as u8,
+                            overlay_settings.overlay_bg_color[3],
                         );
 
-                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0 * fade_mul;
+                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
                         let overlay_text_color = egui::Color32::from_rgba_premultiplied(
                             (txt_r as f32 * txt_a) as u8,
                             (txt_g as f32 * txt_a) as u8,
                             (txt_b as f32 * txt_a) as u8,
-                            (overlay_settings.overlay_text_color[3] as f32 * fade_mul) as u8,
+                            overlay_settings.overlay_text_color[3],
                         );
                         let overlay_padding = overlay_settings.overlay_padding;
                         let overlay_corner_radius = overlay_settings.overlay_corner_radius;

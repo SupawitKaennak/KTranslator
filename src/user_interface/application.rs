@@ -103,7 +103,7 @@ impl App {
     // Background processing: capture → compare → OCR+Translate (if changed)
     // -----------------------------------------------------------------------
 
-    fn tick_background(&mut self, ctx: &egui::Context) -> (bool, bool) {
+    fn tick_background(&mut self, ctx: &egui::Context) -> bool {
         // 1. Process pending signals from popups/error window
         while self.error_dismiss_rx.try_recv().is_ok() {
             self.err_handler.clear_all();
@@ -194,38 +194,7 @@ impl App {
             ctx.request_repaint(); // Wake up main window immediately to start fade animation
         }
 
-        let mut requires_repaint = false;
-        if self.settings.realtime.fade_smoothing {
-            for rt in &mut self.slots_runtime {
-                if rt.last_overlay_fade_ms == 0 {
-                    rt.last_overlay_fade_ms = now;
-                }
 
-                let diff = (rt.overlay_fade_target - rt.overlay_fade_alpha).abs();
-                if diff > 0.005 {
-                    // Calculate precise delta time in seconds
-                    let dt = (now.saturating_sub(rt.last_overlay_fade_ms) as f32 / 1000.0)
-                        .clamp(0.0, 0.1);
-                    rt.last_overlay_fade_ms = now;
-
-                    if dt > 0.0 {
-                        // Premium Cinematic Exponential Interpolation (Independent of FPS)
-                        // Speed constant 8.5 provides an elegant ~300ms buttery smooth fade transition.
-                        let speed = 8.5;
-                        let t = 1.0 - (-speed * dt).exp();
-                        rt.overlay_fade_alpha +=
-                            (rt.overlay_fade_target - rt.overlay_fade_alpha) * t;
-                        requires_repaint = true;
-                    }
-                } else {
-                    rt.overlay_fade_alpha = rt.overlay_fade_target;
-                    rt.last_overlay_fade_ms = now;
-                }
-            }
-            if requires_repaint {
-                ctx.request_repaint();
-            }
-        }
 
         self.coordinator.tick(
             &self.model,
@@ -239,8 +208,7 @@ impl App {
             &self.services.platform,
             ctx.clone(),
         );
-        
-        (processed_any, requires_repaint)
+        processed_any
     }
 
     fn ui_settings(&mut self, ctx: &egui::Context) {
@@ -438,14 +406,14 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let i18n = get_i18n(self.settings.ui_language);
-        let (processed_any, animating_fade) = self.tick_background(ctx);
+        let processed_any = self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
         // Track if user interacted with UI to trigger a child sync (e.g. clicked Clear Cache)
         let ui_interacted = ctx.is_using_pointer() || ctx.wants_keyboard_input() || ctx.input(|i| i.pointer.any_click());
         // Settings window can also request a sync by setting this flag
         let force_sync = ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new("force_sync_children"))).unwrap_or(false);
-        let should_sync_children = processed_any || animating_fade || ui_interacted || force_sync;
+        let should_sync_children = processed_any || ui_interacted || force_sync;
 
         if let Some(sess) = &self.region_session {
             run_region_viewport(

@@ -214,12 +214,6 @@ impl ResultDispatcher {
                             }
                         }
 
-                        if settings.realtime.fade_smoothing {
-                            runtime.overlay_fade_target = 1.0;
-                            runtime.overlay_fade_alpha = 0.35;
-                            runtime.last_overlay_fade_ms = now;
-                        }
-
                         if frame_hash != 0 {
                             let cache_key = (
                                 frame_hash,
