@@ -318,7 +318,11 @@ impl App {
             ctx.request_repaint();
         }
 
-        if resp.close_clicked {
+        let close_requested = ctx
+            .data_mut(|d| d.remove_temp::<bool>(egui::Id::new("settings_close_requested")))
+            .unwrap_or(false);
+
+        if resp.close_clicked || close_requested {
             self.show_settings = false;
             self.settings_ctrl.end_edit();
             ctx.send_viewport_cmd_to(
