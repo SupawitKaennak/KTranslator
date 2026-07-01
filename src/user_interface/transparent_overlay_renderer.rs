@@ -45,7 +45,7 @@ pub fn render_overlay_viewport(
 
             // Clear cached state so it can become visible again if re-opened
             ctx.data_mut(|d| {
-                d.remove::<bool>(egui::Id::new(("first_frame", slot_idx)));
+                d.remove::<bool>(egui::Id::new(("overlay_first_frame", slot_idx)));
             });
         }
         return;
@@ -91,10 +91,10 @@ pub fn render_overlay_viewport(
             }
 
             let first_frame = ctx
-                .data(|d| d.get_temp::<bool>(egui::Id::new(("first_frame", slot_idx))))
+                .data(|d| d.get_temp::<bool>(egui::Id::new(("overlay_first_frame", slot_idx))))
                 .is_none();
             if first_frame {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("first_frame", slot_idx)), false));
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("overlay_first_frame", slot_idx)), false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
 
