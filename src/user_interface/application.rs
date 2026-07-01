@@ -689,7 +689,7 @@ impl eframe::App for App {
             for i in 0..num_slots {
                 let slot = &m.slots[i];
                 if slot.enabled {
-                    if slot.rect.is_some() {
+                    if slot.show_frame && slot.rect.is_some() {
                         ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
                     }
                     if slot.overlay_mode && slot.rect.is_some() {
