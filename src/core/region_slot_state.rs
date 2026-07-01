@@ -141,10 +141,6 @@ pub struct SlotRuntimeState {
     pub error_streak: u32,
     /// Recent translated segments for low-token contextual translation
     pub recent_translations: VecDeque<String>,
-    /// Overlay fade alpha (0.0–1.0) when fade smoothing is enabled
-    pub overlay_fade_alpha: f32,
-    pub overlay_fade_target: f32,
-    pub last_overlay_fade_ms: u64,
     /// ID of the active error shown in the UI for this slot
     pub active_error_id: Option<usize>,
 }
@@ -172,9 +168,6 @@ impl SlotRuntimeState {
             persistent_trans_lines: Arc::new(Mutex::new(Vec::new())),
             error_streak: 0,
             recent_translations: VecDeque::new(),
-            overlay_fade_alpha: 1.0,
-            overlay_fade_target: 1.0,
-            last_overlay_fade_ms: 0,
             active_error_id: None,
         }
     }

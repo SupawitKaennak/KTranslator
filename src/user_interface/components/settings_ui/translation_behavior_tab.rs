@@ -173,8 +173,5 @@ pub fn render_tab_translation_behavior(
             });
             ui.end_row();
 
-            ui.label("Translation Smoothing:");
-            ui.checkbox(&mut real.fade_smoothing, "Apply visual state persistence");
-            ui.end_row();
         });
 }
