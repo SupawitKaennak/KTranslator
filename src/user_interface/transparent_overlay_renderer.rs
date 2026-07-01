@@ -63,6 +63,7 @@ pub fn render_overlay_viewport(
             .with_title(&title)
             .with_decorations(false)
             .with_transparent(true)
+            .with_visible(false)
             .with_always_on_top()
             .with_mouse_passthrough(true)
             .with_active(false)
@@ -82,6 +83,14 @@ pub fn render_overlay_viewport(
                     ui.label("Frame Viewer (Embedded)");
                 });
                 return;
+            }
+
+            let first_frame = ctx
+                .data(|d| d.get_temp::<bool>(egui::Id::new(("first_frame", slot_idx))))
+                .is_none();
+            if first_frame {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("first_frame", slot_idx)), false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
 
             let current_rect = {
