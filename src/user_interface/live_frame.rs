@@ -295,6 +295,8 @@ pub fn render_live_frame_viewport(
                     if is_moving {
                         // User is dragging or resizing the window, extend debounce timer
                         ctx.data_mut(|d| d.insert_temp(debounce_id, now + 0.3));
+                        // Wake up the overlay viewport so it tracks the movement instantly
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{slot_idx}")));
                     } else {
                         // Window is stable. Check if debounce timer elapsed.
                         let debounce_until = ctx.data(|d| d.get_temp::<f64>(debounce_id)).unwrap_or(0.0);
