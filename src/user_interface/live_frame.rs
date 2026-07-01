@@ -236,14 +236,7 @@ pub fn render_live_frame_viewport(
                 || (current_r.w - last_rect.w).abs() > 0.1
                 || (current_r.h - last_rect.h).abs() > 0.1;
 
-            let first_frame = ctx
-                .data(|d| d.get_temp::<bool>(egui::Id::new(("first_frame", slot_idx))))
-                .is_none();
-            if first_frame {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("first_frame", slot_idx)), false));
-            }
-
-            if model_changed || first_frame {
+            if model_changed {
                 let target_pos = egui::pos2(
                     snap_logical(current_r.x, ppp),
                     snap_logical(current_r.y, ppp),
