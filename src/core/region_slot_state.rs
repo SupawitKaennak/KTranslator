@@ -143,6 +143,8 @@ pub struct SlotRuntimeState {
     pub recent_translations: VecDeque<String>,
     /// ID of the active error shown in the UI for this slot
     pub active_error_id: Option<usize>,
+    /// The visual rectangle of the frame, updated continuously during dragging
+    pub visual_rect: Arc<Mutex<Option<Rect>>>,
 }
 
 impl SlotRuntimeState {
@@ -169,6 +171,7 @@ impl SlotRuntimeState {
             error_streak: 0,
             recent_translations: VecDeque::new(),
             active_error_id: None,
+            visual_rect: Arc::new(Mutex::new(None)),
         }
     }
 }

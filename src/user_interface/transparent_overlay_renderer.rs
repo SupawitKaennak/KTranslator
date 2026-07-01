@@ -45,7 +45,8 @@ pub fn render_overlay_viewport(
         }
         return;
     }
-    let r = rect.unwrap().snap_to_pixels();
+    let visual_r = runtime.visual_rect.lock().clone();
+    let r = visual_r.unwrap_or(rect.unwrap()).snap_to_pixels();
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
 
@@ -82,59 +83,29 @@ pub fn render_overlay_viewport(
                 return;
             }
 
+            let target_pos = egui::pos2(
+                snap_logical(r.x, ppp),
+                snap_logical(r.y, ppp),
+            );
+            let target_size = egui::vec2(
+                snap_logical(r.w, ppp),
+                snap_logical(r.h, ppp),
+            );
+
+            let needs_set = ctx.input(|i| i.viewport().outer_rect).is_none_or(|or| {
+                (or.min.x - target_pos.x).abs() > 0.6
+                    || (or.min.y - target_pos.y).abs() > 0.6
+                    || (or.width() - target_size.x).abs() > 0.6
+                    || (or.height() - target_size.y).abs() > 0.6
+            });
+
+            if needs_set {
+                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(target_pos));
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(target_size));
+            }
+
             let painter = ctx.layer_painter(egui::LayerId::background());
             let full_rect = ctx.screen_rect();
-
-            // --- SYNC VIEWPORT POSITION TO MODEL RECT ---
-            let last_rect_id = egui::Id::new(("last_rect_overlay", slot_idx));
-            let current_r = {
-                let m = model_arc_inner.lock();
-                m.slots
-                    .get(slot_idx)
-                    .and_then(|s| s.rect)
-                    .map(|rect| rect.snap_to_pixels())
-                    .unwrap_or(r)
-            };
-
-            let last_rect: crate::core::types::Rect = ctx.data(|d| d.get_temp(last_rect_id)).unwrap_or(current_r);
-
-            let model_changed = (current_r.x - last_rect.x).abs() > 0.1
-                || (current_r.y - last_rect.y).abs() > 0.1
-                || (current_r.w - last_rect.w).abs() > 0.1
-                || (current_r.h - last_rect.h).abs() > 0.1;
-
-            let first_frame = ctx
-                .data(|d| d.get_temp::<bool>(egui::Id::new(("first_frame_overlay", slot_idx))))
-                .is_none();
-            if first_frame {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("first_frame_overlay", slot_idx)), false));
-            }
-
-            if model_changed || first_frame {
-                let target_pos = egui::pos2(
-                    snap_logical(current_r.x, ppp),
-                    snap_logical(current_r.y, ppp),
-                );
-                let target_size = egui::vec2(
-                    snap_logical(current_r.w, ppp),
-                    snap_logical(current_r.h, ppp),
-                );
-
-                let needs_set = ctx.input(|i| i.viewport().outer_rect).is_none_or(|or| {
-                    (or.min.x - target_pos.x).abs() > 0.6
-                        || (or.min.y - target_pos.y).abs() > 0.6
-                        || (or.width() - target_size.x).abs() > 0.6
-                        || (or.height() - target_size.y).abs() > 0.6
-                });
-
-                if needs_set {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(target_pos));
-                    ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(target_size));
-                }
-            }
-
-            ctx.data_mut(|d| d.insert_temp(last_rect_id, current_r));
-            // ----------------------------------------------
 
             {
                 let m = model_arc_inner.lock();

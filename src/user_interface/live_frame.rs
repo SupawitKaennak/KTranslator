@@ -104,6 +104,7 @@ pub fn render_live_frame_viewport(
     let title = format!("Frame Live {}", slot_idx + 1);
     let model_inner = model_arc.clone();
     let hwnd_cache = runtime.frame_live_hwnd.clone();
+    let visual_rect = runtime.visual_rect.clone();
     let hide_capture = settings.hide_from_capture;
     let platform_svc = platform.clone();
 
@@ -282,6 +283,9 @@ pub fn render_live_frame_viewport(
 
                     let last_physical = ctx.data(|d| d.get_temp::<Rect>(last_physical_rect_id)).unwrap_or(physical_rect);
                     ctx.data_mut(|d| d.insert_temp(last_physical_rect_id, physical_rect));
+
+                    // Continuously update the visual rect so the transparent overlay moves instantly with the window
+                    *visual_rect.lock() = Some(physical_rect);
 
                     let is_moving = (last_physical.x - physical_rect.x).abs() > 0.1
                         || (last_physical.y - physical_rect.y).abs() > 0.1
