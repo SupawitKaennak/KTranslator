@@ -196,6 +196,14 @@ pub fn show_settings_window(
                     SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
                 });
             });
+
+            // If the user is dragging sliders or clicking in the settings window,
+            // notify the main window to sync the child viewports (like overlay) so 
+            // settings take effect in real-time.
+            if ctx.is_using_pointer() {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
+                ctx.request_repaint_of(egui::ViewportId::ROOT);
+            }
         },
     );
 
