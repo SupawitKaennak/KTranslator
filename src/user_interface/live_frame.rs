@@ -148,8 +148,8 @@ pub fn render_live_frame_viewport(
                 // The global window alpha will be lowered to create the glass effect, and it will catch clicks.
                 painter.rect_filled(full, 0.0, egui::Color32::from_rgb(25, 25, 25));
             } else {
-                // Pure black triggers LWA_COLORKEY, making the center 100% transparent and click-through.
-                painter.rect_filled(full, 0.0, egui::Color32::BLACK);
+                // Pure black triggers LWA_COLORKEY in GDI, but for wgpu we must use alpha channel transparency.
+                painter.rect_filled(full, 0.0, egui::Color32::TRANSPARENT);
             }
 
             // Keep polling so we can detect mouse entering/leaving

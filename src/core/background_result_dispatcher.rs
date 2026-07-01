@@ -30,8 +30,10 @@ impl ResultDispatcher {
         err_handler: &crate::core::usecases::error_handler::ErrorHandler,
         translation_cache: &Arc<Mutex<TranslationCache>>,
         settings: &crate::infrastructure::settings::Settings,
-    ) {
+    ) -> bool {
+        let mut processed_any = false;
         while let Ok(result) = bg_rx.try_recv() {
+            processed_any = true;
             match result {
                 BgResult::Done {
                     slot_idx,
@@ -105,6 +107,7 @@ impl ResultDispatcher {
                 ),
             }
         }
+        processed_any
     }
 
     #[allow(clippy::too_many_arguments)]
