@@ -676,15 +676,22 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(80));
         }
         
-        // Sync all child viewports to match the state of the main window.
-        // Whenever the main window processes an event (e.g. user clicks Clear Cache, 
-        // toggles settings, or background tick fires), we force children to repaint immediately
-        // so they don't lag behind or feel unresponsive.
-        let num_slots = self.model.lock().slots.len();
+        // Sync all active child viewports to match the state of the main window.
+        let m = self.model.lock();
+        let num_slots = m.slots.len();
         for i in 0..num_slots {
-            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
-            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
-            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
+            let slot = &m.slots[i];
+            if slot.enabled {
+                if slot.rect.is_some() {
+                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
+                }
+                if slot.overlay_mode && slot.rect.is_some() {
+                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
+                }
+            }
+            if slot.popup_open {
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
+            }
         }
     }
 }
