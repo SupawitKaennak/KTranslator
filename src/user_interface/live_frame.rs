@@ -92,7 +92,9 @@ pub fn render_live_frame_viewport(
             ctx.data_mut(|d| {
                 d.remove::<bool>(egui::Id::new(("first_frame", slot_idx)));
                 d.remove::<Rect>(egui::Id::new(("last_rect", slot_idx)));
+                d.remove::<Rect>(egui::Id::new(("last_physical_rect", slot_idx)));
                 d.remove::<f64>(egui::Id::new(("ignore_until", slot_idx)));
+                d.remove::<f64>(egui::Id::new(("debounce_rect", slot_idx)));
             });
         }
         return;
@@ -265,6 +267,9 @@ pub fn render_live_frame_viewport(
                 }
             }
 
+            let last_physical_rect_id = egui::Id::new(("last_physical_rect", slot_idx));
+            let debounce_id = egui::Id::new(("debounce_rect", slot_idx));
+
             if now > ignore_until {
                 if let Some(outer_rect) = ctx.input(|i| i.viewport().outer_rect) {
                     let physical_rect = Rect {
@@ -275,14 +280,32 @@ pub fn render_live_frame_viewport(
                     }
                     .snap_to_pixels();
 
-                    if (current_r.x - physical_rect.x).abs() > 0.1
-                        || (current_r.y - physical_rect.y).abs() > 0.1
-                        || (current_r.w - physical_rect.w).abs() > 0.1
-                        || (current_r.h - physical_rect.h).abs() > 0.1
-                    {
-                        let mut m = model_inner.lock();
-                        m.slots[slot_idx].rect = Some(physical_rect);
-                        current_r = physical_rect;
+                    let last_physical = ctx.data(|d| d.get_temp::<Rect>(last_physical_rect_id)).unwrap_or(physical_rect);
+                    ctx.data_mut(|d| d.insert_temp(last_physical_rect_id, physical_rect));
+
+                    let is_moving = (last_physical.x - physical_rect.x).abs() > 0.1
+                        || (last_physical.y - physical_rect.y).abs() > 0.1
+                        || (last_physical.w - physical_rect.w).abs() > 0.1
+                        || (last_physical.h - physical_rect.h).abs() > 0.1;
+
+                    if is_moving {
+                        // User is dragging or resizing the window, extend debounce timer
+                        ctx.data_mut(|d| d.insert_temp(debounce_id, now + 0.3));
+                    } else {
+                        // Window is stable. Check if debounce timer elapsed.
+                        let debounce_until = ctx.data(|d| d.get_temp::<f64>(debounce_id)).unwrap_or(0.0);
+                        if now > debounce_until {
+                            // Stable for > 300ms. Sync to model if it differs.
+                            if (current_r.x - physical_rect.x).abs() > 0.1
+                                || (current_r.y - physical_rect.y).abs() > 0.1
+                                || (current_r.w - physical_rect.w).abs() > 0.1
+                                || (current_r.h - physical_rect.h).abs() > 0.1
+                            {
+                                let mut m = model_inner.lock();
+                                m.slots[slot_idx].rect = Some(physical_rect);
+                                current_r = physical_rect;
+                            }
+                        }
                     }
                 }
             }
