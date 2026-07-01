@@ -307,6 +307,8 @@ fn region_content(
     if ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
         drop(st);
         *outcome.lock() = Some(RegionOutcome::Cancelled);
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        ui.ctx().request_repaint();
         return;
     }
 
@@ -379,11 +381,12 @@ fn run_create_mode(
         if let (Some(a), Some(b)) = (st.create_drag_start, st.create_drag_current) {
             if let Some(rect) = st.try_finish_create(full_rect, a, b) {
                 let slot = st.slot_idx;
-                let _ = st;
                 *outcome.lock() = Some(RegionOutcome::Done {
                     slot,
                     rect: rect.snap_to_pixels(),
                 });
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ui.ctx().request_repaint();
                 return;
             }
         }
@@ -478,6 +481,8 @@ fn run_edit_mode(
             if let Some(rect) = st.rect.map(|r| r.snap_to_pixels()) {
                 let slot = st.slot_idx;
                 *outcome.lock() = Some(RegionOutcome::Done { slot, rect });
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ui.ctx().request_repaint();
                 return;
             }
             st.edit_drag_active = false;
