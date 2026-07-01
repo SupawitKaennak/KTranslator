@@ -534,6 +534,10 @@ impl eframe::App for App {
                             .on_hover_text(i18n.open_settings_desc)
                             .clicked()
                         {
+                            // Clear any leftover "poison pill" close requests from a previous session
+                            ctx.data_mut(|d| {
+                                d.remove_temp::<bool>(egui::Id::new("settings_close_requested"))
+                            });
                             self.show_settings = true;
                             self.settings_fetch_models_pending = true;
                             let _ = self.settings_ctrl.begin_edit(&self.settings);
