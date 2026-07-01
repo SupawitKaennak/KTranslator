@@ -667,7 +667,7 @@ impl eframe::App for App {
         if any_slot_busy || processed_any {
             let num_slots = self.model.lock().slots.len();
             for i in 0..num_slots {
-                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("overlay_{}", i)));
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
                 ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
                 ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
             }
