@@ -104,6 +104,8 @@ pub fn show_settings_window(
         move |ctx, _| {
             if ctx.input(|i| i.viewport().close_requested()) {
                 close_flag_inner.store(true, Ordering::Relaxed);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("settings_close_requested"), true));
+                ctx.request_repaint();
             }
 
             let active_tab: SettingsTab = ctx
