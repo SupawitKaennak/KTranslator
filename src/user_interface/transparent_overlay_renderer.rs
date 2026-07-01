@@ -51,6 +51,7 @@ pub fn render_overlay_viewport(
     let title = format!("Frame Overlay {}", slot_idx + 1);
 
     let model_arc_inner = model_arc.clone();
+    let visual_rect_arc = runtime.visual_rect.clone();
     let hwnd_cache = runtime.overlay_hwnd.clone();
     let overlay_settings = settings.clone();
     let platform_svc = platform.clone();
@@ -83,13 +84,23 @@ pub fn render_overlay_viewport(
                 return;
             }
 
+            let current_rect = {
+                let m = model_arc_inner.lock();
+                m.slots.get(slot_idx).and_then(|s| s.rect)
+            };
+            if current_rect.is_none() {
+                return;
+            }
+            let visual_r = visual_rect_arc.lock().clone();
+            let dynamic_r = visual_r.unwrap_or(current_rect.unwrap()).snap_to_pixels();
+
             let target_pos = egui::pos2(
-                snap_logical(r.x, ppp),
-                snap_logical(r.y, ppp),
+                snap_logical(dynamic_r.x, ppp),
+                snap_logical(dynamic_r.y, ppp),
             );
             let target_size = egui::vec2(
-                snap_logical(r.w, ppp),
-                snap_logical(r.h, ppp),
+                snap_logical(dynamic_r.w, ppp),
+                snap_logical(dynamic_r.h, ppp),
             );
 
             let needs_set = ctx.input(|i| i.viewport().outer_rect).is_none_or(|or| {
