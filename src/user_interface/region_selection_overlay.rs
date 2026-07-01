@@ -282,7 +282,20 @@ fn region_content(
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
     i18n: &crate::user_interface::i18n::I18n,
 ) {
+    // If outcome is set, we're waiting for the parent to destroy this viewport.
+    // Keep painting the frozen screenshot to prevent the default white background from flashing.
     if outcome.lock().is_some() {
+        let st = state.lock();
+        let tex = st.texture.clone();
+        let full_rect = ui.max_rect();
+        let painter = ui.painter();
+        painter.image(
+            tex.id(),
+            full_rect,
+            egui::Rect::from_min_max(Pos2::ZERO, egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        painter.rect_filled(full_rect, 0.0, Color32::from_black_alpha(140));
         return;
     }
 
