@@ -504,6 +504,8 @@ impl eframe::App for App {
                             visuals.widgets.active.corner_radius = 6.0.into();
                             visuals.widgets.open.corner_radius = 6.0.into();
                             ctx.set_visuals(visuals);
+                            ctx.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
+                            ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
                             let _ = save_settings(&self.settings);
                         }
 
