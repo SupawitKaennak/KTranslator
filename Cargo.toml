@@ -30,7 +30,7 @@ tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 wordninja = "0.1"
 symspell = "0.5"
-oar-ocr = "0.6"
+oar-ocr = { version = "0.6", features = ["directml", "cuda", "tensorrt"] }
 
 
 
