@@ -269,11 +269,12 @@ pub fn run_region_viewport(
             let i18n = crate::user_interface::i18n::get_i18n(lang);
             crate::user_interface::font_loader_setup::setup_fonts(ctx);
 
+            let first_frame_key = egui::Id::new(("region_first_frame", session_id.clone()));
             let first_frame = ctx
-                .data(|d| d.get_temp::<bool>(egui::Id::new("region_first_frame")))
+                .data(|d| d.get_temp::<bool>(first_frame_key))
                 .is_none();
             if first_frame {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new("region_first_frame"), false));
+                ctx.data_mut(|d| d.insert_temp(first_frame_key, false));
                 ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
 

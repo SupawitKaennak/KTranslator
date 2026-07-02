@@ -141,6 +141,16 @@ pub fn render_overlay_viewport(
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
                     let yolo_bubbles = slot.last_yolo_bubbles.clone();
+                    tracing::debug!(
+                        slot = slot_idx,
+                        overlay_mode = slot.overlay_mode,
+                        has_translation = !slot.last_translation.is_empty(),
+                        translation_len = slot.last_translation.len(),
+                        ocr_lines_count = slot.last_ocr_lines.len(),
+                        trans_lines_count = slot.last_trans_lines.len(),
+                        show_overlay,
+                        "overlay_viewport paint check"
+                    );
                     drop(m);
 
                     if show_overlay {
@@ -400,6 +410,7 @@ pub fn render_overlay_viewport(
                             // Fallback
                             let font_size = overlay_settings.overlay_font_size;
                             let mut y = full_rect.top() + 8.0;
+                            tracing::debug!("Rendering fallback text on full_rect: {:?}", full_rect);
                             for line in fallback_text.lines() {
                                 if line.trim().is_empty() { continue; }
                                 let wrap_width = full_rect.width() - 16.0;
@@ -423,6 +434,7 @@ pub fn render_overlay_viewport(
                                     pos - egui::vec2(overlay_padding, overlay_padding/2.0),
                                     galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),
                                 );
+                                tracing::debug!("Drawing fallback line at pos: {:?} with bg: {:?}", pos, bg);
                                 painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
                                 let line_h = galley.size().y;
                                 painter.galley(pos, galley, overlay_text_color);
@@ -459,6 +471,13 @@ pub fn render_overlay_viewport(
                     }
 
                     // No border drawing here, it's handled by live_frame.rs
+
+                    // Keep the overlay alive when there is active translation text.
+                    // Without this, the deferred viewport only paints when explicitly
+                    // woken up by the parent — causing it to freeze after the first frame.
+                    if show_overlay {
+                        ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                    }
                 }
             }
 
