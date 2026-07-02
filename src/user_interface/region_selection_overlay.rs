@@ -45,6 +45,7 @@ pub enum RegionMode {
 pub struct RegionOverlayState {
     pub slot_idx: usize,
     pub mode: RegionMode,
+    pub session_id: String,
     pub texture: egui::TextureHandle,
     pub origin: (i32, i32),
     pub px: (u32, u32),
@@ -98,10 +99,11 @@ impl RegionOverlayState {
                 .map(|d| d.as_nanos())
                 .unwrap_or(0)
         );
-        let texture = ctx.load_texture(tid, color, Default::default());
+        let texture = ctx.load_texture(tid.clone(), color, Default::default());
         Ok(Self {
             slot_idx,
             mode: RegionMode::Create,
+            session_id: tid,
             texture,
             origin: (screen.display_info.x, screen.display_info.y),
             px: (w, h),
@@ -249,24 +251,43 @@ pub fn run_region_viewport(
     let i18n = crate::user_interface::i18n::get_i18n(lang);
     let title = i18n.region_title;
 
-    ctx.show_viewport_immediate(
-        egui::ViewportId::from_hash_of("screen_translator_region_overlay"),
+    let state_clone = state.clone();
+    let outcome_clone = outcome.clone();
+    let session_id = state.lock().session_id.clone();
+    
+    ctx.show_viewport_deferred(
+        egui::ViewportId::from_hash_of(&session_id),
         egui::ViewportBuilder::default()
             .with_title(title)
             .with_fullscreen(true)
             .with_decorations(false)
             .with_resizable(false)
+            .with_transparent(true)
+            .with_visible(false)
             .with_window_level(egui::WindowLevel::AlwaysOnTop),
-        |ctx, class| {
+        move |ctx, class| {
+            let i18n = crate::user_interface::i18n::get_i18n(lang);
             crate::user_interface::font_loader_setup::setup_fonts(ctx);
+
+            let first_frame_key = egui::Id::new(("region_first_frame", session_id.clone()));
+            let first_frame = ctx
+                .data(|d| d.get_temp::<bool>(first_frame_key))
+                .is_none();
+            if first_frame {
+                ctx.data_mut(|d| d.insert_temp(first_frame_key, false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            }
+
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::Window::new(i18n.region).show(ctx, |ui| {
-                    region_content(ui, &state, &outcome, i18n);
+                    region_content(ui, &state_clone, &outcome_clone, i18n);
                 });
             } else {
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    region_content(ui, &state, &outcome, i18n);
-                });
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::NONE.fill(egui::Color32::TRANSPARENT))
+                    .show(ctx, |ui| {
+                        region_content(ui, &state_clone, &outcome_clone, i18n);
+                    });
             }
         },
     );
@@ -278,7 +299,20 @@ fn region_content(
     outcome: &Arc<Mutex<Option<RegionOutcome>>>,
     i18n: &crate::user_interface::i18n::I18n,
 ) {
+    // If outcome is set, we're waiting for the parent to destroy this viewport.
+    // Keep painting the frozen screenshot to prevent the default white background from flashing.
     if outcome.lock().is_some() {
+        let st = state.lock();
+        let tex = st.texture.clone();
+        let full_rect = ui.max_rect();
+        let painter = ui.painter();
+        painter.image(
+            tex.id(),
+            full_rect,
+            egui::Rect::from_min_max(Pos2::ZERO, egui::pos2(1.0, 1.0)),
+            Color32::WHITE,
+        );
+        painter.rect_filled(full_rect, 0.0, Color32::from_black_alpha(140));
         return;
     }
 
@@ -290,6 +324,8 @@ fn region_content(
     if ui.ctx().input(|i| i.key_pressed(egui::Key::Escape)) {
         drop(st);
         *outcome.lock() = Some(RegionOutcome::Cancelled);
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+        ui.ctx().request_repaint();
         return;
     }
 
@@ -362,11 +398,12 @@ fn run_create_mode(
         if let (Some(a), Some(b)) = (st.create_drag_start, st.create_drag_current) {
             if let Some(rect) = st.try_finish_create(full_rect, a, b) {
                 let slot = st.slot_idx;
-                let _ = st;
                 *outcome.lock() = Some(RegionOutcome::Done {
                     slot,
                     rect: rect.snap_to_pixels(),
                 });
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ui.ctx().request_repaint();
                 return;
             }
         }
@@ -461,6 +498,8 @@ fn run_edit_mode(
             if let Some(rect) = st.rect.map(|r| r.snap_to_pixels()) {
                 let slot = st.slot_idx;
                 *outcome.lock() = Some(RegionOutcome::Done { slot, rect });
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                ui.ctx().request_repaint();
                 return;
             }
             st.edit_drag_active = false;

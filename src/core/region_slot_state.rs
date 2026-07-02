@@ -107,6 +107,8 @@ use std::sync::Arc;
 pub struct SlotRuntimeState {
     /// True if the slot has a background task running (capture or API)
     pub busy: bool,
+    /// Timestamp (ms) when `busy` was last set to true — used for timeout recovery
+    pub busy_since_ms: u64,
     /// True if the slot is currently waiting for an AI response
     pub processing: bool,
     /// Human-readable status shown in the UI
@@ -139,18 +141,17 @@ pub struct SlotRuntimeState {
     pub error_streak: u32,
     /// Recent translated segments for low-token contextual translation
     pub recent_translations: VecDeque<String>,
-    /// Overlay fade alpha (0.0–1.0) when fade smoothing is enabled
-    pub overlay_fade_alpha: f32,
-    pub overlay_fade_target: f32,
-    pub last_overlay_fade_ms: u64,
     /// ID of the active error shown in the UI for this slot
     pub active_error_id: Option<usize>,
+    /// The visual rectangle of the frame, updated continuously during dragging
+    pub visual_rect: Arc<Mutex<Option<Rect>>>,
 }
 
 impl SlotRuntimeState {
     pub fn new() -> Self {
         Self {
             busy: false,
+            busy_since_ms: 0,
             processing: false,
             status: "Idle".to_string(),
             last_hash: 0,
@@ -169,10 +170,8 @@ impl SlotRuntimeState {
             persistent_trans_lines: Arc::new(Mutex::new(Vec::new())),
             error_streak: 0,
             recent_translations: VecDeque::new(),
-            overlay_fade_alpha: 1.0,
-            overlay_fade_target: 1.0,
-            last_overlay_fade_ms: 0,
             active_error_id: None,
+            visual_rect: Arc::new(Mutex::new(None)),
         }
     }
 }

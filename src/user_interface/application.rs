@@ -103,7 +103,7 @@ impl App {
     // Background processing: capture → compare → OCR+Translate (if changed)
     // -----------------------------------------------------------------------
 
-    fn tick_background(&mut self, ctx: &egui::Context) {
+    fn tick_background(&mut self, ctx: &egui::Context) -> bool {
         // 1. Process pending signals from popups/error window
         while self.error_dismiss_rx.try_recv().is_ok() {
             self.err_handler.clear_all();
@@ -180,41 +180,8 @@ impl App {
             ctx.request_repaint();
         }
 
-        if self.settings.realtime.fade_smoothing {
-            let mut requires_repaint = false;
-            for rt in &mut self.slots_runtime {
-                if rt.last_overlay_fade_ms == 0 {
-                    rt.last_overlay_fade_ms = now;
-                }
-
-                let diff = (rt.overlay_fade_target - rt.overlay_fade_alpha).abs();
-                if diff > 0.005 {
-                    // Calculate precise delta time in seconds
-                    let dt = (now.saturating_sub(rt.last_overlay_fade_ms) as f32 / 1000.0)
-                        .clamp(0.0, 0.1);
-                    rt.last_overlay_fade_ms = now;
-
-                    if dt > 0.0 {
-                        // Premium Cinematic Exponential Interpolation (Independent of FPS)
-                        // Speed constant 8.5 provides an elegant ~300ms buttery smooth fade transition.
-                        let speed = 8.5;
-                        let t = 1.0 - (-speed * dt).exp();
-                        rt.overlay_fade_alpha +=
-                            (rt.overlay_fade_target - rt.overlay_fade_alpha) * t;
-                        requires_repaint = true;
-                    }
-                } else {
-                    rt.overlay_fade_alpha = rt.overlay_fade_target;
-                    rt.last_overlay_fade_ms = now;
-                }
-            }
-            if requires_repaint {
-                ctx.request_repaint();
-            }
-        }
-
-        // 2. Delegate background logic to coordinator
-        ResultDispatcher::process_results(
+        // 1. Delegate background logic to coordinator (Process Results FIRST)
+        let processed_any = ResultDispatcher::process_results(
             &self.coordinator.bg_rx,
             &self.model,
             &mut self.slots_runtime,
@@ -222,6 +189,12 @@ impl App {
             &self.caches.translation,
             &self.settings,
         );
+
+        if processed_any {
+            ctx.request_repaint(); // Wake up main window immediately to start fade animation
+        }
+
+
 
         self.coordinator.tick(
             &self.model,
@@ -235,6 +208,7 @@ impl App {
             &self.services.platform,
             ctx.clone(),
         );
+        processed_any
     }
 
     fn ui_settings(&mut self, ctx: &egui::Context) {
@@ -316,9 +290,18 @@ impl App {
             ctx.request_repaint();
         }
 
-        if resp.close_clicked {
+        let close_requested = ctx
+            .data_mut(|d| d.remove_temp::<bool>(egui::Id::new("settings_close_requested")))
+            .unwrap_or(false);
+
+        if resp.close_clicked || close_requested {
             self.show_settings = false;
             self.settings_ctrl.end_edit();
+            ctx.send_viewport_cmd_to(
+                egui::ViewportId::from_hash_of("settings_viewport"),
+                egui::ViewportCommand::Close,
+            );
+            ctx.request_repaint();
         }
     }
 
@@ -336,7 +319,7 @@ impl App {
             .map(|e| e.message)
             .collect();
 
-        ctx.show_viewport_immediate(
+        ctx.show_viewport_deferred(
             viewport_id,
             egui::ViewportBuilder::default()
                 .with_title("KTranslator - Error Report")
@@ -423,8 +406,24 @@ impl eframe::App for App {
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let i18n = get_i18n(self.settings.ui_language);
-        self.tick_background(ctx);
+        let processed_any = self.tick_background(ctx);
         self.ui_error_popup(ctx);
+
+        // Apply capture exclusion to main window and settings window if they are open
+        let main_title = "KTranslator";
+        if let Some(hwnd) = self.services.platform.find_window_by_title(main_title) {
+            self.services.platform.set_window_capture_exclusion(hwnd, self.settings.hide_from_capture);
+        }
+        let settings_title = format!("KTranslator - {}", i18n.settings);
+        if let Some(hwnd) = self.services.platform.find_window_by_title(&settings_title) {
+            self.services.platform.set_window_capture_exclusion(hwnd, self.settings.hide_from_capture);
+        }
+
+        // Track if user interacted with UI to trigger a child sync (e.g. clicked Clear Cache)
+        let ui_interacted = ctx.is_using_pointer() || ctx.wants_keyboard_input() || ctx.input(|i| i.pointer.any_click());
+        // Settings window can also request a sync by setting this flag
+        let force_sync = ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new("force_sync_children"))).unwrap_or(false);
+        let should_sync_children = processed_any || ui_interacted || force_sync;
 
         if let Some(sess) = &self.region_session {
             run_region_viewport(
@@ -515,6 +514,8 @@ impl eframe::App for App {
                             visuals.widgets.active.corner_radius = 6.0.into();
                             visuals.widgets.open.corner_radius = 6.0.into();
                             ctx.set_visuals(visuals);
+                            ctx.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
+                            ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
                             let _ = save_settings(&self.settings);
                         }
 
@@ -523,6 +524,10 @@ impl eframe::App for App {
                             .on_hover_text(i18n.open_settings_desc)
                             .clicked()
                         {
+                            // Clear any leftover "poison pill" close requests from a previous session
+                            ctx.data_mut(|d| {
+                                d.remove_temp::<bool>(egui::Id::new("settings_close_requested"))
+                            });
                             self.show_settings = true;
                             self.settings_fetch_models_pending = true;
                             let _ = self.settings_ctrl.begin_edit(&self.settings);
@@ -651,6 +656,36 @@ impl eframe::App for App {
 
         if min_wait_ms != u64::MAX {
             ctx.request_repaint_after(std::time::Duration::from_millis(min_wait_ms.max(5)));
+        }
+
+        // Keep polling while any slot has a background task running.
+        // Without this, eframe may sleep and never call update() to collect results,
+        // causing busy=true to deadlock indefinitely.
+        let any_slot_busy = self.slots_runtime.iter().any(|r| r.busy);
+        if any_slot_busy {
+            ctx.request_repaint_after(std::time::Duration::from_millis(80));
+        }
+        
+        // Sync active child viewports only when their visual state might have changed.
+        // This avoids spamming wgpu with 144+ repaint requests per second unnecessarily,
+        // which was causing severe lock contention, stuttering, and eventual GPU deadlocks.
+        if should_sync_children {
+            let m = self.model.lock();
+            let num_slots = m.slots.len();
+            for i in 0..num_slots {
+                let slot = &m.slots[i];
+                if slot.enabled {
+                    if slot.show_frame && slot.rect.is_some() {
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{}", i)));
+                    }
+                    if slot.overlay_mode && slot.rect.is_some() {
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{}", i)));
+                    }
+                }
+                if slot.popup_open {
+                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
+                }
+            }
         }
     }
 }

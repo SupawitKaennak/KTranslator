@@ -42,26 +42,33 @@ pub fn render_overlay_viewport(
             runtime
                 .overlay_hwnd
                 .store(0, std::sync::atomic::Ordering::Relaxed);
+
+            // Clear cached state so it can become visible again if re-opened
+            ctx.data_mut(|d| {
+                d.remove::<bool>(egui::Id::new(("overlay_first_frame", slot_idx)));
+            });
         }
         return;
     }
-    let r = rect.unwrap().snap_to_pixels();
+    let visual_r = runtime.visual_rect.lock().clone();
+    let r = visual_r.unwrap_or(rect.unwrap()).snap_to_pixels();
 
     let title = format!("Frame Overlay {}", slot_idx + 1);
 
     let model_arc_inner = model_arc.clone();
+    let visual_rect_arc = runtime.visual_rect.clone();
     let hwnd_cache = runtime.overlay_hwnd.clone();
     let overlay_settings = settings.clone();
     let platform_svc = platform.clone();
-    let fade_alpha = runtime.overlay_fade_alpha;
-    let fade_smoothing = overlay_settings.realtime.fade_smoothing;
+    let last_capture_hide = runtime.last_capture_hide.clone();
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(&title)
             .with_decorations(false)
             .with_transparent(true)
+            .with_visible(false)
             .with_always_on_top()
             .with_mouse_passthrough(true)
             .with_active(false)
@@ -83,6 +90,45 @@ pub fn render_overlay_viewport(
                 return;
             }
 
+            let first_frame = ctx
+                .data(|d| d.get_temp::<bool>(egui::Id::new(("overlay_first_frame", slot_idx))))
+                .is_none();
+            if first_frame {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("overlay_first_frame", slot_idx)), false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            }
+
+            let current_rect = {
+                let m = model_arc_inner.lock();
+                m.slots.get(slot_idx).and_then(|s| s.rect)
+            };
+            if current_rect.is_none() {
+                return;
+            }
+            let visual_r = visual_rect_arc.lock().clone();
+            let dynamic_r = visual_r.unwrap_or(current_rect.unwrap()).snap_to_pixels();
+
+            let target_pos = egui::pos2(
+                snap_logical(dynamic_r.x, ppp),
+                snap_logical(dynamic_r.y, ppp),
+            );
+            let target_size = egui::vec2(
+                snap_logical(dynamic_r.w, ppp),
+                snap_logical(dynamic_r.h, ppp),
+            );
+
+            let needs_set = ctx.input(|i| i.viewport().outer_rect).is_none_or(|or| {
+                (or.min.x - target_pos.x).abs() > 0.6
+                    || (or.min.y - target_pos.y).abs() > 0.6
+                    || (or.width() - target_size.x).abs() > 0.6
+                    || (or.height() - target_size.y).abs() > 0.6
+            });
+
+            if needs_set {
+                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(target_pos));
+                ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(target_size));
+            }
+
             let painter = ctx.layer_painter(egui::LayerId::background());
             let full_rect = ctx.screen_rect();
 
@@ -95,6 +141,16 @@ pub fn render_overlay_viewport(
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
                     let yolo_bubbles = slot.last_yolo_bubbles.clone();
+                    tracing::debug!(
+                        slot = slot_idx,
+                        overlay_mode = slot.overlay_mode,
+                        has_translation = !slot.last_translation.is_empty(),
+                        translation_len = slot.last_translation.len(),
+                        ocr_lines_count = slot.last_ocr_lines.len(),
+                        trans_lines_count = slot.last_trans_lines.len(),
+                        show_overlay,
+                        "overlay_viewport paint check"
+                    );
                     drop(m);
 
                     if show_overlay {
@@ -117,25 +173,20 @@ pub fn render_overlay_viewport(
                             txt_r = 12; txt_g = 12; txt_b = 12;
                         }
 
-                        let fade_mul = if fade_smoothing {
-                            fade_alpha.clamp(0.0, 1.0)
-                        } else {
-                            1.0
-                        };
-                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0 * fade_mul;
+                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
                         let overlay_bg_color = egui::Color32::from_rgba_premultiplied(
                             (bg_r as f32 * bg_a) as u8,
                             (bg_g as f32 * bg_a) as u8,
                             (bg_b as f32 * bg_a) as u8,
-                            (overlay_settings.overlay_bg_color[3] as f32 * fade_mul) as u8,
+                            overlay_settings.overlay_bg_color[3],
                         );
 
-                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0 * fade_mul;
+                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
                         let overlay_text_color = egui::Color32::from_rgba_premultiplied(
                             (txt_r as f32 * txt_a) as u8,
                             (txt_g as f32 * txt_a) as u8,
                             (txt_b as f32 * txt_a) as u8,
-                            (overlay_settings.overlay_text_color[3] as f32 * fade_mul) as u8,
+                            overlay_settings.overlay_text_color[3],
                         );
                         let overlay_padding = overlay_settings.overlay_padding;
                         let overlay_corner_radius = overlay_settings.overlay_corner_radius;
@@ -359,6 +410,7 @@ pub fn render_overlay_viewport(
                             // Fallback
                             let font_size = overlay_settings.overlay_font_size;
                             let mut y = full_rect.top() + 8.0;
+                            tracing::debug!("Rendering fallback text on full_rect: {:?}", full_rect);
                             for line in fallback_text.lines() {
                                 if line.trim().is_empty() { continue; }
                                 let wrap_width = full_rect.width() - 16.0;
@@ -382,6 +434,7 @@ pub fn render_overlay_viewport(
                                     pos - egui::vec2(overlay_padding, overlay_padding/2.0),
                                     galley.size() + egui::vec2(overlay_padding*2.0, overlay_padding),
                                 );
+                                tracing::debug!("Drawing fallback line at pos: {:?} with bg: {:?}", pos, bg);
                                 painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
                                 let line_h = galley.size().y;
                                 painter.galley(pos, galley, overlay_text_color);
@@ -418,6 +471,13 @@ pub fn render_overlay_viewport(
                     }
 
                     // No border drawing here, it's handled by live_frame.rs
+
+                    // Keep the overlay alive when there is active translation text.
+                    // Without this, the deferred viewport only paints when explicitly
+                    // woken up by the parent — causing it to freeze after the first frame.
+                    if show_overlay {
+                        ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                    }
                 }
             }
 
@@ -426,7 +486,7 @@ pub fn render_overlay_viewport(
             if let Some(raw) = platform_svc.find_window_by_title(&title_inner) {
                 let cached_hwnd = hwnd_cache.load(std::sync::atomic::Ordering::Relaxed);
                 let current_hide = overlay_settings.hide_from_capture;
-                let mut last_hide = runtime.last_capture_hide.lock();
+                let mut last_hide = last_capture_hide.lock();
 
                 if raw != cached_hwnd || *last_hide != Some(current_hide) {
                     crate::infrastructure::win32::apply_overlay_attributes(raw, current_hide);
@@ -448,7 +508,7 @@ pub fn render_popup_viewport(
     let viewport_id = egui::ViewportId::from_hash_of(format!("popup_{}", slot_idx));
     let model_arc_inner = model_arc.clone();
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(&title)

@@ -94,7 +94,7 @@ pub fn show_settings_window(
         get_i18n(s.ui_language)
     };
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(format!("KTranslator - {}", i18n.settings))
@@ -104,6 +104,8 @@ pub fn show_settings_window(
         move |ctx, _| {
             if ctx.input(|i| i.viewport().close_requested()) {
                 close_flag_inner.store(true, Ordering::Relaxed);
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new("settings_close_requested"), true));
+                ctx.request_repaint();
             }
 
             let active_tab: SettingsTab = ctx
@@ -156,6 +158,7 @@ pub fn show_settings_window(
             // ── Right Content Panel ──
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut settings = settings_inner.lock();
+                let initial_settings = settings.clone();
                 let i18n = get_i18n(settings.ui_language);
 
                 egui::ScrollArea::vertical().show(ui, |ui| match active_tab {
@@ -193,6 +196,17 @@ pub fn show_settings_window(
                     ),
                     SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
                 });
+
+                // If any setting was actually modified, notify the main window to sync 
+                // the child viewports (like overlay) so settings take effect in real-time.
+                if *settings != initial_settings {
+                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
+                    ctx.request_repaint_of(egui::ViewportId::ROOT);
+                }
+
+                // Ensure dynamic tabs like Image Processing (live preview), Debugging, 
+                // and Download Progress update in real-time even when mouse is idle
+                ctx.request_repaint_after(std::time::Duration::from_millis(150));
             });
         },
     );

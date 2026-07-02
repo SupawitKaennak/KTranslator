@@ -90,9 +90,11 @@ pub fn render_live_frame_viewport(
 
             // Clear cached states so that when re-opened, it forces the correct initial position
             ctx.data_mut(|d| {
-                d.remove::<bool>(egui::Id::new(("first_frame", slot_idx)));
+                d.remove::<bool>(egui::Id::new(("live_first_frame", slot_idx)));
                 d.remove::<Rect>(egui::Id::new(("last_rect", slot_idx)));
+                d.remove::<Rect>(egui::Id::new(("last_physical_rect", slot_idx)));
                 d.remove::<f64>(egui::Id::new(("ignore_until", slot_idx)));
+                d.remove::<f64>(egui::Id::new(("debounce_rect", slot_idx)));
             });
         }
         return;
@@ -102,23 +104,41 @@ pub fn render_live_frame_viewport(
     let title = format!("Frame Live {}", slot_idx + 1);
     let model_inner = model_arc.clone();
     let hwnd_cache = runtime.frame_live_hwnd.clone();
+    let visual_rect = runtime.visual_rect.clone();
     let hide_capture = settings.hide_from_capture;
     let platform_svc = platform.clone();
 
-    ctx.show_viewport_immediate(
+    ctx.show_viewport_deferred(
         viewport_id,
         egui::ViewportBuilder::default()
             .with_title(&title)
             .with_decorations(false)
             .with_transparent(true)
+            .with_visible(false)
             .with_always_on_top()
             .with_active(true)
             .with_min_inner_size([150.0, 100.0])
+            .with_inner_size(egui::vec2(
+                snap_logical(r.w, ppp),
+                snap_logical(r.h, ppp),
+            ))
+            .with_position(egui::pos2(
+                snap_logical(r.x, ppp),
+                snap_logical(r.y, ppp),
+            ))
             .with_mouse_passthrough(false),
         move |ctx, class| {
             crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 return;
+            }
+
+            let first_frame = ctx
+                .data(|d| d.get_temp::<bool>(egui::Id::new(("live_first_frame", slot_idx))))
+                .is_none();
+            if first_frame {
+                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("live_first_frame", slot_idx)), false));
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
             }
 
             let full = ctx.screen_rect();
@@ -148,8 +168,8 @@ pub fn render_live_frame_viewport(
                 // The global window alpha will be lowered to create the glass effect, and it will catch clicks.
                 painter.rect_filled(full, 0.0, egui::Color32::from_rgb(25, 25, 25));
             } else {
-                // Pure black triggers LWA_COLORKEY, making the center 100% transparent and click-through.
-                painter.rect_filled(full, 0.0, egui::Color32::BLACK);
+                // Pure black triggers LWA_COLORKEY in GDI, but for wgpu we must use alpha channel transparency.
+                painter.rect_filled(full, 0.0, egui::Color32::TRANSPARENT);
             }
 
             // Keep polling so we can detect mouse entering/leaving
@@ -162,6 +182,16 @@ pub fn render_live_frame_viewport(
                 full,
                 0.0,
                 egui::Stroke::new(BORDER, accent),
+                egui::StrokeKind::Inside,
+            );
+
+            // Invisible hit-testing border so the user can easily grab corners/edges for resizing.
+            // wgpu alpha compositing means fully transparent pixels pass mouse clicks to the game.
+            // Alpha=1 is visually invisible but opaque enough for Windows to catch mouse events.
+            painter.rect_stroke(
+                full,
+                0.0,
+                egui::Stroke::new(HANDLE * 2.0, egui::Color32::from_rgba_premultiplied(1, 1, 1, 1)),
                 egui::StrokeKind::Inside,
             );
 
@@ -199,13 +229,15 @@ pub fn render_live_frame_viewport(
 
             let last_rect_id = egui::Id::new(("last_rect", slot_idx));
 
-            let mut current_r = {
+            let (mut current_r, overlay_mode) = {
                 let m = model_inner.lock();
-                m.slots
-                    .get(slot_idx)
-                    .and_then(|s| s.rect)
+                let s = m.slots.get(slot_idx);
+                let rect = s
+                    .and_then(|slot| slot.rect)
                     .map(|rect| rect.snap_to_pixels())
-                    .unwrap_or(r)
+                    .unwrap_or(r);
+                let overlay_mode = s.map(|slot| slot.overlay_mode).unwrap_or(false);
+                (rect, overlay_mode)
             };
 
             let last_rect: Rect = ctx.data(|d| d.get_temp(last_rect_id)).unwrap_or(current_r);
@@ -215,14 +247,7 @@ pub fn render_live_frame_viewport(
                 || (current_r.w - last_rect.w).abs() > 0.1
                 || (current_r.h - last_rect.h).abs() > 0.1;
 
-            let first_frame = ctx
-                .data(|d| d.get_temp::<bool>(egui::Id::new(("first_frame", slot_idx))))
-                .is_none();
-            if first_frame {
-                ctx.data_mut(|d| d.insert_temp(egui::Id::new(("first_frame", slot_idx)), false));
-            }
-
-            if model_changed || first_frame {
+            if model_changed {
                 let target_pos = egui::pos2(
                     snap_logical(current_r.x, ppp),
                     snap_logical(current_r.y, ppp),
@@ -247,24 +272,50 @@ pub fn render_live_frame_viewport(
                 }
             }
 
-            if now > ignore_until {
-                if let Some(outer_rect) = ctx.input(|i| i.viewport().outer_rect) {
-                    let physical_rect = Rect {
-                        x: (outer_rect.min.x * ppp).round(),
-                        y: (outer_rect.min.y * ppp).round(),
-                        w: (outer_rect.width() * ppp).round(),
-                        h: (outer_rect.height() * ppp).round(),
-                    }
-                    .snap_to_pixels();
+            let last_physical_rect_id = egui::Id::new(("last_physical_rect", slot_idx));
+            let debounce_id = egui::Id::new(("debounce_rect", slot_idx));
 
-                    if (current_r.x - physical_rect.x).abs() > 0.1
-                        || (current_r.y - physical_rect.y).abs() > 0.1
-                        || (current_r.w - physical_rect.w).abs() > 0.1
-                        || (current_r.h - physical_rect.h).abs() > 0.1
-                    {
-                        let mut m = model_inner.lock();
-                        m.slots[slot_idx].rect = Some(physical_rect);
-                        current_r = physical_rect;
+            if let Some(outer_rect) = ctx.input(|i| i.viewport().outer_rect) {
+                let physical_rect = Rect {
+                    x: (outer_rect.min.x * ppp).round(),
+                    y: (outer_rect.min.y * ppp).round(),
+                    w: (outer_rect.width() * ppp).round(),
+                    h: (outer_rect.height() * ppp).round(),
+                }
+                .snap_to_pixels();
+
+                let last_physical = ctx.data(|d| d.get_temp::<Rect>(last_physical_rect_id)).unwrap_or(physical_rect);
+                ctx.data_mut(|d| d.insert_temp(last_physical_rect_id, physical_rect));
+
+                // Continuously update the visual rect so the transparent overlay moves instantly with the window
+                *visual_rect.lock() = Some(physical_rect);
+
+                let is_moving = (last_physical.x - physical_rect.x).abs() > 0.1
+                    || (last_physical.y - physical_rect.y).abs() > 0.1
+                    || (last_physical.w - physical_rect.w).abs() > 0.1
+                    || (last_physical.h - physical_rect.h).abs() > 0.1;
+
+                if is_moving {
+                    // User is dragging or resizing the window, extend debounce timer
+                    ctx.data_mut(|d| d.insert_temp(debounce_id, now + 0.3));
+                    // Wake up the overlay viewport so it tracks the movement instantly
+                    if overlay_mode {
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{slot_idx}")));
+                    }
+                } else if now > ignore_until {
+                    // Window is stable and we are past the initial spawn ignore timer.
+                    let debounce_until = ctx.data(|d| d.get_temp::<f64>(debounce_id)).unwrap_or(0.0);
+                    if now > debounce_until {
+                        // Stable for > 300ms. Sync to model if it differs.
+                        if (current_r.x - physical_rect.x).abs() > 0.1
+                            || (current_r.y - physical_rect.y).abs() > 0.1
+                            || (current_r.w - physical_rect.w).abs() > 0.1
+                            || (current_r.h - physical_rect.h).abs() > 0.1
+                        {
+                            let mut m = model_inner.lock();
+                            m.slots[slot_idx].rect = Some(physical_rect);
+                            current_r = physical_rect;
+                        }
                     }
                 }
             }

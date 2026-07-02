@@ -9,6 +9,9 @@ use crate::core::{
 use parking_lot::Mutex;
 use std::sync::{mpsc, Arc};
 
+/// If a slot stays busy longer than this, force-reset it to allow a new attempt.
+const BUSY_TIMEOUT_MS: u64 = 20_000;
+
 pub struct BackgroundCoordinator {
     pub bg_tx: mpsc::Sender<BgResult>,
     pub bg_rx: mpsc::Receiver<BgResult>,
@@ -139,11 +142,34 @@ impl BackgroundCoordinator {
                 continue;
             }
 
+            // --- Busy Timeout Recovery ---
+            // If a slot has been stuck as busy for over BUSY_TIMEOUT_MS (e.g. OCR/API hung),
+            // force-reset it so the pipeline can attempt a fresh task.
+            if slots_runtime[i].busy && slots_runtime[i].busy_since_ms > 0 {
+                let busy_duration = now.saturating_sub(slots_runtime[i].busy_since_ms);
+                if busy_duration > BUSY_TIMEOUT_MS {
+                    tracing::warn!(
+                        slot = i,
+                        busy_duration_ms = busy_duration,
+                        "Slot stuck busy — force resetting after timeout"
+                    );
+                    slots_runtime[i].busy = false;
+                    slots_runtime[i].busy_since_ms = 0;
+                    slots_runtime[i].processing = false;
+                    slots_runtime[i].status = "Timeout — retrying".to_string();
+                    let mut m = model_arc.lock();
+                    if let Some(s) = m.slots.get_mut(i) {
+                        s.next_tick_at_ms = now; // retry immediately
+                    }
+                }
+            }
+
             if slots_runtime[i].busy || now < slot.next_tick_at_ms || any_busy {
                 continue;
             }
 
             slots_runtime[i].busy = true;
+            slots_runtime[i].busy_since_ms = now;  // record when busy started
             slots_runtime[i].processing = false;
             {
                 let mut m = model_arc.lock();

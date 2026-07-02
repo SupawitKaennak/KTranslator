@@ -5,8 +5,7 @@ mod core;
 mod infrastructure;
 mod user_interface;
 
-#[tokio::main]
-async fn main() -> eframe::Result<()> {
+fn main() -> eframe::Result<()> {
     let filter = tracing_subscriber::EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("ktranslator=debug,debug"));
 
@@ -46,6 +45,10 @@ async fn main() -> eframe::Result<()> {
             .with_icon(std::sync::Arc::new(icon_data))
             .with_always_on_top()
             .with_resizable(false),
+        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
+            present_mode: eframe::wgpu::PresentMode::AutoNoVsync,
+            ..Default::default()
+        },
         ..Default::default()
     };
     eframe::run_native(
