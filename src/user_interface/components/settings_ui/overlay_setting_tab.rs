@@ -20,13 +20,43 @@ pub fn render_tab_overlay(
         .show(ui, |ui| {
             ui.label(format!("{}:", i18n.bg_color));
             ui.horizontal(|ui| {
-                ui.color_edit_button_srgba_unmultiplied(&mut settings.overlay_bg_color);
+                let mut rgb = [
+                    settings.overlay_bg_color[0],
+                    settings.overlay_bg_color[1],
+                    settings.overlay_bg_color[2],
+                ];
+                if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    settings.overlay_bg_color[0] = rgb[0];
+                    settings.overlay_bg_color[1] = rgb[1];
+                    settings.overlay_bg_color[2] = rgb[2];
+                }
+                ui.add_space(8.0);
+                ui.label(format!("{}:", i18n.opacity));
+                ui.add(egui::Slider::new(
+                    &mut settings.overlay_bg_color[3],
+                    0..=255,
+                ));
             });
             ui.end_row();
 
             ui.label(format!("{}:", i18n.text_color));
             ui.horizontal(|ui| {
-                ui.color_edit_button_srgba_unmultiplied(&mut settings.overlay_text_color);
+                let mut rgb = [
+                    settings.overlay_text_color[0],
+                    settings.overlay_text_color[1],
+                    settings.overlay_text_color[2],
+                ];
+                if ui.color_edit_button_srgb(&mut rgb).changed() {
+                    settings.overlay_text_color[0] = rgb[0];
+                    settings.overlay_text_color[1] = rgb[1];
+                    settings.overlay_text_color[2] = rgb[2];
+                }
+                ui.add_space(8.0);
+                ui.label(format!("{}:", i18n.opacity));
+                ui.add(egui::Slider::new(
+                    &mut settings.overlay_text_color[3],
+                    0..=255,
+                ));
             });
             ui.end_row();
 

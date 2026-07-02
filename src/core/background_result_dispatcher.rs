@@ -30,10 +30,8 @@ impl ResultDispatcher {
         err_handler: &crate::core::usecases::error_handler::ErrorHandler,
         translation_cache: &Arc<Mutex<TranslationCache>>,
         settings: &crate::infrastructure::settings::Settings,
-    ) -> bool {
-        let mut processed_any = false;
+    ) {
         while let Ok(result) = bg_rx.try_recv() {
-            processed_any = true;
             match result {
                 BgResult::Done {
                     slot_idx,
@@ -107,7 +105,6 @@ impl ResultDispatcher {
                 ),
             }
         }
-        processed_any
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -135,7 +132,6 @@ impl ResultDispatcher {
 
             if language_version != slot.language_version {
                 runtime.busy = false;
-                runtime.busy_since_ms = 0;
                 runtime.processing = false;
                 runtime.first_unstable_at = 0;
                 slot.next_tick_at_ms = 0;
@@ -143,7 +139,6 @@ impl ResultDispatcher {
             }
 
             runtime.busy = false;
-            runtime.busy_since_ms = 0;
             runtime.processing = false;
             runtime.first_unstable_at = 0;
             runtime.status = "Ready".to_string();
@@ -214,6 +209,12 @@ impl ResultDispatcher {
                             }
                         }
 
+                        if settings.realtime.fade_smoothing {
+                            runtime.overlay_fade_target = 1.0;
+                            runtime.overlay_fade_alpha = 0.35;
+                            runtime.last_overlay_fade_ms = now;
+                        }
+
                         if frame_hash != 0 {
                             let cache_key = (
                                 frame_hash,
@@ -268,7 +269,6 @@ impl ResultDispatcher {
     ) {
         if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
             runtime.busy = false;
-            runtime.busy_since_ms = 0;
             runtime.status = "Ready".to_string();
             runtime.first_unstable_at = 0;
         }
@@ -294,7 +294,6 @@ impl ResultDispatcher {
         }
         if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
             runtime.busy = false;
-            runtime.busy_since_ms = 0;
             if runtime.first_unstable_at == 0 {
                 runtime.first_unstable_at = now;
             }
@@ -308,7 +307,6 @@ impl ResultDispatcher {
     ) {
         if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
             runtime.busy = false;
-            runtime.busy_since_ms = 0;
         }
         let mut model = model_arc.lock();
         if let Some(slot) = model.slots.get_mut(slot_idx) {
@@ -339,13 +337,11 @@ impl ResultDispatcher {
 
             if language_version != slot.language_version {
                 runtime.busy = false;
-                runtime.busy_since_ms = 0;
                 slot.next_tick_at_ms = 0;
                 return;
             }
 
             runtime.busy = false;
-            runtime.busy_since_ms = 0;
             runtime.processing = false;
             runtime.status = "Ready (Cached)".to_string();
             runtime.error_streak = 0;
@@ -394,7 +390,6 @@ impl ResultDispatcher {
             };
 
             runtime.busy = false;
-            runtime.busy_since_ms = 0;
             runtime.processing = false;
             runtime.status = "Error".to_string();
             runtime.error_streak = runtime.error_streak.saturating_add(1);

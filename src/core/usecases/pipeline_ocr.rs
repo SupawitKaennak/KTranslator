@@ -41,14 +41,11 @@ pub fn perform_ocr(
                             bubbles.sort_by(|a, b| {
                                 let a_h = a.y2 - a.y1;
                                 let b_h = b.y2 - b.y1;
-                                let band_size = a_h.min(b_h) * 0.4;
-                                let band_size = if band_size < 5.0 { 5.0 } else { band_size };
+                                let tolerance = a_h.min(b_h) * 0.4;
+                                let y_diff = (a.y1 - b.y1).abs();
 
-                                let a_band = (a.y1 / band_size).round() as i32;
-                                let b_band = (b.y1 / band_size).round() as i32;
-
-                                if a_band != b_band {
-                                    a_band.cmp(&b_band)
+                                if y_diff > tolerance {
+                                    a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else if jp_merge_vertical {
                                     b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else {
@@ -79,14 +76,11 @@ pub fn perform_ocr(
                             regions.sort_by(|a, b| {
                                 let a_h = a.y2 - a.y1;
                                 let b_h = b.y2 - b.y1;
-                                let band_size = a_h.min(b_h) * 0.4;
-                                let band_size = if band_size < 5.0 { 5.0 } else { band_size };
+                                let tolerance = a_h.min(b_h) * 0.4;
+                                let y_diff = (a.y1 - b.y1).abs();
 
-                                let a_band = (a.y1 / band_size).round() as i32;
-                                let b_band = (b.y1 / band_size).round() as i32;
-
-                                if a_band != b_band {
-                                    a_band.cmp(&b_band)
+                                if y_diff > tolerance {
+                                    a.y1.partial_cmp(&b.y1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else if jp_merge_vertical {
                                     b.x1.partial_cmp(&a.x1).unwrap_or(std::cmp::Ordering::Equal)
                                 } else {

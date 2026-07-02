@@ -15,20 +15,14 @@ pub struct BuiltinPaddleOcr {
     pipeline: Arc<Mutex<Option<(oar_ocr::oarocr::OAROCR, PpocrModelSuite)>>>,
     models_dir: String,
     model_suite: Arc<Mutex<PpocrModelSuite>>,
-    gpu_backend: crate::infrastructure::settings::GpuBackend,
 }
 
 impl BuiltinPaddleOcr {
-    pub fn new(
-        models_dir: String,
-        model_suite: PpocrModelSuite,
-        gpu_backend: crate::infrastructure::settings::GpuBackend,
-    ) -> Self {
+    pub fn new(models_dir: String, model_suite: PpocrModelSuite) -> Self {
         Self {
             pipeline: Arc::new(Mutex::new(None)),
             models_dir,
             model_suite: Arc::new(Mutex::new(model_suite)),
-            gpu_backend,
         }
     }
 
@@ -107,46 +101,7 @@ impl BuiltinPaddleOcr {
         let rec_str = rec_path.to_string_lossy().to_string();
         let dict_str = dict_path.to_string_lossy().to_string();
 
-        let mut execution_providers = Vec::new();
-        match self.gpu_backend {
-            crate::infrastructure::settings::GpuBackend::Cuda
-            | crate::infrastructure::settings::GpuBackend::TensorRt => {
-                execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::CUDA {
-                    device_id: Some(0),
-                    gpu_mem_limit: None,
-                    arena_extend_strategy: None,
-                    cudnn_conv_algo_search: None,
-                    cudnn_conv_use_max_workspace: None,
-                });
-            }
-            crate::infrastructure::settings::GpuBackend::DirectMl => {
-                execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::DirectML {
-                    device_id: Some(0),
-                });
-            }
-            crate::infrastructure::settings::GpuBackend::Auto => {
-                execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::CUDA {
-                    device_id: Some(0),
-                    gpu_mem_limit: None,
-                    arena_extend_strategy: None,
-                    cudnn_conv_algo_search: None,
-                    cudnn_conv_use_max_workspace: None,
-                });
-                execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::DirectML {
-                    device_id: Some(0),
-                });
-            }
-            _ => {}
-        }
-        execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::CPU);
-
-        let ort_config = oar_ocr::core::config::OrtSessionConfig {
-            execution_providers: Some(execution_providers),
-            ..Default::default()
-        };
-
         let pipeline = oar_ocr::oarocr::OAROCRBuilder::new(&det_str, &rec_str, &dict_str)
-            .ort_session(ort_config)
             .build()
             .map_err(|e| {
                 crate::core::error::KError::Ocr(format!(
@@ -157,8 +112,7 @@ impl BuiltinPaddleOcr {
 
         *guard = Some((pipeline, current_suite));
         tracing::info!(
-            "Built-in PaddleOCR pipeline ready with {:?} GPU backend for {:?}",
-            self.gpu_backend,
+            "Built-in PaddleOCR pipeline ready (GPU accelerated via DirectML) for {:?}",
             current_suite
         );
         Ok(())

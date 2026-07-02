@@ -10,12 +10,13 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "native-tls", "blocking"] }
-eframe = { version = "0.31", default-features = false, features = ["default_fonts", "wgpu", "x11", "wayland"] }
+eframe = { version = "0.31", features = ["default_fonts"] }
 egui = "0.31"
 parking_lot = "0.12"
 indexmap = "2"
 directories = "6"
 screenshots = "0.8"
+dxgcap = "0.2.4"
 image = { version = "0.25", default-features = false, features = ["png", "ico"] }
 base64 = "0.22"
 regex = "1"
@@ -30,7 +31,7 @@ tokenizers = { version = "0.21", default-features = false, features = ["onig"] }
 ndarray = "0.17"
 wordninja = "0.1"
 symspell = "0.5"
-oar-ocr = { version = "0.6", features = ["directml", "cuda", "tensorrt"] }
+oar-ocr = "0.6"
 
 
 

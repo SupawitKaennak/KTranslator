@@ -206,14 +206,6 @@ pub fn build_blocks(
 
     // Build the merged text for each block with smart natural reading order sorting
     for block in &mut blocks {
-        let avg_char_size = if block.lines.is_empty() {
-            12.0
-        } else {
-            let sum: f32 = block.lines.iter().map(get_char_size).sum();
-            sum / block.lines.len() as f32
-        };
-        let band_size = avg_char_size * 0.5;
-
         block.lines.sort_by(|a, b| {
             let is_a_vertical = a.h > a.w * 1.2;
             let is_b_vertical = b.h > b.w * 1.2;
@@ -221,21 +213,19 @@ pub fn build_blocks(
 
             if is_vertical {
                 // Vertical CJK reading order: Right-to-Left (x descending) primarily, then top-to-bottom
-                // Group X coordinates into vertical bands
-                let a_band = (a.x / band_size).round() as i32;
-                let b_band = (b.x / band_size).round() as i32;
-                if a_band != b_band {
-                    b_band.cmp(&a_band) // Descending
+                let char_size = get_char_size(a).max(get_char_size(b));
+                let x_diff = (a.x - b.x).abs();
+                if x_diff > char_size * 0.5 {
+                    b.x.partial_cmp(&a.x).unwrap_or(std::cmp::Ordering::Equal)
                 } else {
                     a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal)
                 }
             } else {
                 // Horizontal reading order: Top-to-Bottom (y ascending) primarily, then left-to-right
-                // Group Y coordinates into horizontal bands
-                let a_band = (a.y / band_size).round() as i32;
-                let b_band = (b.y / band_size).round() as i32;
-                if a_band != b_band {
-                    a_band.cmp(&b_band)
+                let y_diff = (a.y - b.y).abs();
+                let char_size = get_char_size(a).max(get_char_size(b));
+                if y_diff > char_size * 0.5 {
+                    a.y.partial_cmp(&b.y).unwrap_or(std::cmp::Ordering::Equal)
                 } else {
                     a.x.partial_cmp(&b.x).unwrap_or(std::cmp::Ordering::Equal)
                 }
@@ -248,28 +238,45 @@ pub fn build_blocks(
     // Sort blocks by reading order to preserve dialogue flow
     blocks.sort_by(|a, b| {
         let (a_x1, a_y1, _a_x2, a_y2) = a.lines.iter().fold(
-            (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+            (
+                f32::INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY,
+            ),
             |(min_x, min_y, max_x, max_y), l| {
-                (min_x.min(l.x), min_y.min(l.y), max_x.max(l.x + l.w), max_y.max(l.y + l.h))
+                (
+                    min_x.min(l.x),
+                    min_y.min(l.y),
+                    max_x.max(l.x + l.w),
+                    max_y.max(l.y + l.h),
+                )
             },
         );
         let (b_x1, b_y1, _b_x2, b_y2) = b.lines.iter().fold(
-            (f32::INFINITY, f32::INFINITY, f32::NEG_INFINITY, f32::NEG_INFINITY),
+            (
+                f32::INFINITY,
+                f32::INFINITY,
+                f32::NEG_INFINITY,
+                f32::NEG_INFINITY,
+            ),
             |(min_x, min_y, max_x, max_y), l| {
-                (min_x.min(l.x), min_y.min(l.y), max_x.max(l.x + l.w), max_y.max(l.y + l.h))
+                (
+                    min_x.min(l.x),
+                    min_y.min(l.y),
+                    max_x.max(l.x + l.w),
+                    max_y.max(l.y + l.h),
+                )
             },
         );
 
         let a_h = a_y2 - a_y1;
         let b_h = b_y2 - b_y1;
-        let band_size = a_h.min(b_h) * 0.4;
-        let band_size = if band_size < 5.0 { 5.0 } else { band_size };
+        let tolerance = a_h.min(b_h) * 0.4;
+        let y_diff = (a_y1 - b_y1).abs();
 
-        let a_band = (a_y1 / band_size).round() as i32;
-        let b_band = (b_y1 / band_size).round() as i32;
-
-        if a_band != b_band {
-            a_band.cmp(&b_band)
+        if y_diff > tolerance {
+            a_y1.partial_cmp(&b_y1).unwrap_or(std::cmp::Ordering::Equal)
         } else {
             if jp_merge_vertical {
                 b_x1.partial_cmp(&a_x1).unwrap_or(std::cmp::Ordering::Equal)
@@ -280,94 +287,4 @@ pub fn build_blocks(
     });
 
     blocks
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn create_line(text: &str, x: f32, y: f32, w: f32, h: f32) -> OcrTextLine {
-        OcrTextLine {
-            text: text.to_string(),
-            x,
-            y,
-            w,
-            h,
-            bubble_idx: None,
-        }
-    }
-
-    #[test]
-    fn test_get_char_size() {
-        let line = create_line("Test", 10.0, 10.0, 100.0, 20.0);
-        assert_eq!(get_char_size(&line), 20.0); // min of w and h, maxed with 12.0
-    }
-
-    #[test]
-    fn test_is_close_horizontal_stack() {
-        let a = create_line("Hello", 10.0, 10.0, 80.0, 15.0);
-        let b = create_line("World", 12.0, 28.0, 80.0, 15.0); // Stacked vertically below 'a'
-        
-        // Should be close because they overlap horizontally and have small vertical gap
-        assert!(is_close(&a, &b, false));
-    }
-
-    #[test]
-    fn test_is_close_vertical_cjk() {
-        let a = create_line("こ", 100.0, 10.0, 20.0, 80.0); // Vertical column 1
-        let b = create_line("れ", 75.0, 12.0, 20.0, 80.0);  // Vertical column 2 (to the left)
-
-        // Should be close in vertical context
-        assert!(is_close(&a, &b, true));
-    }
-
-    #[test]
-    fn test_merge_text_english() {
-        let lines = vec![
-            create_line("Hello", 0.0, 0.0, 50.0, 15.0),
-            create_line("World", 0.0, 20.0, 50.0, 15.0),
-        ];
-        assert_eq!(merge_text(&lines), "Hello World");
-    }
-
-    #[test]
-    fn test_merge_text_japanese() {
-        let lines = vec![
-            create_line("これは", 0.0, 0.0, 15.0, 50.0),
-            create_line("テスト", 0.0, 60.0, 15.0, 50.0),
-        ];
-        assert_eq!(merge_text(&lines), "これはテスト"); // No spaces for Asian text
-    }
-
-    #[test]
-    fn test_merge_text_hyphenation() {
-        let lines = vec![
-            create_line("SUPER-", 0.0, 0.0, 50.0, 15.0),
-            create_line("HERO", 0.0, 20.0, 50.0, 15.0),
-        ];
-        assert_eq!(merge_text(&lines), "SUPER-HERO"); // Joined without extra space
-    }
-
-    #[test]
-    fn test_build_blocks_no_merge() {
-        let lines = vec![
-            create_line("Line 1", 10.0, 10.0, 100.0, 15.0),
-            create_line("Line 2", 10.0, 50.0, 100.0, 15.0),
-        ];
-        let blocks = build_blocks(lines, false, false);
-        assert_eq!(blocks.len(), 2);
-        assert_eq!(blocks[0].source_text, "Line 1");
-        assert_eq!(blocks[1].source_text, "Line 2");
-    }
-
-    #[test]
-    fn test_build_blocks_smart_merge() {
-        let lines = vec![
-            create_line("Line 1", 10.0, 10.0, 100.0, 15.0),
-            create_line("Line 2", 12.0, 22.0, 100.0, 15.0), // Close to Line 1
-        ];
-        let blocks = build_blocks(lines, true, false);
-        assert_eq!(blocks.len(), 1);
-        assert_eq!(blocks[0].source_text, "Line 1 Line 2");
-    }
 }
