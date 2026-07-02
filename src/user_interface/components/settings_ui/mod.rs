@@ -203,6 +203,10 @@ pub fn show_settings_window(
                     ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
                     ctx.request_repaint_of(egui::ViewportId::ROOT);
                 }
+
+                // Ensure dynamic tabs like Image Processing (live preview), Debugging, 
+                // and Download Progress update in real-time even when mouse is idle
+                ctx.request_repaint_after(std::time::Duration::from_millis(150));
             });
         },
     );

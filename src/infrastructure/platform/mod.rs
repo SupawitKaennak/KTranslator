@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
 // Platform abstraction layer
 //
 // Provides a trait `PlatformServices` that encapsulates all OS-specific
@@ -32,6 +32,8 @@ pub trait PlatformServices: Send + Sync {
         text: &str,
         mode: crate::infrastructure::settings::ThaiSegmentationMode,
     ) -> String;
+    /// Excludes the window from screen capture.
+    fn set_window_capture_exclusion(&self, hwnd: isize, hide: bool);
 }
 
 /// Create the platform services implementation for the current OS.
@@ -64,4 +66,5 @@ impl PlatformServices for StubPlatform {
     ) -> String {
         text.to_string()
     }
+    fn set_window_capture_exclusion(&self, _hwnd: isize, _hide: bool) {}
 }

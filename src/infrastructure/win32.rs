@@ -66,6 +66,21 @@ pub fn apply_overlay_attributes(hwnd_raw: isize, hide_from_capture: bool) {
     let _ = hide_from_capture;
 }
 
+/// Excludes the window from screen capture without making it color-keyed transparent.
+pub fn set_window_capture_exclusion(hwnd_raw: isize, hide_from_capture: bool) {
+    #[cfg(target_os = "windows")]
+    unsafe {
+        let hwnd = HWND(hwnd_raw as *mut _);
+        if hide_from_capture {
+            let _ = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+        } else {
+            let _ = SetWindowDisplayAffinity(hwnd, WDA_NONE);
+        }
+    }
+    let _ = hwnd_raw;
+    let _ = hide_from_capture;
+}
+
 /// Sets the global window alpha transparency, preserving the color key.
 pub fn set_window_alpha(hwnd_raw: isize, alpha: u8) {
     #[cfg(target_os = "windows")]

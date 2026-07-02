@@ -19,4 +19,8 @@ impl PlatformServices for WindowsPlatform {
     ) -> String {
         crate::infrastructure::thai_word_segmenter::segment_thai(text, mode)
     }
+
+    fn set_window_capture_exclusion(&self, hwnd: isize, hide: bool) {
+        crate::infrastructure::win32::set_window_capture_exclusion(hwnd, hide);
+    }
 }

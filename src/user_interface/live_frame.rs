@@ -229,13 +229,15 @@ pub fn render_live_frame_viewport(
 
             let last_rect_id = egui::Id::new(("last_rect", slot_idx));
 
-            let mut current_r = {
+            let (mut current_r, overlay_mode) = {
                 let m = model_inner.lock();
-                m.slots
-                    .get(slot_idx)
-                    .and_then(|s| s.rect)
+                let s = m.slots.get(slot_idx);
+                let rect = s
+                    .and_then(|slot| slot.rect)
                     .map(|rect| rect.snap_to_pixels())
-                    .unwrap_or(r)
+                    .unwrap_or(r);
+                let overlay_mode = s.map(|slot| slot.overlay_mode).unwrap_or(false);
+                (rect, overlay_mode)
             };
 
             let last_rect: Rect = ctx.data(|d| d.get_temp(last_rect_id)).unwrap_or(current_r);
@@ -297,7 +299,9 @@ pub fn render_live_frame_viewport(
                     // User is dragging or resizing the window, extend debounce timer
                     ctx.data_mut(|d| d.insert_temp(debounce_id, now + 0.3));
                     // Wake up the overlay viewport so it tracks the movement instantly
-                    ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{slot_idx}")));
+                    if overlay_mode {
+                        ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{slot_idx}")));
+                    }
                 } else if now > ignore_until {
                     // Window is stable and we are past the initial spawn ignore timer.
                     let debounce_until = ctx.data(|d| d.get_temp::<f64>(debounce_id)).unwrap_or(0.0);

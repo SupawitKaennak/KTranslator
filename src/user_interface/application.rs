@@ -409,6 +409,16 @@ impl eframe::App for App {
         let processed_any = self.tick_background(ctx);
         self.ui_error_popup(ctx);
 
+        // Apply capture exclusion to main window and settings window if they are open
+        let main_title = "KTranslator";
+        if let Some(hwnd) = self.services.platform.find_window_by_title(main_title) {
+            self.services.platform.set_window_capture_exclusion(hwnd, self.settings.hide_from_capture);
+        }
+        let settings_title = format!("KTranslator - {}", i18n.settings);
+        if let Some(hwnd) = self.services.platform.find_window_by_title(&settings_title) {
+            self.services.platform.set_window_capture_exclusion(hwnd, self.settings.hide_from_capture);
+        }
+
         // Track if user interacted with UI to trigger a child sync (e.g. clicked Clear Cache)
         let ui_interacted = ctx.is_using_pointer() || ctx.wants_keyboard_input() || ctx.input(|i| i.pointer.any_click());
         // Settings window can also request a sync by setting this flag
