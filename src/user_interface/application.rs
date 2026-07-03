@@ -121,32 +121,27 @@ impl App {
 
         // 1b. Handle Download Trigger
         while let Ok(engine_type) = self.downloads.trigger_rx.try_recv() {
+            self.model.lock().download_progress.is_downloading = true; // Force UI awake
             let tx = self.downloads.progress_tx.clone();
-            tokio::spawn(async move {
-                match engine_type {
-                    crate::infrastructure::settings::OcrEngineType::MangaOCR => {
-                        let _ = crate::infrastructure::asset_download_manager::download_models(tx)
-                            .await;
+            std::thread::spawn(move || {
+                let rt = tokio::runtime::Runtime::new().unwrap();
+                rt.block_on(async move {
+                    match engine_type {
+                        crate::infrastructure::settings::OcrEngineType::MangaOCR => {
+                            let _ = crate::infrastructure::asset_download_manager::download_models(tx).await;
+                        }
+                        crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
+                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(tx).await;
+                        }
+                        crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
+                            let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(tx).await;
+                        }
+                        crate::infrastructure::settings::OcrEngineType::CraftDetector => {
+                            let _ = crate::infrastructure::asset_download_manager::download_craft_model(tx).await;
+                        }
+                        _ => {}
                     }
-                    crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
-                        let _ =
-                            crate::infrastructure::asset_download_manager::download_ppocr_models(
-                                tx,
-                            )
-                            .await;
-                    }
-                    crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
-                        let _ =
-                            crate::infrastructure::asset_download_manager::download_bubble_yolo_model(tx)
-                                .await;
-                    }
-                    crate::infrastructure::settings::OcrEngineType::CraftDetector => {
-                        let _ =
-                            crate::infrastructure::asset_download_manager::download_craft_model(tx)
-                                .await;
-                    }
-                    _ => {}
-                }
+                });
             });
         }
 
@@ -154,6 +149,7 @@ impl App {
         while let Ok(prog) = self.downloads.progress_rx.try_recv() {
             let was_downloading = self.model.lock().download_progress.is_downloading;
             self.model.lock().download_progress = prog.clone();
+            ctx.request_repaint(); // Wake up UI to show progress
 
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
@@ -658,11 +654,11 @@ impl eframe::App for App {
             ctx.request_repaint_after(std::time::Duration::from_millis(min_wait_ms.max(5)));
         }
 
-        // Keep polling while any slot has a background task running.
-        // Without this, eframe may sleep and never call update() to collect results,
-        // causing busy=true to deadlock indefinitely.
+        // Keep polling while any slot has a background task running or if a download is active.
+        // Without this, eframe may sleep and never call update() to collect results.
+        let is_downloading = self.model.lock().download_progress.is_downloading;
         let any_slot_busy = self.slots_runtime.iter().any(|r| r.busy);
-        if any_slot_busy {
+        if any_slot_busy || is_downloading {
             ctx.request_repaint_after(std::time::Duration::from_millis(80));
         }
         

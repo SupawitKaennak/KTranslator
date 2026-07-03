@@ -102,6 +102,9 @@ pub fn show_settings_window(
             .with_resizable(true)
             .with_always_on_top(),
         move |ctx, _| {
+            if download_progress.is_downloading {
+                ctx.request_repaint_after(std::time::Duration::from_millis(80));
+            }
             if ctx.input(|i| i.viewport().close_requested()) {
                 close_flag_inner.store(true, Ordering::Relaxed);
                 ctx.data_mut(|d| d.insert_temp(egui::Id::new("settings_close_requested"), true));
