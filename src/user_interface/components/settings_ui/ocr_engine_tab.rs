@@ -101,6 +101,7 @@ pub fn render_tab_ocr(
                 if ui.button(i18n.download_install).clicked() {
                     let _ = download_trigger_tx
                         .send(crate::infrastructure::settings::OcrEngineType::MangaOCR);
+                    ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
                 }
             } else {
                 ui.colored_label(
@@ -110,6 +111,7 @@ pub fn render_tab_ocr(
                 if ui.button(i18n.reinstall_update).clicked() {
                     let _ = download_trigger_tx
                         .send(crate::infrastructure::settings::OcrEngineType::MangaOCR);
+                    ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
                 }
             }
         }
@@ -261,6 +263,7 @@ pub fn render_tab_ocr(
                 if ui.button(i18n.reinstall_update).clicked() {
                     let _ = download_trigger_tx
                         .send(crate::infrastructure::settings::OcrEngineType::BuiltinPaddle);
+                    ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
                 }
             } else {
                 ui.colored_label(
@@ -271,6 +274,7 @@ pub fn render_tab_ocr(
                 if ui.button(i18n.download_install).clicked() {
                     let _ = download_trigger_tx
                         .send(crate::infrastructure::settings::OcrEngineType::BuiltinPaddle);
+                    ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
                 }
             }
         }
