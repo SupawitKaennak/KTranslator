@@ -16,7 +16,6 @@
 - **ตัวเลือกเอนจิน OCR (ONNX Runtime)**:
   - Manga-OCR: โมเดลสแกนตัวอักษรภาษาญี่ปุ่นที่ครอบคลุมการอ่านทั้งแนวตั้งและแนวนอน
   - PaddleOCR v4 (Mobile): โมเดลสแกนตัวอักษรรุ่นขนาดเล็ก
-  - PaddleOCR v4 (Server): โมเดลรุ่นมาตรฐานสำหรับประมวลผลข้อความที่มีโครงสร้างและฟอนต์ที่ซับซ้อน
   - Windows OCR: ระบบรู้จำอักขระผ่าน API บิวท์อินของระบบปฏิบัติการ Windows
 - **การประมวลผลด้วย GPU (Hardware Acceleration)**: รองรับการเชื่อมต่อกับไดรเวอร์การ์ดจอ NVIDIA CUDA, TensorRT และ DirectML บนระบบปฏิบัติการ Windows 
 - **การวิเคราะห์การจัดหน้า (Layout Analysis)**:
@@ -66,7 +65,6 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
 - **OCR Engine Selection (ONNX Runtime)**:
   - Manga-OCR: A model for scanning Japanese text, covering both vertical and horizontal writing formats.
   - PaddleOCR v4 (Mobile): A scaled-down model variant for lower memory footprint.
-  - PaddleOCR v4 (Server): A standard model variant for processing complex structures and fonts.
   - Windows OCR: Text recognition utilizing the built-in Windows API.
 - **Hardware Acceleration**: Integrates with NVIDIA CUDA, TensorRT, and DirectML APIs on Windows to route ONNX computations through the GPU.
 - **Layout Analysis**:
