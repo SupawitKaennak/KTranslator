@@ -129,38 +129,20 @@ pub fn render_tab_ocr(
                     crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => {
                         i18n.ppocr_suite_cnen_mobile
                     }
-                    crate::infrastructure::settings::PpocrModelSuite::CnEnServer => {
-                        i18n.ppocr_suite_cnen_server
-                    }
                     crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => {
                         i18n.ppocr_suite_jp_mobile
-                    }
-                    crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => {
-                        i18n.ppocr_suite_jp_server
                     }
                     crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => {
                         i18n.ppocr_suite_ko_mobile
                     }
-                    crate::infrastructure::settings::PpocrModelSuite::KoreanServer => {
-                        i18n.ppocr_suite_ko_server
-                    }
                     crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => {
                         i18n.ppocr_suite_th_mobile
-                    }
-                    crate::infrastructure::settings::PpocrModelSuite::ThaiServer => {
-                        i18n.ppocr_suite_th_server
                     }
                     crate::infrastructure::settings::PpocrModelSuite::LatinMobile => {
                         i18n.ppocr_suite_latin_mobile
                     }
-                    crate::infrastructure::settings::PpocrModelSuite::LatinServer => {
-                        i18n.ppocr_suite_latin_server
-                    }
                     crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
                         i18n.ppocr_suite_cyrillic_mobile
-                    }
-                    crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => {
-                        i18n.ppocr_suite_cyrillic_server
                     }
                 })
                 .show_ui(ui, |ui| {
@@ -171,18 +153,8 @@ pub fn render_tab_ocr(
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::CnEnServer,
-                        i18n.ppocr_suite_cnen_server,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
                         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile,
                         i18n.ppocr_suite_jp_mobile,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer,
-                        i18n.ppocr_suite_jp_server,
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
@@ -191,18 +163,8 @@ pub fn render_tab_ocr(
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::KoreanServer,
-                        i18n.ppocr_suite_ko_server,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
                         crate::infrastructure::settings::PpocrModelSuite::ThaiMobile,
                         i18n.ppocr_suite_th_mobile,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::ThaiServer,
-                        i18n.ppocr_suite_th_server,
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
@@ -211,18 +173,8 @@ pub fn render_tab_ocr(
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::LatinServer,
-                        i18n.ppocr_suite_latin_server,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
                         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile,
                         i18n.ppocr_suite_cyrillic_mobile,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer,
-                        i18n.ppocr_suite_cyrillic_server,
                     );
                 });
         });

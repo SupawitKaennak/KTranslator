@@ -221,17 +221,11 @@ pub struct I18n {
     pub ppocr_mobile: &'static str,
     pub ppocr_server: &'static str,
     pub ppocr_suite_cnen_mobile: &'static str,
-    pub ppocr_suite_cnen_server: &'static str,
     pub ppocr_suite_jp_mobile: &'static str,
-    pub ppocr_suite_jp_server: &'static str,
     pub ppocr_suite_ko_mobile: &'static str,
-    pub ppocr_suite_ko_server: &'static str,
     pub ppocr_suite_th_mobile: &'static str,
-    pub ppocr_suite_th_server: &'static str,
     pub ppocr_suite_latin_mobile: &'static str,
-    pub ppocr_suite_latin_server: &'static str,
     pub ppocr_suite_cyrillic_mobile: &'static str,
-    pub ppocr_suite_cyrillic_server: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -430,17 +424,11 @@ const EN: I18n = I18n {
     ppocr_mobile: "Fast: CN/EN Suite (Mobile ~15MB)",
     ppocr_server: "Precision: CN/EN Suite (Server ~194MB)",
     ppocr_suite_cnen_mobile: "Fast: Chinese/English (Mobile ~15MB)",
-    ppocr_suite_cnen_server: "Precision: Chinese/English (Server ~194MB)",
     ppocr_suite_jp_mobile: "Fast: Japanese (Mobile ~15MB)",
-    ppocr_suite_jp_server: "Precision: Japanese (Server ~194MB)",
     ppocr_suite_ko_mobile: "Fast: Korean (Mobile ~15MB)",
-    ppocr_suite_ko_server: "Precision: Korean (Server ~194MB)",
     ppocr_suite_th_mobile: "Fast: Thai (Mobile ~15MB)",
-    ppocr_suite_th_server: "Precision: Thai (Server ~194MB)",
     ppocr_suite_latin_mobile: "Fast: Latin/Western Europe (Mobile ~15MB)",
-    ppocr_suite_latin_server: "Precision: Latin/Western Europe (Server ~194MB)",
     ppocr_suite_cyrillic_mobile: "Fast: Cyrillic/Eastern Europe (Mobile ~15MB)",
-    ppocr_suite_cyrillic_server: "Precision: Cyrillic/Eastern Europe (Server ~194MB)",
 };
 
 const TH: I18n = I18n {
@@ -634,17 +622,11 @@ const TH: I18n = I18n {
     ppocr_mobile: "ความเร็วสูง: ชุดภาษา จีน/อังกฤษ (Mobile ~15MB)",
     ppocr_server: "ความแม่นยำสูง: ชุดภาษา จีน/อังกฤษ (Server ~194MB)",
     ppocr_suite_cnen_mobile: "ความเร็วสูง: จีน/อังกฤษ (Mobile ~15MB)",
-    ppocr_suite_cnen_server: "ความแม่นยำสูง: จีน/อังกฤษ (Server ~194MB)",
     ppocr_suite_jp_mobile: "ความเร็วสูง: ภาษาญี่ปุ่น (Mobile ~15MB)",
-    ppocr_suite_jp_server: "ความแม่นยำสูง: ภาษาญี่ปุ่น (Server ~194MB)",
     ppocr_suite_ko_mobile: "ความเร็วสูง: ภาษาเกาหลี (Mobile ~15MB)",
-    ppocr_suite_ko_server: "ความแม่นยำสูง: ภาษาเกาหลี (Server ~194MB)",
     ppocr_suite_th_mobile: "ความเร็วสูง: ภาษาไทย (Mobile ~15MB)",
-    ppocr_suite_th_server: "ความแม่นยำสูง: ภาษาไทย (Server ~194MB)",
     ppocr_suite_latin_mobile: "ความเร็วสูง: กลุ่มภาษาละติน/ยุโรปตะวันตก (Mobile ~15MB)",
-    ppocr_suite_latin_server: "ความแม่นยำสูง: กลุ่มภาษาละติน/ยุโรปตะวันตก (Server ~194MB)",
     ppocr_suite_cyrillic_mobile: "ความเร็วสูง: กลุ่มภาษาซีริลลิก/ยุโรปตะวันออก (Mobile ~15MB)",
-    ppocr_suite_cyrillic_server: "ความแม่นยำสูง: กลุ่มภาษาซีริลลิก/ยุโรปตะวันออก (Server ~194MB)",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {

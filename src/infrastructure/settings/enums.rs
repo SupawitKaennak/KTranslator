@@ -24,34 +24,22 @@ pub enum OcrEngineType {
 pub enum PpocrModelSuite {
     #[default]
     CnEnMobile,
-    CnEnServer,
     JapaneseMobile,
-    JapaneseServer,
     KoreanMobile,
-    KoreanServer,
     ThaiMobile,
-    ThaiServer,
     LatinMobile,
-    LatinServer,
     CyrillicMobile,
-    CyrillicServer,
 }
 
 impl PpocrModelSuite {
     pub fn folder_name(&self) -> &'static str {
         match self {
             PpocrModelSuite::CnEnMobile => "cn_en_mobile",
-            PpocrModelSuite::CnEnServer => "cn_en_server",
             PpocrModelSuite::JapaneseMobile => "mobile_japanese",
-            PpocrModelSuite::JapaneseServer => "server_japanese",
             PpocrModelSuite::KoreanMobile => "mobile_korean",
-            PpocrModelSuite::KoreanServer => "server_korean",
             PpocrModelSuite::ThaiMobile => "mobile_thai",
-            PpocrModelSuite::ThaiServer => "server_thai",
             PpocrModelSuite::LatinMobile => "mobile_latin",
-            PpocrModelSuite::LatinServer => "server_latin",
             PpocrModelSuite::CyrillicMobile => "mobile_cyrillic",
-            PpocrModelSuite::CyrillicServer => "server_cyrillic",
         }
     }
 }
