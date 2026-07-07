@@ -5,6 +5,7 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
+mod custom_rules_tab;
 mod debugging_tab;
 mod general_tab;
 mod image_processing_tab;
@@ -15,6 +16,7 @@ mod text_processing_tab;
 mod translation_behavior_tab;
 mod translation_provider_tab;
 
+use custom_rules_tab::render_tab_custom_rules;
 use debugging_tab::render_tab_debugging;
 use general_tab::render_tab_general;
 use image_processing_tab::render_tab_image_processing;
@@ -49,6 +51,7 @@ enum SettingsTab {
     Ocr,
     TextProcessing,
     ImageProcessing,
+    CustomRules,
     Overlay,
     Debugging,
 }
@@ -138,6 +141,7 @@ pub fn show_settings_window(
                         (SettingsTab::Ocr, i18n.tab_ocr),
                         (SettingsTab::TextProcessing, i18n.tab_text_processing),
                         (SettingsTab::ImageProcessing, i18n.tab_image_processing),
+                        (SettingsTab::CustomRules, i18n.tab_custom_rules),
                         (SettingsTab::Overlay, i18n.tab_overlay),
                         (SettingsTab::Debugging, i18n.tab_debugging),
                     ];
@@ -190,24 +194,21 @@ pub fn show_settings_window(
                         i18n,
                         sample_frame.as_ref(),
                     ),
-                    SettingsTab::Overlay => render_tab_overlay(
-                        ui,
-                        &mut settings,
-                        i18n,
-                        &download_progress,
-                        &download_trigger_tx,
-                    ),
+                    SettingsTab::CustomRules => {
+                        render_tab_custom_rules(ui, &mut settings, i18n)
+                    }
+                    SettingsTab::Overlay => render_tab_overlay(ui, &mut settings, i18n),
                     SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
                 });
 
-                // If any setting was actually modified, notify the main window to sync 
+                // If any setting was actually modified, notify the main window to sync
                 // the child viewports (like overlay) so settings take effect in real-time.
                 if *settings != initial_settings {
                     ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
                     ctx.request_repaint_of(egui::ViewportId::ROOT);
                 }
 
-                // Ensure dynamic tabs like Image Processing (live preview), Debugging, 
+                // Ensure dynamic tabs like Image Processing (live preview), Debugging,
                 // and Download Progress update in real-time even when mouse is idle
                 ctx.request_repaint_after(std::time::Duration::from_millis(150));
             });

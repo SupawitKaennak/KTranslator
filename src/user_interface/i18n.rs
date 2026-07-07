@@ -69,6 +69,7 @@ pub struct I18n {
     pub tab_ocr: &'static str,
     pub tab_text_processing: &'static str,
     pub tab_image_processing: &'static str,
+    pub tab_custom_rules: &'static str,
     pub tab_overlay: &'static str,
     pub tab_debugging: &'static str,
 
@@ -288,6 +289,7 @@ const EN: I18n = I18n {
     tab_ocr: "OCR Engine",
     tab_text_processing: "Text Processing",
     tab_image_processing: "Image Processing",
+    tab_custom_rules: "Custom Rules",
     tab_overlay: "Overlay",
     tab_debugging: "Debugging Panel",
     clean_remove_dups: "Remove Duplicate Lines",
@@ -491,6 +493,7 @@ const TH: I18n = I18n {
     tab_ocr: "เอนจิน OCR",
     tab_text_processing: "การประมวลผลข้อความ",
     tab_image_processing: "การปรับแต่งภาพ (Pre-OCR)",
+    tab_custom_rules: "กฎและพจนานุกรม",
     tab_overlay: "หน้าตาซ้อนทับ",
     tab_debugging: "แผงดีบักและสถิติ",
     clean_remove_dups: "ลบบรรทัดซ้ำซ้อน (ระวังพิกัดคลาดเคลื่อน)",
