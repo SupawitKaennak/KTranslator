@@ -5,27 +5,27 @@ use parking_lot::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-mod custom_rules_tab;
+mod ai_provider_tab;
 mod debugging_tab;
+mod dictionary_rules_tab;
+mod display_settings_tab;
 mod general_tab;
 mod image_processing_tab;
-mod ocr_engine_tab;
-mod overlay_setting_tab;
+mod ocr_system_tab;
 mod performance_tuning_tab;
-mod text_processing_tab;
-mod translation_behavior_tab;
-mod translation_provider_tab;
+mod text_cleaning_tab;
+mod translation_style_tab;
 
-use custom_rules_tab::render_tab_custom_rules;
+use ai_provider_tab::render_tab_ai_provider;
 use debugging_tab::render_tab_debugging;
+use dictionary_rules_tab::render_tab_custom_rules;
+use display_settings_tab::render_tab_overlay;
 use general_tab::render_tab_general;
 use image_processing_tab::render_tab_image_processing;
-use ocr_engine_tab::render_tab_ocr;
-use overlay_setting_tab::render_tab_overlay;
+use ocr_system_tab::render_tab_ocr;
 use performance_tuning_tab::render_tab_performance;
-use text_processing_tab::render_tab_text_processing;
-use translation_behavior_tab::render_tab_translation_behavior;
-use translation_provider_tab::render_tab_ai_provider;
+use text_cleaning_tab::render_tab_text_processing;
+use translation_style_tab::render_tab_translation_behavior;
 
 pub struct SettingsWindowResponse {
     pub close_clicked: bool,
