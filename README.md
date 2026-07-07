@@ -30,8 +30,12 @@
   - Google Translate: การแปลผ่านหน้าเว็บ
   - Gemini API: เชื่อมต่อผ่านรหัส API Key จาก Google AI Studio
   - Groq API: เชื่อมต่อผ่าน API ไปยังโมเดลเช่น Llama หรือ Gemma
-  - Ollama: เชื่อมต่อกับเซิร์ฟเวอร์ Ollama ในเครื่องเพื่อรันโมเดลภาษาในแบบออฟไลน์
-  - OpenAI / Custom: ส่งคำขอไปยัง API ที่มีโครงสร้างแบบ OpenAI เช่น OpenRouter หรือ DeepSeek
+  - Claude (Anthropic): ประมวลผลภาษาด้วยโมเดลตระกูล Claude (เช่น Sonnet/Opus)
+  - DeepSeek API: เข้าถึงโมเดลในราคาประหยัดจากค่าย DeepSeek
+  - DeepL: ระบบ Neural Machine Translation สำหรับการแปลแบบรวดเร็วตรงไปตรงมา
+  - Ollama / LM Studio: รองรับการรันโมเดลภาษา (Local LLM) ในเครื่องแบบออฟไลน์
+  - Azure OpenAI: ระบบแปลภาษาสำหรับองค์กรผ่านเซิร์ฟเวอร์คลาวด์ของ Microsoft
+  - OpenAI / Custom: ส่งคำขอไปยัง API ที่มีโครงสร้างแบบ OpenAI เช่น OpenRouter
 - **การจัดการและการตั้งค่าโปรแกรม**:
   - แคชข้อความ (Translation Cache): บันทึกผลการแปลและ OCR ในหน่วยความจำ เพื่อนำมาแสดงซ้ำหากภาพหน้าจอยังคงเป็นข้อความเดิม 
   - การปรับแต่งสไตล์: ตั้งค่าสีตัวอักษร ขนาดฟอนต์ สีพื้นหลัง และความโปร่งแสงในโหมด Overlay
@@ -50,7 +54,11 @@
      - Google Translate: ใช้งานได้ทันทีโดยไม่ต้องใส่คีย์
      - Gemini: ขอคีย์ที่ [Google AI Studio](https://aistudio.google.com/)
      - Groq: ขอคีย์ที่ [Groq Console](https://console.groq.com/)
-     - Ollama: ดาวน์โหลดเซิร์ฟเวอร์และโมเดลจาก [Ollama.com](https://ollama.com/)
+     - Claude: ขอคีย์ที่ [Anthropic Console](https://console.anthropic.com/)
+     - DeepSeek: ขอคีย์ที่ [DeepSeek Platform](https://platform.deepseek.com/)
+     - DeepL: ขอคีย์ที่ [DeepL Pro API](https://www.deepl.com/pro-api)
+     - Ollama / LM Studio: ดาวน์โหลดโปรแกรมมารันในเครื่อง และชี้ URL ตามที่ระบบกำหนด
+     - Azure OpenAI: ตั้งค่า Deployment Name และเชื่อมต่อคีย์ตามนโยบายองค์กร
      - OpenAI / Custom: ขอคีย์จาก [OpenAI Platform](https://platform.openai.com/) หรือ [OpenRouter](https://openrouter.ai/)
 
 ---
@@ -79,8 +87,12 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
   - Google Translate: Web-based translation implementation.
   - Gemini API: Connects using API keys from Google AI Studio.
   - Groq API: Connects to Llama or Gemma inference endpoints via Groq.
-  - Ollama: Targets a locally hosted Ollama server for offline language model execution.
-  - OpenAI / Custom: Sends requests to APIs implementing the OpenAI interface format, such as OpenRouter or DeepSeek.
+  - Claude (Anthropic): Leverages the Claude models for translation.
+  - DeepSeek API: Integrates with DeepSeek's high-performance LLMs.
+  - DeepL API: Directly uses Neural Machine Translation for swift, straightforward translations.
+  - Ollama / LM Studio: Target locally hosted servers for offline language model execution.
+  - Azure OpenAI: Enterprise-grade translation endpoint integration via Microsoft Azure.
+  - OpenAI / Custom: Sends requests to APIs implementing the OpenAI interface format, such as OpenRouter.
 - **Management and Configuration**:
   - Translation Cache: Records OCR and translation outputs in memory, preventing duplicate API calls when the target screen content remains static.
   - Styling Customization: Configuration of font colors, sizes, background colors, and overlay opacity.
@@ -99,7 +111,11 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
      - Google Translate: Operates without a key.
      - Gemini: Obtain an API key from [Google AI Studio](https://aistudio.google.com/).
      - Groq: Obtain an API key from [Groq Console](https://console.groq.com/).
-     - Ollama: Download the server and models from [Ollama.com](https://ollama.com/).
+     - Claude: Obtain an API key from [Anthropic Console](https://console.anthropic.com/).
+     - DeepSeek: Obtain an API key from [DeepSeek Platform](https://platform.deepseek.com/).
+     - DeepL: Obtain an API key from [DeepL Pro API](https://www.deepl.com/pro-api).
+     - Ollama / LM Studio: Download and run locally, then point to the local URL.
+     - Azure OpenAI: Configure the Deployment Name, API Version, and Endpoint via Azure Portal.
      - OpenAI / Custom: Obtain an API key from [OpenAI Platform](https://platform.openai.com/) or [OpenRouter](https://openrouter.ai/).
 
 ---
