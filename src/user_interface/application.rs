@@ -544,6 +544,11 @@ impl eframe::App for App {
                             for runtime in &mut self.slots_runtime {
                                 runtime.last_hash = 0;
                                 runtime.first_unstable_at = 0;
+                                runtime.last_stable_ocr_text.clear();
+                                runtime.persistent_translation.lock().take();
+                                runtime.persistent_ocr_lines.lock().clear();
+                                runtime.persistent_trans_lines.lock().clear();
+                                runtime.recent_translations.clear();
                             }
                             self.caches.translation.lock().clear();
                             self.caches.text_translation.lock().clear();
