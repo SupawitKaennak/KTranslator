@@ -49,7 +49,6 @@ pub fn render_tab_custom_rules(
                         );
                     });
 
-                ui.label(format!("{}:", i18n.prio));
                 if ui.button("🗑").clicked() {
                     remove_idx = Some(idx);
                 }
@@ -95,7 +94,7 @@ pub fn render_tab_custom_rules(
     ui.add_space(8.0);
 
     // ── Glossary / Custom Dictionary ──
-    super::section_header(ui, &format!("Custom Dictionary / Glossary Engine"));
+    super::section_header(ui, "Custom Dictionary / Glossary Engine");
     ui.label(egui::RichText::new(i18n.gloss_adv_desc).italics());
     ui.add_space(6.0);
 

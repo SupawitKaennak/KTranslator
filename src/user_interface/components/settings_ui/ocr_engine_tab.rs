@@ -298,12 +298,6 @@ pub fn render_tab_ocr(
     settings.use_yolo_bubble =
         settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble;
 
-    ui.add_space(4.0);
-    ui.checkbox(
-        &mut settings.show_yolo_debug_borders,
-        "Show Detection Borders (Debug)",
-    );
-
     match settings.text_detector {
         crate::infrastructure::settings::TextDetectorMode::YoloBubble => {
             let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();

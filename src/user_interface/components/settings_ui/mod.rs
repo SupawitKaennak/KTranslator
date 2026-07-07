@@ -198,7 +198,7 @@ pub fn show_settings_window(
                         render_tab_custom_rules(ui, &mut settings, i18n)
                     }
                     SettingsTab::Overlay => render_tab_overlay(ui, &mut settings, i18n),
-                    SettingsTab::Debugging => render_tab_debugging(ui, &debug_infos, i18n),
+                    SettingsTab::Debugging => render_tab_debugging(ui, &mut settings, &debug_infos, i18n),
                 });
 
                 // If any setting was actually modified, notify the main window to sync

@@ -2,6 +2,7 @@ use eframe::egui;
 
 pub fn render_tab_debugging(
     ui: &mut egui::Ui,
+    settings: &mut crate::infrastructure::settings::Settings,
     debug_infos: &[super::SlotDebugInfo],
     i18n: &crate::user_interface::i18n::I18n,
 ) {
@@ -13,6 +14,12 @@ pub fn render_tab_debugging(
         egui::RichText::new(i18n.dbg_desc)
             .small()
             .color(egui::Color32::GRAY),
+    );
+    ui.add_space(6.0);
+
+    ui.checkbox(
+        &mut settings.show_yolo_debug_borders,
+        "Show Text Detection Borders (YOLO/CRAFT Debug)",
     );
     ui.add_space(10.0);
 

@@ -124,5 +124,4 @@ pub fn render_tab_translation_behavior(
                 ui.end_row();
             });
     });
-
 }

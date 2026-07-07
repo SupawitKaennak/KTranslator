@@ -20,7 +20,7 @@ pub fn render_tab_text_processing(
     ui.separator();
     ui.add_space(8.0);
 
-    super::section_header(ui, i18n.txt_pre_trans);
+    super::section_header(ui, i18n.txt_ocr_cleaning);
     ui.label(egui::RichText::new(i18n.txt_proc_adv_desc).italics());
     ui.add_space(6.0);
 
@@ -135,17 +135,4 @@ pub fn render_tab_text_processing(
         ui.checkbox(&mut tp.ar_rtl_correction, i18n.ar_rtl_fix);
         ui.end_row();
     });
-
-    ui.add_space(16.0);
-    ui.separator();
-    ui.add_space(8.0);
-
-    super::section_header(ui, i18n.txt_regex);
-    ui.label(
-        egui::RichText::new(
-            "Regex rules and Glossary entries have moved to the \"Custom Rules\" tab.",
-        )
-        .italics()
-        .color(egui::Color32::GRAY),
-    );
 }
