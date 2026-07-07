@@ -7,6 +7,11 @@ pub enum TranslationProvider {
     Ollama,
     CustomOpenAI,
     Google,
+    Claude,
+    DeepSeek,
+    DeepL,
+    LmStudio,
+    AzureOpenAI,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

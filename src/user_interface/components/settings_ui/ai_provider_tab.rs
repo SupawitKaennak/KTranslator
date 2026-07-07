@@ -31,6 +31,11 @@ pub fn render_tab_ai_provider(
             TranslationProvider::Google,
             &format!("Google Translate ({})", i18n.auto_detect),
         ),
+        (TranslationProvider::Claude, i18n.prov_claude),
+        (TranslationProvider::DeepSeek, i18n.prov_deepseek),
+        (TranslationProvider::DeepL, i18n.prov_deepl),
+        (TranslationProvider::LmStudio, i18n.prov_lmstudio),
+        (TranslationProvider::AzureOpenAI, i18n.prov_azure),
     ];
     for (prov, label) in providers {
         ui.radio_value(&mut settings.provider, prov, label);
@@ -179,6 +184,93 @@ pub fn render_tab_ai_provider(
         TranslationProvider::Google => {
             super::section_header(ui, &format!("Google Translate {}", i18n.config_for));
             ui.label("Using public Google Translate API. No API Key required.");
+        }
+        TranslationProvider::Claude => {
+            super::section_header(ui, &format!("{} {}", i18n.prov_claude, i18n.config_for));
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.api_key));
+                ui.add(egui::TextEdit::singleline(&mut settings.claude_api_key).password(true));
+            });
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.model_name));
+                ui.text_edit_singleline(&mut settings.claude_model);
+            });
+            ui.add_space(4.0);
+            ui.hyperlink_to(i18n.get_api_key, "https://console.anthropic.com/settings/keys");
+        }
+        TranslationProvider::DeepSeek => {
+            super::section_header(ui, &format!("{} {}", i18n.prov_deepseek, i18n.config_for));
+            render_api_key_field(
+                ui,
+                i18n,
+                &mut settings.deepseek_api_key,
+                &ctrl.deepseek_models,
+                &ctrl.deepseek_fetching,
+            );
+            try_fetch_deepseek(ctx, settings, &ctrl.deepseek_models, &ctrl.deepseek_fetching);
+            if !settings.deepseek_api_key.trim().is_empty() {
+                render_model_dropdown(
+                    ui,
+                    i18n,
+                    "deepseek_mdl",
+                    &mut settings.deepseek_model,
+                    &ctrl.deepseek_models,
+                    &ctrl.deepseek_fetching,
+                );
+            }
+            ui.add_space(4.0);
+            ui.hyperlink_to(i18n.get_api_key, "https://platform.deepseek.com/api_keys");
+        }
+        TranslationProvider::DeepL => {
+            super::section_header(ui, &format!("{} {}", i18n.prov_deepl, i18n.config_for));
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.api_key));
+                ui.add(egui::TextEdit::singleline(&mut settings.deepl_api_key).password(true));
+            });
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new("Note: DeepL does not support custom prompts or translation styles. It is a dedicated Neural Machine Translation service.").color(ui.visuals().warn_fg_color));
+            ui.add_space(4.0);
+            ui.hyperlink_to(i18n.get_api_key, "https://www.deepl.com/pro-api");
+        }
+        TranslationProvider::LmStudio => {
+            super::section_header(ui, &format!("{} {}", i18n.prov_lmstudio, i18n.config_for));
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.server_url));
+                let resp = ui.text_edit_singleline(&mut settings.lm_studio_url);
+                if resp.lost_focus() && resp.changed() {
+                    ctrl.lm_studio_models.lock().clear();
+                }
+            });
+            try_fetch_lm_studio(ctx, settings, &ctrl.lm_studio_models, &ctrl.lm_studio_fetching);
+            if !settings.lm_studio_url.trim().is_empty() {
+                render_model_dropdown(
+                    ui,
+                    i18n,
+                    "lm_studio_mdl",
+                    &mut settings.lm_studio_model,
+                    &ctrl.lm_studio_models,
+                    &ctrl.lm_studio_fetching,
+                );
+            }
+        }
+        TranslationProvider::AzureOpenAI => {
+            super::section_header(ui, &format!("{} {}", i18n.prov_azure, i18n.config_for));
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.base_url));
+                ui.text_edit_singleline(&mut settings.azure_openai_url);
+            });
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.api_key));
+                ui.add(egui::TextEdit::singleline(&mut settings.azure_openai_api_key).password(true));
+            });
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.azure_deployment_name));
+                ui.text_edit_singleline(&mut settings.azure_deployment_name);
+            });
+            ui.horizontal(|ui| {
+                ui.label(format!("{}:", i18n.azure_api_version));
+                ui.text_edit_singleline(&mut settings.azure_api_version);
+            });
         }
     }
 }
@@ -329,6 +421,62 @@ fn try_fetch_custom(
     std::thread::spawn(move || {
         if let Ok(list) =
             crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, &key)
+        {
+            *m.lock() = list;
+        }
+        *f.lock() = false;
+        c.request_repaint();
+    });
+}
+
+fn try_fetch_deepseek(
+    ctx: &egui::Context,
+    settings: &Settings,
+    models: &Arc<Mutex<Vec<String>>>,
+    fetching: &Arc<Mutex<bool>>,
+) {
+    let should = {
+        models.lock().is_empty() && !*fetching.lock() && !settings.deepseek_api_key.trim().is_empty()
+    };
+    if !should {
+        return;
+    }
+    let key = settings.deepseek_api_key.clone();
+    let m = models.clone();
+    let f = fetching.clone();
+    let c = ctx.clone();
+    *f.lock() = true;
+    std::thread::spawn(move || {
+        if let Ok(list) =
+            crate::adapters::translate::openai::OpenAiTranslator::list_models("https://api.deepseek.com/v1", &key)
+        {
+            *m.lock() = list;
+        }
+        *f.lock() = false;
+        c.request_repaint();
+    });
+}
+
+fn try_fetch_lm_studio(
+    ctx: &egui::Context,
+    settings: &Settings,
+    models: &Arc<Mutex<Vec<String>>>,
+    fetching: &Arc<Mutex<bool>>,
+) {
+    let should = {
+        models.lock().is_empty() && !*fetching.lock() && !settings.lm_studio_url.trim().is_empty()
+    };
+    if !should {
+        return;
+    }
+    let url = settings.lm_studio_url.clone();
+    let m = models.clone();
+    let f = fetching.clone();
+    let c = ctx.clone();
+    *f.lock() = true;
+    std::thread::spawn(move || {
+        if let Ok(list) =
+            crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, "")
         {
             *m.lock() = list;
         }

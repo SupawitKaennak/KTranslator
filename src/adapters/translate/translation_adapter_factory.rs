@@ -1,4 +1,5 @@
-﻿use super::{
+use super::{
+    azure::AzureOpenAiTranslator, claude::ClaudeTranslator, deepl::DeeplTranslator,
     gemini::GeminiTranslator, google::GoogleTranslator, groq::GroqTranslator,
     ollama::OllamaTranslator, openai::OpenAiTranslator,
 };
@@ -41,6 +42,41 @@ impl TranslatorFactory {
                 settings.custom_openai_url.clone(),
                 settings.custom_openai_api_key.clone(),
                 settings.custom_openai_model.clone(),
+                Some(settings.trans_behavior.clone()),
+            )
+            .ok()
+            .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
+            TranslationProvider::Claude => ClaudeTranslator::new(
+                settings.claude_api_key.clone(),
+                settings.claude_model.clone(),
+                Some(settings.trans_behavior.clone()),
+            )
+            .ok()
+            .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
+            TranslationProvider::DeepSeek => OpenAiTranslator::new(
+                "https://api.deepseek.com".to_string(), // DeepSeek uses OpenAI compatible API
+                settings.deepseek_api_key.clone(),
+                settings.deepseek_model.clone(),
+                Some(settings.trans_behavior.clone()),
+            )
+            .ok()
+            .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
+            TranslationProvider::DeepL => DeeplTranslator::new(settings.deepl_api_key.clone())
+                .ok()
+                .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
+            TranslationProvider::LmStudio => OpenAiTranslator::new(
+                settings.lm_studio_url.clone(),
+                "lm-studio".to_string(), // API key is often ignored but required by schema
+                settings.lm_studio_model.clone(),
+                Some(settings.trans_behavior.clone()),
+            )
+            .ok()
+            .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
+            TranslationProvider::AzureOpenAI => AzureOpenAiTranslator::new(
+                settings.azure_openai_url.clone(),
+                settings.azure_openai_api_key.clone(),
+                settings.azure_deployment_name.clone(),
+                settings.azure_api_version.clone(),
                 Some(settings.trans_behavior.clone()),
             )
             .ok()
