@@ -129,38 +129,20 @@ pub fn render_tab_ocr(
                     crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => {
                         i18n.ppocr_suite_cnen_mobile
                     }
-                    crate::infrastructure::settings::PpocrModelSuite::CnEnServer => {
-                        i18n.ppocr_suite_cnen_server
-                    }
                     crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => {
                         i18n.ppocr_suite_jp_mobile
-                    }
-                    crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => {
-                        i18n.ppocr_suite_jp_server
                     }
                     crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => {
                         i18n.ppocr_suite_ko_mobile
                     }
-                    crate::infrastructure::settings::PpocrModelSuite::KoreanServer => {
-                        i18n.ppocr_suite_ko_server
-                    }
                     crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => {
                         i18n.ppocr_suite_th_mobile
-                    }
-                    crate::infrastructure::settings::PpocrModelSuite::ThaiServer => {
-                        i18n.ppocr_suite_th_server
                     }
                     crate::infrastructure::settings::PpocrModelSuite::LatinMobile => {
                         i18n.ppocr_suite_latin_mobile
                     }
-                    crate::infrastructure::settings::PpocrModelSuite::LatinServer => {
-                        i18n.ppocr_suite_latin_server
-                    }
                     crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
                         i18n.ppocr_suite_cyrillic_mobile
-                    }
-                    crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => {
-                        i18n.ppocr_suite_cyrillic_server
                     }
                 })
                 .show_ui(ui, |ui| {
@@ -171,18 +153,8 @@ pub fn render_tab_ocr(
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::CnEnServer,
-                        i18n.ppocr_suite_cnen_server,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
                         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile,
                         i18n.ppocr_suite_jp_mobile,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer,
-                        i18n.ppocr_suite_jp_server,
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
@@ -191,18 +163,8 @@ pub fn render_tab_ocr(
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::KoreanServer,
-                        i18n.ppocr_suite_ko_server,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
                         crate::infrastructure::settings::PpocrModelSuite::ThaiMobile,
                         i18n.ppocr_suite_th_mobile,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::ThaiServer,
-                        i18n.ppocr_suite_th_server,
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
@@ -211,18 +173,8 @@ pub fn render_tab_ocr(
                     );
                     ui.selectable_value(
                         &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::LatinServer,
-                        i18n.ppocr_suite_latin_server,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
                         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile,
                         i18n.ppocr_suite_cyrillic_mobile,
-                    );
-                    ui.selectable_value(
-                        &mut settings.ppocr_model,
-                        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer,
-                        i18n.ppocr_suite_cyrillic_server,
                     );
                 });
         });
@@ -296,5 +248,128 @@ pub fn render_tab_ocr(
             egui::Color32::from_rgb(255, 180, 100),
             "⚠ Warning: This requires calling the LLM API twice per frame, which doubles latency and token usage.",
         );
+    }
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    // ── Advanced Text Detection Models ──
+    super::section_header(ui, "Advanced Text Detection Models");
+    ui.label(
+        egui::RichText::new("AI-powered pre-processing to locate text regions before OCR.")
+            .small()
+            .color(egui::Color32::GRAY),
+    );
+    ui.add_space(4.0);
+
+    ui.horizontal(|ui| {
+        ui.label("Text Detector Mode:");
+        egui::ComboBox::from_id_salt("text_detector_mode")
+            .selected_text(match settings.text_detector {
+                crate::infrastructure::settings::TextDetectorMode::None => "None (Full Frame)",
+                crate::infrastructure::settings::TextDetectorMode::YoloBubble => {
+                    "YOLO Speech Bubble"
+                }
+                crate::infrastructure::settings::TextDetectorMode::CraftRegion => {
+                    "CRAFT Text Region"
+                }
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::None,
+                    "None (Full Frame)",
+                );
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::YoloBubble,
+                    "YOLO Speech Bubble",
+                );
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::CraftRegion,
+                    "CRAFT Text Region",
+                );
+            });
+    });
+
+    // Synchronize legacy `use_yolo_bubble` setting
+    settings.use_yolo_bubble =
+        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble;
+
+    match settings.text_detector {
+        crate::infrastructure::settings::TextDetectorMode::YoloBubble => {
+            let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
+            if !exists {
+                ui.add_space(8.0);
+                if download_progress.is_downloading
+                    && download_progress.current_file.contains("Bubble")
+                {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(format!(
+                            "Downloading model: {}",
+                            download_progress.current_file
+                        ));
+                    });
+                    ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(235, 120, 0),
+                            "⚠ YOLO Speech Bubble model (yolo26n.onnx) is not installed.",
+                        );
+                        if ui.button("Download (6MB)").clicked() {
+                            let _ = download_trigger_tx
+                                .send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
+                        }
+                    });
+                }
+            } else {
+                ui.add_space(8.0);
+                ui.colored_label(
+                    egui::Color32::from_rgb(0, 180, 50),
+                    "✅ YOLO Speech Bubble model installed.",
+                );
+            }
+        }
+        crate::infrastructure::settings::TextDetectorMode::CraftRegion => {
+            let exists = crate::infrastructure::asset_download_manager::check_craft_exists();
+            if !exists {
+                ui.add_space(8.0);
+                if download_progress.is_downloading
+                    && download_progress.current_file.contains("CRAFT")
+                {
+                    ui.horizontal(|ui| {
+                        ui.spinner();
+                        ui.label(format!(
+                            "Downloading model: {}",
+                            download_progress.current_file
+                        ));
+                    });
+                    ui.add(egui::ProgressBar::new(download_progress.progress).show_percentage());
+                } else {
+                    ui.horizontal(|ui| {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(235, 120, 0),
+                            "⚠ CRAFT Text Detector model is not installed.",
+                        );
+                        if ui.button("Download (83MB)").clicked() {
+                            let _ = download_trigger_tx.send(
+                                crate::infrastructure::settings::OcrEngineType::CraftDetector,
+                            );
+                        }
+                    });
+                }
+            } else {
+                ui.add_space(8.0);
+                ui.colored_label(
+                    egui::Color32::from_rgb(0, 180, 50),
+                    "✅ CRAFT Text Detector model installed.",
+                );
+            }
+        }
+        _ => {}
     }
 }

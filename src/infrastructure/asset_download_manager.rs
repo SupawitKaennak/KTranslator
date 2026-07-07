@@ -83,20 +83,7 @@ pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
     },
 ];
 
-/// PP-OCRv4 Server models for maximum precision on complex game/manga fonts.
-/// Det (~108MB) + Rec (~86MB).
-pub const PPOCR_SERVER_MODELS: [ModelAsset<'static>; 2] = [
-    ModelAsset {
-        name: "PP-OCRv4 Detection (Server)",
-        url: "https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv4/ch_PP-OCRv4_det_server_infer.onnx",
-        path: "models/ppocr/det_server.onnx",
-    },
-    ModelAsset {
-        name: "PP-OCRv4 Recognition (Server)",
-        url: "https://huggingface.co/SWHL/RapidOCR/resolve/main/PP-OCRv4/ch_PP-OCRv4_rec_server_infer.onnx",
-        path: "models/ppocr/rec_server.onnx",
-    },
-];
+
 
 pub const PPOCR_DICT_JAPANESE: ModelAsset<'static> = ModelAsset {
     name: "PP-OCR Dictionary (Japanese)",
@@ -263,75 +250,45 @@ pub async fn download_ppocr_models(
     let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
 
     // 1. Detection Model URL
-    let det_url = match settings.ppocr_model {
-        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile
-        | crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile
-        | crate::infrastructure::settings::PpocrModelSuite::KoreanMobile
-        | crate::infrastructure::settings::PpocrModelSuite::ThaiMobile
-        | crate::infrastructure::settings::PpocrModelSuite::LatinMobile
-        | crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
-            PPOCR_MOBILE_MODELS[0].url
-        }
-
-        crate::infrastructure::settings::PpocrModelSuite::CnEnServer
-        | crate::infrastructure::settings::PpocrModelSuite::JapaneseServer
-        | crate::infrastructure::settings::PpocrModelSuite::KoreanServer
-        | crate::infrastructure::settings::PpocrModelSuite::ThaiServer
-        | crate::infrastructure::settings::PpocrModelSuite::LatinServer
-        | crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => {
-            PPOCR_SERVER_MODELS[0].url
-        }
-    };
+    let det_url = PPOCR_MOBILE_MODELS[0].url;
 
     // 2. Recognition Model URL
     let rec_url = match settings.ppocr_model {
         crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => PPOCR_MOBILE_MODELS[1].url,
-        crate::infrastructure::settings::PpocrModelSuite::CnEnServer => PPOCR_SERVER_MODELS[1].url,
-
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile |
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseServer =>
+        
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile =>
             "https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/model.onnx",
 
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile |
-        crate::infrastructure::settings::PpocrModelSuite::KoreanServer =>
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile =>
             "https://huggingface.co/cycloneboy/korean_PP-OCRv4_rec_infer/resolve/main/model.onnx",
 
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile |
-        crate::infrastructure::settings::PpocrModelSuite::ThaiServer =>
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile =>
             "https://huggingface.co/itextresearch/itext-th_PP-OCRv5_mobile_rec_infer/resolve/main/inference.onnx",
 
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile |
-        crate::infrastructure::settings::PpocrModelSuite::LatinServer =>
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile =>
             "https://huggingface.co/cycloneboy/latin_PP-OCRv3_rec_infer/resolve/main/model.onnx",
 
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile |
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicServer =>
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile =>
             "https://huggingface.co/cycloneboy/cyrillic_PP-OCRv3_rec_infer/resolve/main/model.onnx",
     };
 
     // 3. Dictionary URL
     let dict_url = match settings.ppocr_model {
-        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile
-        | crate::infrastructure::settings::PpocrModelSuite::CnEnServer => {
+        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => {
             PPOCR_MOBILE_MODELS[2].url
         }
 
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile
-        | crate::infrastructure::settings::PpocrModelSuite::JapaneseServer => {
+        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => {
             PPOCR_DICT_JAPANESE.url
         }
 
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile
-        | crate::infrastructure::settings::PpocrModelSuite::KoreanServer => PPOCR_DICT_KOREAN.url,
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => PPOCR_DICT_KOREAN.url,
 
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile
-        | crate::infrastructure::settings::PpocrModelSuite::ThaiServer => PPOCR_DICT_THAI.url,
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => PPOCR_DICT_THAI.url,
 
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile
-        | crate::infrastructure::settings::PpocrModelSuite::LatinServer => PPOCR_DICT_LATIN.url,
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile => PPOCR_DICT_LATIN.url,
 
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile
-        | crate::infrastructure::settings::PpocrModelSuite::CyrillicServer => {
+        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
             PPOCR_DICT_CYRILLIC.url
         }
     };

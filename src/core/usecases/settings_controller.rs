@@ -1,4 +1,4 @@
-﻿use crate::infrastructure::settings::Settings;
+use crate::infrastructure::settings::Settings;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -15,6 +15,10 @@ pub struct SettingsController {
     pub ollama_fetching: Arc<Mutex<bool>>,
     pub custom_openai_models: Arc<Mutex<Vec<String>>>,
     pub custom_openai_fetching: Arc<Mutex<bool>>,
+    pub deepseek_models: Arc<Mutex<Vec<String>>>,
+    pub deepseek_fetching: Arc<Mutex<bool>>,
+    pub lm_studio_models: Arc<Mutex<Vec<String>>>,
+    pub lm_studio_fetching: Arc<Mutex<bool>>,
     #[allow(dead_code)]
     pub custom_openai_error: Arc<Mutex<Option<String>>>,
 }
@@ -31,6 +35,10 @@ impl SettingsController {
             ollama_fetching: Arc::new(Mutex::new(false)),
             custom_openai_models: Arc::new(Mutex::new(Vec::new())),
             custom_openai_fetching: Arc::new(Mutex::new(false)),
+            deepseek_models: Arc::new(Mutex::new(Vec::new())),
+            deepseek_fetching: Arc::new(Mutex::new(false)),
+            lm_studio_models: Arc::new(Mutex::new(Vec::new())),
+            lm_studio_fetching: Arc::new(Mutex::new(false)),
             custom_openai_error: Arc::new(Mutex::new(None)),
         }
     }
@@ -54,5 +62,7 @@ impl SettingsController {
         self.groq_models.lock().clear();
         self.ollama_models.lock().clear();
         self.custom_openai_models.lock().clear();
+        self.deepseek_models.lock().clear();
+        self.lm_studio_models.lock().clear();
     }
 }

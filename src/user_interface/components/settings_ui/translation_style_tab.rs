@@ -123,55 +123,61 @@ pub fn render_tab_translation_behavior(
                 ui.checkbox(&mut beh.profanity_filter, "Safe Profanity Filter");
                 ui.end_row();
             });
-    });
 
-    ui.add_space(16.0);
-    ui.separator();
-    ui.add_space(8.0);
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
 
-    // ── Realtime Stability Section ──
-    super::section_header(ui, i18n.beh_stability);
-    ui.label(
-        egui::RichText::new(
-            "Prevent screen flickering and stabilize typewriter subtitles in games.",
-        )
-        .small()
-        .color(egui::Color32::GRAY),
-    );
-    ui.add_space(6.0);
+        super::section_header(ui, i18n.beh_prompt_cust);
+        ui.checkbox(
+            &mut beh.custom_prompts.enabled,
+            "Enable Custom AI Prompts Overrides",
+        );
+        if beh.custom_prompts.enabled {
+            ui.add_space(4.0);
+            egui::CollapsingHeader::new("Edit Prompt Templates")
+                .default_open(true)
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new("Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}").small().color(egui::Color32::GRAY));
+                    ui.add_space(6.0);
 
-    let real = &mut settings.realtime;
-    egui::Grid::new("realtime_stability_grid")
-        .num_columns(2)
-        .spacing([20.0, 12.0])
-        .show(ui, |ui| {
-            ui.label("Debounce Delay (Frames):");
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::Slider::new(&mut real.stability_threshold_frames, 1..=10).text("Frames"),
-                );
-                ui.label(
-                    egui::RichText::new("Wait for scrolling text to stop")
-                        .small()
-                        .color(egui::Color32::GRAY),
-                );
-            });
-            ui.end_row();
+                    ui.label("System Prompt (Role & Guidelines):");
+                    ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.system_prompt).desired_rows(3).desired_width(f32::INFINITY));
+                    ui.add_space(6.0);
 
-            ui.label("Subtitle Persistence:");
-            ui.horizontal(|ui| {
-                ui.add(
-                    egui::Slider::new(&mut real.subtitle_persistence_ms, 0..=10000)
-                        .step_by(500.0)
-                        .text("ms"),
-                );
-                ui.label(
-                    egui::RichText::new("Hold text after dialogue disappears")
-                        .small()
-                        .color(egui::Color32::GRAY),
-                );
-            });
-            ui.end_row();
+                    ui.label("Single-line User Prompt Template:");
+                    ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.single_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
+                    ui.add_space(6.0);
 
+                    ui.label("Multi-line Batch User Prompt Template:");
+                    ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.multi_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
+                    ui.add_space(4.0);
+
+                    if ui.button("Reset to Default Prompts").clicked() {
+                        beh.custom_prompts = crate::infrastructure::settings::CustomPromptSettings {
+                            enabled: true,
+                            ..Default::default()
+                        };
+                    }
+                });
+        }
+
+        ui.add_space(16.0);
+        ui.separator();
+        ui.add_space(8.0);
+
+        super::section_header(ui, "AI Memory & Context");
+        ui.horizontal(|ui| {
+            ui.label("Context Memory:");
+            ui.add(
+                egui::Slider::new(&mut settings.realtime.context_window_size, 0..=5)
+                    .text("Segments"),
+            );
+            ui.label(
+                egui::RichText::new("Remember past chat history for better contextual translation")
+                    .small()
+                    .color(egui::Color32::GRAY),
+            );
         });
+    });
 }

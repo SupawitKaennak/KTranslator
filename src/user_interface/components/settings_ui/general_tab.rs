@@ -33,4 +33,53 @@ pub fn render_tab_general(
     if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
         settings.hide_from_capture = !allow;
     }
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
+    // ── Realtime Stability ──
+    super::section_header(ui, i18n.beh_stability);
+    ui.label(
+        egui::RichText::new(
+            "Prevent screen flickering and stabilize typewriter subtitles in games.",
+        )
+        .small()
+        .color(egui::Color32::GRAY),
+    );
+    ui.add_space(6.0);
+
+    let real = &mut settings.realtime;
+    egui::Grid::new("realtime_stability_grid")
+        .num_columns(2)
+        .spacing([20.0, 12.0])
+        .show(ui, |ui| {
+            ui.label("Debounce Delay (Frames):");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut real.stability_threshold_frames, 1..=10).text("Frames"),
+                );
+                ui.label(
+                    egui::RichText::new("Wait for scrolling text to stop")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+            });
+            ui.end_row();
+
+            ui.label("Subtitle Persistence:");
+            ui.horizontal(|ui| {
+                ui.add(
+                    egui::Slider::new(&mut real.subtitle_persistence_ms, 0..=10000)
+                        .step_by(500.0)
+                        .text("ms"),
+                );
+                ui.label(
+                    egui::RichText::new("Hold text after dialogue disappears")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+            });
+            ui.end_row();
+        });
 }

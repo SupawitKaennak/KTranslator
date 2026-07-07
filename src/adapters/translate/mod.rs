@@ -1,3 +1,6 @@
+pub mod claude;
+pub mod deepl;
+pub mod azure;
 pub mod gemini;
 pub mod google;
 pub mod groq;
