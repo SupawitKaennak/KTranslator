@@ -72,9 +72,9 @@ impl Translator for OpenAiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.base_url.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Custom OpenAI Base URL is empty".to_string(),
             ));
         }
@@ -113,7 +113,7 @@ impl Translator for OpenAiTranslator {
         }
 
         let res = req.json(&req_body).send().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "OpenAI compatible request failed: {:?}",
                 e
             ))
@@ -123,14 +123,14 @@ impl Translator for OpenAiTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "OpenAI API error {}: {}",
                 status, body_text
             )));
         }
 
         let resp: OpenAiResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse OpenAI API response: {}, response was: {}",
                 e, body_text
             ))
@@ -150,9 +150,9 @@ impl Translator for OpenAiTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.base_url.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Custom OpenAI Base URL is empty".to_string(),
             ));
         }
@@ -184,7 +184,7 @@ impl Translator for OpenAiTranslator {
         }
 
         let res = req.json(&req_body).send().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "OpenAI compatible request failed during OCR correction: {:?}",
                 e
             ))
@@ -194,14 +194,14 @@ impl Translator for OpenAiTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "OpenAI API error during OCR correction {}: {}",
                 status, body_text
             )));
         }
 
         let resp: OpenAiResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse OpenAI API response: {}, response was: {}",
                 e, body_text
             ))

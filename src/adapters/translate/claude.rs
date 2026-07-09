@@ -39,9 +39,9 @@ impl Translator for ClaudeTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Claude API key is empty".to_string(),
             ));
         }
@@ -75,7 +75,7 @@ impl Translator for ClaudeTranslator {
             .json(&req_body)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!(
+                anyhow::anyhow!(format!(
                     "Claude request failed: {:?}",
                     e
                 ))
@@ -85,14 +85,14 @@ impl Translator for ClaudeTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Claude API error {}: {}",
                 status, body_text
             )));
         }
 
         let resp: ClaudeResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse Claude API response: {}, response was: {}",
                 e, body_text
             ))
@@ -111,9 +111,9 @@ impl Translator for ClaudeTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Claude API key is empty".to_string(),
             ));
         }
@@ -140,7 +140,7 @@ impl Translator for ClaudeTranslator {
             .json(&req_body)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!(
+                anyhow::anyhow!(format!(
                     "Claude request failed during OCR correction: {:?}",
                     e
                 ))
@@ -150,14 +150,14 @@ impl Translator for ClaudeTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Claude API error during OCR correction {}: {}",
                 status, body_text
             )));
         }
 
         let resp: ClaudeResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse Claude API response: {}, response was: {}",
                 e, body_text
             ))

@@ -122,25 +122,43 @@ impl App {
         // 1b. Handle Download Trigger
         while let Ok(engine_type) = self.downloads.trigger_rx.try_recv() {
             self.model.lock().download_progress.is_downloading = true; // Force UI awake
-            let tx = self.downloads.progress_tx.clone();
+            let actual_tx = self.downloads.progress_tx.clone();
+            let ctx_clone = ctx.clone();
+            let model_clone = self.model.clone();
+            
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().unwrap();
                 rt.block_on(async move {
+                    let (proxy_tx, mut proxy_rx) = tokio::sync::mpsc::unbounded_channel::<crate::core::types::DownloadProgress>();
+                    
+                    // Relay task to wake up UI when progress updates
+                    let proxy_handle = tokio::spawn(async move {
+                        while let Some(msg) = proxy_rx.recv().await {
+                            model_clone.lock().download_progress = msg.clone();
+                            let _ = actual_tx.send(msg);
+                            ctx_clone.request_repaint();
+                            ctx_clone.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
+                        }
+                    });
+
                     match engine_type {
                         crate::infrastructure::settings::OcrEngineType::MangaOCR => {
-                            let _ = crate::infrastructure::asset_download_manager::download_models(tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_models(proxy_tx).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
-                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
-                            let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(proxy_tx).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::CraftDetector => {
-                            let _ = crate::infrastructure::asset_download_manager::download_craft_model(tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_craft_model(proxy_tx).await;
                         }
                         _ => {}
                     }
+
+                    // Wait for the proxy task to process all pending messages before dropping the runtime
+                    let _ = proxy_handle.await;
                 });
             });
         }
@@ -150,6 +168,7 @@ impl App {
             let was_downloading = self.model.lock().download_progress.is_downloading;
             self.model.lock().download_progress = prog.clone();
             ctx.request_repaint(); // Wake up UI to show progress
+            ctx.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport")); // Wake up Settings window
 
             // If download just finished successfully, reload the engine
             if was_downloading && !prog.is_downloading && prog.error.is_none() {
@@ -218,7 +237,7 @@ impl App {
             ctx,
             settings_arc.clone(),
             &self.settings_ctrl,
-            self.model.lock().download_progress.clone(),
+            self.model.clone(),
             self.downloads.trigger_tx.clone(),
             &self.slots_runtime,
         );

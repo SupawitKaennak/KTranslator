@@ -38,7 +38,7 @@ impl BuiltinPaddleOcr {
         *self.model_suite.lock() = suite;
     }
 
-    fn ensure_pipeline(&self) -> Result<(), crate::core::error::KError> {
+    fn ensure_pipeline(&self) -> anyhow::Result<()> {
         let current_suite = { *self.model_suite.lock() };
         let mut guard = self.pipeline.lock();
 
@@ -79,20 +79,20 @@ impl BuiltinPaddleOcr {
         let dict_path = resolve_file("dict.txt");
 
         if !det_path.exists() {
-            return Err(crate::core::error::KError::Asset(format!(
+            return Err(anyhow::anyhow!(format!(
                 "PP-OCR detection model not found at {:?}\n\
                  Please place the required models in '{}' or use the Download button in settings.",
                 det_path, self.models_dir
             )));
         }
         if !rec_path.exists() {
-            return Err(crate::core::error::KError::Asset(format!(
+            return Err(anyhow::anyhow!(format!(
                 "PP-OCR recognition model not found at {:?}",
                 rec_path
             )));
         }
         if !dict_path.exists() {
-            return Err(crate::core::error::KError::Asset(format!(
+            return Err(anyhow::anyhow!(format!(
                 "PP-OCR dictionary file not found at {:?}",
                 dict_path
             )));
@@ -149,7 +149,7 @@ impl BuiltinPaddleOcr {
             .ort_session(ort_config)
             .build()
             .map_err(|e| {
-                crate::core::error::KError::Ocr(format!(
+                anyhow::anyhow!(format!(
                     "Failed to initialize Built-in PaddleOCR pipeline: {}",
                     e
                 ))
@@ -170,7 +170,7 @@ impl OcrEngine for BuiltinPaddleOcr {
         &self,
         frame: FrameRgba,
         lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let lines = self.recognize_lines(frame, lang_hint)?;
         Ok(lines
             .iter()
@@ -183,7 +183,7 @@ impl OcrEngine for BuiltinPaddleOcr {
         &self,
         frame: FrameRgba,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<Vec<OcrTextLine>, crate::core::error::KError> {
+    ) -> anyhow::Result<Vec<OcrTextLine>> {
         self.ensure_pipeline()?;
 
         let start_time = std::time::Instant::now();
@@ -205,7 +205,7 @@ impl OcrEngine for BuiltinPaddleOcr {
             rgb_data,
         )
         .ok_or_else(|| {
-            crate::core::error::KError::Ocr("Failed to construct high-speed RGB buffer".to_string())
+            anyhow::anyhow!("Failed to construct high-speed RGB buffer".to_string())
         })?;
 
         let prep_duration = start_time.elapsed();
@@ -214,10 +214,10 @@ impl OcrEngine for BuiltinPaddleOcr {
         // Run OCR pipeline — predict() takes Vec<ImageBuffer<Rgb<u8>>>
         let guard = self.pipeline.lock();
         let (pipeline, _) = guard.as_ref().ok_or_else(|| {
-            crate::core::error::KError::Ocr("BuiltinPaddleOcr pipeline not initialized".to_string())
+            anyhow::anyhow!("BuiltinPaddleOcr pipeline not initialized".to_string())
         })?;
         let results = pipeline.predict(vec![rgb_img]).map_err(|e| {
-            crate::core::error::KError::Ocr(format!("Built-in PaddleOCR inference failed: {}", e))
+            anyhow::anyhow!(format!("Built-in PaddleOCR inference failed: {}", e))
         })?;
 
         let infer_duration = infer_start.elapsed();

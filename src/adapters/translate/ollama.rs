@@ -69,7 +69,7 @@ impl Translator for OllamaTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let prompt = llm_shared_utilities::build_prompt(
             text,
             source,
@@ -86,7 +86,7 @@ impl Translator for OllamaTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let system = "You are an OCR error correction engine. Fix typos and garbled text in the following input. Return ONLY the corrected text. Do NOT translate it. Preserve the original formatting.";
         self.call_ollama(system, text, 0.1)
     }
@@ -98,7 +98,7 @@ impl OllamaTranslator {
         system_prompt: &str,
         user_prompt: &str,
         temp: f32,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let req = OllamaChatRequest {
             model: self.model.clone(),
             messages: vec![
@@ -121,19 +121,17 @@ impl OllamaTranslator {
         };
 
         let endpoint = format!("{}/api/chat", self.url);
-        let resp = self.client.post(&endpoint).json(&req).send().map_err(|e| {
-            crate::core::error::KError::Translation(format!("send ollama request: {:?}", e))
-        })?;
+        let resp = self.client.post(&endpoint).json(&req).send()
+            .context("Failed to send request to Ollama API")?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            return Err(crate::core::error::KError::Translation(format!("Ollama error: {status} {body} (Make sure Ollama is running and model '{}' is pulled)", self.model)));
+            return Err(anyhow::anyhow!(format!("Ollama error: {status} {body} (Make sure Ollama is running and model '{}' is pulled)", self.model)));
         }
 
-        let data: OllamaChatResponse = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!("parse ollama response: {:?}", e))
-        })?;
+        let data: OllamaChatResponse = resp.json()
+            .context("Failed to parse Ollama JSON response")?;
         Ok(data.message.content.trim().to_string())
     }
 }
@@ -164,4 +162,32 @@ struct OllamaOptions {
 #[derive(Deserialize)]
 struct OllamaChatResponse {
     message: OllamaMessage,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ollama_error_handling_stack_trace() {
+        // Deliberately point to a non-existent port to force a network error
+        let translator = OllamaTranslator::new("http://localhost:59999".to_string(), "llama3".to_string(), None).unwrap();
+        
+        let result = translator.translate("Hello", None, &LanguageTag("th".to_string()), None);
+        
+        match result {
+            Ok(_) => panic!("Expected an error, but got Ok"),
+            Err(e) => {
+                // This simulates what `coordinator.rs` does when printing the error:
+                let formatted_error = format!("{e:#}");
+                println!("--- ERROR STACK TRACE ---");
+                println!("{}", formatted_error);
+                println!("-------------------------");
+                
+                // Assert that the error chain is preserved
+                assert!(formatted_error.contains("Failed to send request to Ollama API"));
+                assert!(formatted_error.contains("tcp connect error"));
+            }
+        }
+    }
 }

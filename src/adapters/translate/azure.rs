@@ -45,9 +45,9 @@ impl Translator for AzureOpenAiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.endpoint.is_empty() || self.api_key.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Azure OpenAI configuration is incomplete".to_string(),
             ));
         }
@@ -80,7 +80,7 @@ impl Translator for AzureOpenAiTranslator {
         let res = self.client.post(&self.endpoint)
             .header("api-key", self.api_key.trim())
             .json(&req_body).send().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Azure OpenAI request failed: {:?}",
                 e
             ))
@@ -90,14 +90,14 @@ impl Translator for AzureOpenAiTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Azure OpenAI API error {}: {}",
                 status, body_text
             )));
         }
 
         let resp: AzureOpenAiResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse Azure OpenAI API response: {}, response was: {}",
                 e, body_text
             ))
@@ -117,9 +117,9 @@ impl Translator for AzureOpenAiTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.endpoint.is_empty() || self.api_key.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Azure OpenAI configuration is incomplete".to_string(),
             ));
         }
@@ -145,7 +145,7 @@ impl Translator for AzureOpenAiTranslator {
         let res = self.client.post(&self.endpoint)
             .header("api-key", self.api_key.trim())
             .json(&req_body).send().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Azure OpenAI request failed during OCR correction: {:?}",
                 e
             ))
@@ -155,14 +155,14 @@ impl Translator for AzureOpenAiTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Azure OpenAI API error during OCR correction {}: {}",
                 status, body_text
             )));
         }
 
         let resp: AzureOpenAiResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse Azure OpenAI API response: {}, response was: {}",
                 e, body_text
             ))

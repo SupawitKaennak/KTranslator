@@ -338,11 +338,18 @@ fn try_fetch_gemini(
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        if let Ok(list) = crate::adapters::translate::gemini::GeminiTranslator::list_models(&key) {
-            *m.lock() = list.into_iter().map(|x| x.id).collect();
+        match crate::adapters::translate::gemini::GeminiTranslator::list_models(&key) {
+            Ok(list) => {
+                let items: Vec<String> = list.into_iter().map(|x| x.id).collect();
+                *m.lock() = if items.is_empty() { vec!["(No models found)".to_string()] } else { items };
+            }
+            Err(e) => {
+                *m.lock() = vec![format!("(Error: {})", e.to_string().lines().next().unwrap_or("Failed"))];
+            }
         }
         *f.lock() = false;
         c.request_repaint();
+        c.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
     });
 }
 
@@ -364,11 +371,17 @@ fn try_fetch_groq(
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        if let Ok(list) = crate::adapters::translate::groq::GroqTranslator::list_models(&key) {
-            *m.lock() = list;
+        match crate::adapters::translate::groq::GroqTranslator::list_models(&key) {
+            Ok(list) => {
+                *m.lock() = if list.is_empty() { vec!["(No models found)".to_string()] } else { list };
+            }
+            Err(e) => {
+                *m.lock() = vec![format!("(Error: {})", e.to_string().lines().next().unwrap_or("Failed"))];
+            }
         }
         *f.lock() = false;
         c.request_repaint();
+        c.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
     });
 }
 
@@ -389,11 +402,17 @@ fn try_fetch_ollama(
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        if let Ok(list) = crate::adapters::translate::ollama::OllamaTranslator::list_models(&url) {
-            *m.lock() = list;
+        match crate::adapters::translate::ollama::OllamaTranslator::list_models(&url) {
+            Ok(list) => {
+                *m.lock() = if list.is_empty() { vec!["(No models found)".to_string()] } else { list };
+            }
+            Err(e) => {
+                *m.lock() = vec![format!("(Error: {})", e.to_string().lines().next().unwrap_or("Failed"))];
+            }
         }
         *f.lock() = false;
         c.request_repaint();
+        c.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
     });
 }
 
@@ -419,13 +438,17 @@ fn try_fetch_custom(
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        if let Ok(list) =
-            crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, &key)
-        {
-            *m.lock() = list;
+        match crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, &key) {
+            Ok(list) => {
+                *m.lock() = if list.is_empty() { vec!["(No models found)".to_string()] } else { list };
+            }
+            Err(e) => {
+                *m.lock() = vec![format!("(Error: {})", e.to_string().lines().next().unwrap_or("Failed"))];
+            }
         }
         *f.lock() = false;
         c.request_repaint();
+        c.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
     });
 }
 
@@ -447,13 +470,17 @@ fn try_fetch_deepseek(
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        if let Ok(list) =
-            crate::adapters::translate::openai::OpenAiTranslator::list_models("https://api.deepseek.com/v1", &key)
-        {
-            *m.lock() = list;
+        match crate::adapters::translate::openai::OpenAiTranslator::list_models("https://api.deepseek.com/v1", &key) {
+            Ok(list) => {
+                *m.lock() = if list.is_empty() { vec!["(No models found)".to_string()] } else { list };
+            }
+            Err(e) => {
+                *m.lock() = vec![format!("(Error: {})", e.to_string().lines().next().unwrap_or("Failed"))];
+            }
         }
         *f.lock() = false;
         c.request_repaint();
+        c.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
     });
 }
 
@@ -475,12 +502,16 @@ fn try_fetch_lm_studio(
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        if let Ok(list) =
-            crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, "")
-        {
-            *m.lock() = list;
+        match crate::adapters::translate::openai::OpenAiTranslator::list_models(&url, "") {
+            Ok(list) => {
+                *m.lock() = if list.is_empty() { vec!["(No models found)".to_string()] } else { list };
+            }
+            Err(e) => {
+                *m.lock() = vec![format!("(Error: {})", e.to_string().lines().next().unwrap_or("Failed"))];
+            }
         }
         *f.lock() = false;
         c.request_repaint();
+        c.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
     });
 }

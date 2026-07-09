@@ -24,7 +24,7 @@ impl Translator for GoogleTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         _context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let sl = source.map(|s| s.as_str()).unwrap_or("auto");
         let tl = target.as_str();
 
@@ -94,7 +94,7 @@ impl Translator for GoogleTranslator {
             }
         }
 
-        Err(crate::core::error::KError::Translation(format!(
+        Err(anyhow::anyhow!(format!(
             "Google Translate failed after 3 attempts. Last error: {:?}",
             last_err
         )))

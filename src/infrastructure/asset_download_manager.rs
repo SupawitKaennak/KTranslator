@@ -159,7 +159,7 @@ pub use crate::core::types::DownloadProgress;
 /// Generic download helper that downloads a list of model assets with progress reporting.
 async fn download_asset_list(
     assets: &[ModelAsset<'_>],
-    progress_tx: &tokio::sync::mpsc::Sender<DownloadProgress>,
+    progress_tx: &tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 ) -> Result<()> {
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -200,7 +200,7 @@ async fn download_asset_list(
             is_downloading: true,
             error: None,
         };
-        let _ = progress_tx.send(progress.clone()).await;
+        let _ = progress_tx.send(progress.clone());
 
         let mut response = client.get(asset.url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
@@ -216,7 +216,7 @@ async fn download_asset_list(
                 let new_prog = downloaded as f32 / total_size as f32;
                 if (new_prog - progress.progress).abs() > 0.01 {
                     progress.progress = new_prog;
-                    let _ = progress_tx.send(progress.clone()).await;
+                    let _ = progress_tx.send(progress.clone());
                 }
             }
         }
@@ -227,7 +227,7 @@ async fn download_asset_list(
 
 /// Download Manga-OCR models.
 pub async fn download_models(
-    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 ) -> Result<()> {
     download_asset_list(&MANGA_MODELS, &progress_tx).await?;
 
@@ -237,15 +237,14 @@ pub async fn download_models(
             progress: 1.0,
             is_downloading: false,
             error: None,
-        })
-        .await;
+        });
 
     Ok(())
 }
 
 /// Download PP-OCR models for Built-in PaddleOCR.
 pub async fn download_ppocr_models(
-    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 ) -> Result<()> {
     let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
 
@@ -327,14 +326,13 @@ pub async fn download_ppocr_models(
             progress: 1.0,
             is_downloading: false,
             error: None,
-        })
-        .await;
+        });
 
     Ok(())
 }
 
 pub async fn download_bubble_yolo_model(
-    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 ) -> Result<()> {
     download_asset_list(&[BUBBLE_YOLO_MODEL], &progress_tx).await?;
 
@@ -344,14 +342,13 @@ pub async fn download_bubble_yolo_model(
             progress: 1.0,
             is_downloading: false,
             error: None,
-        })
-        .await;
+        });
 
     Ok(())
 }
 
 pub async fn download_craft_model(
-    progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+    progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 ) -> Result<()> {
     download_asset_list(&[CRAFT_TEXT_DETECTOR_MODEL], &progress_tx).await?;
 
@@ -361,8 +358,7 @@ pub async fn download_craft_model(
             progress: 1.0,
             is_downloading: false,
             error: None,
-        })
-        .await;
+        });
 
     Ok(())
 }

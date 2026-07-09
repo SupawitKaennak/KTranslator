@@ -66,7 +66,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
         crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(&settings);
 
     let (dt_tx, dt_rx) = std::sync::mpsc::channel();
-    let (dp_tx, dp_rx) = tokio::sync::mpsc::channel(32);
+    let (dp_tx, dp_rx) = tokio::sync::mpsc::unbounded_channel();
 
     let caches = AppCaches {
         translation: Arc::new(Mutex::new(indexmap::IndexMap::new())),
