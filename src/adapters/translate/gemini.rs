@@ -98,9 +98,9 @@ impl Translator for GeminiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.trim().is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Gemini API key is empty (open Settings and set it)".to_string(),
             ));
         }
@@ -137,7 +137,7 @@ impl Translator for GeminiTranslator {
             .json(&body)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!(
+                anyhow::anyhow!(format!(
                     "send generateContent request: {:?}",
                     e
                 ))
@@ -146,13 +146,13 @@ impl Translator for GeminiTranslator {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Gemini API error: {status} {body}"
             )));
         }
 
         let data: ResponseBody = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "parse generateContent response: {:?}",
                 e
             ))
@@ -163,7 +163,7 @@ impl Translator for GeminiTranslator {
             .and_then(|c| c.content.parts.first())
             .map(|p| p.text.clone())
             .ok_or_else(|| {
-                crate::core::error::KError::Translation(
+                anyhow::anyhow!(
                     "Gemini returned no candidates (Safety filter?)".to_string(),
                 )
             })?;
@@ -175,9 +175,9 @@ impl Translator for GeminiTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.trim().is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Gemini API key is empty".to_string(),
             ));
         }
@@ -209,7 +209,7 @@ impl Translator for GeminiTranslator {
             .json(&body)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!(
+                anyhow::anyhow!(format!(
                     "send generateContent request: {:?}",
                     e
                 ))
@@ -218,13 +218,13 @@ impl Translator for GeminiTranslator {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Gemini API error during OCR correction: {status} {body}"
             )));
         }
 
         let data: ResponseBody = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "parse generateContent response: {:?}",
                 e
             ))
@@ -236,7 +236,7 @@ impl Translator for GeminiTranslator {
             .and_then(|c| c.content.parts.first())
             .map(|p| p.text.trim().to_string())
             .ok_or_else(|| {
-                crate::core::error::KError::Translation(
+                anyhow::anyhow!(
                     "Gemini returned no candidates during OCR correction".to_string(),
                 )
             })?;

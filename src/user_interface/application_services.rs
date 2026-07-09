@@ -21,6 +21,6 @@ pub struct AppCaches {
 pub struct DownloadManager {
     pub trigger_tx: mpsc::Sender<OcrEngineType>,
     pub trigger_rx: mpsc::Receiver<OcrEngineType>,
-    pub progress_rx: tokio::sync::mpsc::Receiver<DownloadProgress>,
-    pub progress_tx: tokio::sync::mpsc::Sender<DownloadProgress>,
+    pub progress_rx: tokio::sync::mpsc::UnboundedReceiver<DownloadProgress>,
+    pub progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 }

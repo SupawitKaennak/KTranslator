@@ -14,7 +14,7 @@ pub fn perform_ocr(
     text_detector_mode: TextDetectorMode,
     img_proc_cfg: &ImageProcessingSettings,
     jp_merge_vertical: bool,
-) -> (Vec<Vec<OcrTextLine>>, Vec<OcrTextLine>, bool) {
+) -> anyhow::Result<(Vec<Vec<OcrTextLine>>, Vec<OcrTextLine>, bool)> {
     let mut detection_boxes = Vec::new();
     let mut grouped_ocr_lines = Vec::new();
     let mut detection_successful = false;
@@ -142,23 +142,29 @@ pub fn perform_ocr(
                 processed_crop.width = proc_w;
                 processed_crop.height = proc_h;
 
-                if let Ok(mut lines) = ocr_engine.recognize_lines(processed_crop, source_lang) {
-                    let mut current_group = Vec::new();
-                    let scale = img_proc_cfg.resize_scale;
-                    for line in &mut lines {
-                        if (scale - 1.0).abs() > 0.01 {
-                            line.x /= scale;
-                            line.y /= scale;
-                            line.w /= scale;
-                            line.h /= scale;
+                match ocr_engine.recognize_lines(processed_crop, source_lang) {
+                    Ok(mut lines) => {
+                        let mut current_group = Vec::new();
+                        let scale = img_proc_cfg.resize_scale;
+                        for line in &mut lines {
+                            if (scale - 1.0).abs() > 0.01 {
+                                line.x /= scale;
+                                line.y /= scale;
+                                line.w /= scale;
+                                line.h /= scale;
+                            }
+                            line.x += crop_x as f32;
+                            line.y += crop_y as f32;
+                            line.bubble_idx = Some(b_idx);
+                            current_group.push(line.clone());
                         }
-                        line.x += crop_x as f32;
-                        line.y += crop_y as f32;
-                        line.bubble_idx = Some(b_idx);
-                        current_group.push(line.clone());
+                        if !current_group.is_empty() {
+                            grouped_ocr_lines.push(current_group);
+                        }
                     }
-                    if !current_group.is_empty() {
-                        grouped_ocr_lines.push(current_group);
+                    Err(e) => {
+                        tracing::warn!("OCR failed on cropped region: {:?}", e);
+                        // We continue with other crops rather than failing the whole frame
                     }
                 }
             }
@@ -179,21 +185,26 @@ pub fn perform_ocr(
         processed_frame.width = proc_w;
         processed_frame.height = proc_h;
 
-        if let Ok(mut lines) = ocr_engine.recognize_lines(processed_frame, source_lang) {
-            if (img_proc_cfg.resize_scale - 1.0).abs() > 0.01 {
-                let scale = img_proc_cfg.resize_scale;
-                for line in &mut lines {
-                    line.x /= scale;
-                    line.y /= scale;
-                    line.w /= scale;
-                    line.h /= scale;
+        match ocr_engine.recognize_lines(processed_frame, source_lang) {
+            Ok(mut lines) => {
+                if (img_proc_cfg.resize_scale - 1.0).abs() > 0.01 {
+                    let scale = img_proc_cfg.resize_scale;
+                    for line in &mut lines {
+                        line.x /= scale;
+                        line.y /= scale;
+                        line.w /= scale;
+                        line.h /= scale;
+                    }
+                }
+                if !lines.is_empty() {
+                    grouped_ocr_lines.push(lines);
                 }
             }
-            if !lines.is_empty() {
-                grouped_ocr_lines.push(lines);
+            Err(e) => {
+                return Err(e.context("OCR Engine failed to recognize text"));
             }
         }
     }
 
-    (grouped_ocr_lines, yolo_bubbles, detection_successful)
+    Ok((grouped_ocr_lines, yolo_bubbles, detection_successful))
 }

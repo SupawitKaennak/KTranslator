@@ -297,14 +297,14 @@ impl OcrEngine for OnnxMangaRecognizer {
         &self,
         frame: FrameRgba,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let img = image::RgbaImage::from_raw(frame.width, frame.height, (*frame.data).clone())
             .ok_or_else(|| {
-                crate::core::error::KError::Ocr("Failed to create image from frame".to_string())
+                anyhow::anyhow!("Failed to create image from frame".to_string())
             })?;
         let dynamic_img = image::DynamicImage::ImageRgba8(img);
         self.recognize_internal(&dynamic_img).map_err(|e| {
-            crate::core::error::KError::Ocr(format!("Manga109 OCR recognize failed: {:?}", e))
+            anyhow::anyhow!(format!("Manga109 OCR recognize failed: {:?}", e))
         })
     }
 
@@ -312,15 +312,15 @@ impl OcrEngine for OnnxMangaRecognizer {
         &self,
         frame: FrameRgba,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<Vec<OcrTextLine>, crate::core::error::KError> {
+    ) -> anyhow::Result<Vec<OcrTextLine>> {
         let img = image::RgbaImage::from_raw(frame.width, frame.height, (*frame.data).clone())
             .ok_or_else(|| {
-                crate::core::error::KError::Ocr("Failed to create image from frame".to_string())
+                anyhow::anyhow!("Failed to create image from frame".to_string())
             })?;
         let dynamic_img = image::DynamicImage::ImageRgba8(img);
 
         let boxes = self.detect_text_boxes(&dynamic_img).map_err(|e| {
-            crate::core::error::KError::Ocr(format!(
+            anyhow::anyhow!(format!(
                 "Manga109 OCR text box detection failed: {:?}",
                 e
             ))
@@ -375,7 +375,7 @@ impl OcrEngine for OnnxMangaRecognizer {
 
             let cropped = dynamic_img.crop_imm(x1, y1, x2 - x1, y2 - y1);
             let text = self.recognize_internal(&cropped).map_err(|e| {
-                crate::core::error::KError::Ocr(format!(
+                anyhow::anyhow!(format!(
                     "Manga109 OCR box text recognize failed: {:?}",
                     e
                 ))

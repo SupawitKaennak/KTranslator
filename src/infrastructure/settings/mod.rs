@@ -27,24 +27,31 @@ pub struct Settings {
     pub document_ocr_engine: OcrEngineType,
     pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
     pub ppocr_model: PpocrModelSuite,
+    #[serde(skip_serializing)]
     pub gemini_api_key: String,
     pub gemini_model: String,
+    #[serde(skip_serializing)]
     pub groq_api_key: String,
     pub groq_model: String,
     pub ollama_url: String,
     pub ollama_model: String,
     pub custom_openai_url: String,
+    #[serde(skip_serializing)]
     pub custom_openai_api_key: String,
     pub custom_openai_model: String,
     pub custom_openai_use_list: bool,
+    #[serde(skip_serializing)]
     pub claude_api_key: String,
     pub claude_model: String,
+    #[serde(skip_serializing)]
     pub deepseek_api_key: String,
     pub deepseek_model: String,
+    #[serde(skip_serializing)]
     pub deepl_api_key: String,
     pub lm_studio_url: String,
     pub lm_studio_model: String,
     pub azure_openai_url: String,
+    #[serde(skip_serializing)]
     pub azure_openai_api_key: String,
     pub azure_deployment_name: String,
     pub azure_api_version: String,
@@ -139,11 +146,14 @@ fn settings_path() -> Result<PathBuf> {
 
 pub fn load_settings() -> Result<Settings> {
     let path = settings_path()?;
-    if !path.exists() {
-        return Ok(Settings::default());
-    }
-    let bytes = fs::read(&path).with_context(|| format!("read settings at {}", path.display()))?;
-    let s = serde_json::from_slice(&bytes).context("parse settings.json")?;
+    let mut s = if !path.exists() {
+        Settings::default()
+    } else {
+        let bytes = fs::read(&path).with_context(|| format!("read settings at {}", path.display()))?;
+        serde_json::from_slice(&bytes).context("parse settings.json")?
+    };
+    
+    load_or_migrate_secrets(&mut s);
     Ok(s)
 }
 
@@ -153,7 +163,67 @@ pub fn save_settings(settings: &Settings) -> Result<()> {
         fs::create_dir_all(parent)
             .with_context(|| format!("create config dir {}", parent.display()))?;
     }
+    
+    save_secrets(settings);
+    
     let bytes = serde_json::to_vec_pretty(settings).context("serialize settings")?;
     fs::write(&path, bytes).with_context(|| format!("write settings at {}", path.display()))?;
     Ok(())
 }
+
+fn get_keyring_entry(key_name: &str) -> Result<keyring::Entry, keyring::Error> {
+    keyring::Entry::new("ktranslator", key_name)
+}
+
+fn load_or_migrate_secrets(settings: &mut Settings) {
+    let keys = [
+        ("gemini_api_key", &mut settings.gemini_api_key),
+        ("groq_api_key", &mut settings.groq_api_key),
+        ("custom_openai_api_key", &mut settings.custom_openai_api_key),
+        ("claude_api_key", &mut settings.claude_api_key),
+        ("deepseek_api_key", &mut settings.deepseek_api_key),
+        ("deepl_api_key", &mut settings.deepl_api_key),
+        ("azure_openai_api_key", &mut settings.azure_openai_api_key),
+    ];
+
+    for (name, setting_val) in keys {
+        if let Ok(entry) = get_keyring_entry(name) {
+            match entry.get_password() {
+                Ok(pwd) => {
+                    *setting_val = pwd;
+                }
+                Err(keyring::Error::NoEntry) => {
+                    if !setting_val.is_empty() {
+                        let _ = entry.set_password(setting_val.as_str());
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read {} from keyring: {}", name, e);
+                }
+            }
+        }
+    }
+}
+
+fn save_secrets(settings: &Settings) {
+    let keys = [
+        ("gemini_api_key", &settings.gemini_api_key),
+        ("groq_api_key", &settings.groq_api_key),
+        ("custom_openai_api_key", &settings.custom_openai_api_key),
+        ("claude_api_key", &settings.claude_api_key),
+        ("deepseek_api_key", &settings.deepseek_api_key),
+        ("deepl_api_key", &settings.deepl_api_key),
+        ("azure_openai_api_key", &settings.azure_openai_api_key),
+    ];
+
+    for (name, setting_val) in keys {
+        if let Ok(entry) = get_keyring_entry(name) {
+            if setting_val.is_empty() {
+                let _ = entry.delete_credential();
+            } else {
+                let _ = entry.set_password(setting_val.as_str());
+            }
+        }
+    }
+}
+

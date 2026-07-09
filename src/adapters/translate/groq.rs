@@ -72,9 +72,9 @@ impl Translator for GroqTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.trim().is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Groq API key is empty (obtain it from console.groq.com)".to_string(),
             ));
         }
@@ -112,19 +112,19 @@ impl Translator for GroqTranslator {
             .json(&req)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!("send groq request: {:?}", e))
+                anyhow::anyhow!(format!("send groq request: {:?}", e))
             })?;
 
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Groq error: {status} {body}"
             )));
         }
 
         let data: GroqChatResponse = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!("parse groq response: {:?}", e))
+            anyhow::anyhow!(format!("parse groq response: {:?}", e))
         })?;
         let out = data
             .choices
@@ -140,9 +140,9 @@ impl Translator for GroqTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.trim().is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "Groq API key is empty".to_string(),
             ));
         }
@@ -173,7 +173,7 @@ impl Translator for GroqTranslator {
             .json(&req)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!(
+                anyhow::anyhow!(format!(
                     "send groq correction request: {:?}",
                     e
                 ))
@@ -182,13 +182,13 @@ impl Translator for GroqTranslator {
         if !resp.status().is_success() {
             let status = resp.status();
             let body = resp.text().unwrap_or_default();
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "Groq error during OCR correction: {status} {body}"
             )));
         }
 
         let data: GroqChatResponse = resp.json().map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "parse groq correction response: {:?}",
                 e
             ))

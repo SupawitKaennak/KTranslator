@@ -1,4 +1,3 @@
-use anyhow::Result;
 use image::{ImageBuffer, Rgba};
 use std::future::IntoFuture;
 use std::sync::Arc;
@@ -29,7 +28,7 @@ impl WindowsOcr {
     fn get_engine(
         &self,
         lang_tag: Option<&LanguageTag>,
-    ) -> Result<Arc<OcrEngine>, crate::core::error::KError> {
+    ) -> anyhow::Result<Arc<OcrEngine>> {
         let is_auto = lang_tag.is_none();
         let requested_tag = if let Some(t) = lang_tag {
             t.0.as_str().to_lowercase()
@@ -46,7 +45,7 @@ impl WindowsOcr {
         );
 
         let available_langs = OcrEngine::AvailableRecognizerLanguages()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
 
         // Log all available languages for debugging
         let mut all_tags = Vec::new();
@@ -113,12 +112,12 @@ impl WindowsOcr {
                     {
                         first
                     } else {
-                        return Err(crate::core::error::KError::Ocr("No Windows OCR languages installed. Please install a Language Pack in Windows Settings.".to_string()));
+                        return Err(anyhow::anyhow!("No Windows OCR languages installed. Please install a Language Pack in Windows Settings.".to_string()));
                     }
                 } else {
                     // Manual selection failed - this is a hard error
                     let available = all_tags.join(", ");
-                    return Err(crate::core::error::KError::Ocr(format!(
+                    return Err(anyhow::anyhow!(format!(
                         "Windows OCR does not have the language pack for '{}' installed.\n\nAvailable languages: {}\n\nPlease go to Windows Settings -> Time & Language -> Language & Region and add the language pack for '{}' (ensure OCR/Optical Character Recognition is checked).",
                         requested_tag, available, requested_tag
                     )));
@@ -128,7 +127,7 @@ impl WindowsOcr {
 
         let final_tag = final_lang
             .LanguageTag()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
             .to_string();
         tracing::info!("WindowsOCR selected engine language: {}", final_tag);
 
@@ -138,7 +137,7 @@ impl WindowsOcr {
         }
 
         let engine = OcrEngine::TryCreateFromLanguage(&final_lang).map_err(|e| {
-            crate::core::error::KError::Ocr(format!(
+            anyhow::anyhow!(format!(
                 "Failed to create Windows OCR engine for {}: {}",
                 final_tag, e
             ))
@@ -234,7 +233,7 @@ impl WindowsOcr {
 
     fn frame_to_bitmap(
         processed: FrameRgba,
-    ) -> Result<windows::Graphics::Imaging::SoftwareBitmap, crate::core::error::KError> {
+    ) -> anyhow::Result<windows::Graphics::Imaging::SoftwareBitmap> {
         // Encode raw pixels to PNG in memory
         let mut png_buffer = Vec::new();
         let mut cursor = std::io::Cursor::new(&mut png_buffer);
@@ -242,57 +241,57 @@ impl WindowsOcr {
         let img =
             ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(processed.width, processed.height, raw_data)
                 .ok_or_else(|| {
-                    crate::core::error::KError::Ocr("Failed to create image buffer".to_string())
+                    anyhow::anyhow!("Failed to create image buffer".to_string())
                 })?;
         image::DynamicImage::ImageRgba8(img)
             .write_to(&mut cursor, image::ImageFormat::Png)
-            .map_err(|e| crate::core::error::KError::Ocr(format!("Image write error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("Image write error: {:?}", e)))?;
 
         let stream = InMemoryRandomAccessStream::new()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
         let writer = stream
             .GetOutputStreamAt(0)
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
         {
             let data_writer = windows::Storage::Streams::DataWriter::CreateDataWriter(&writer)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
             data_writer
                 .WriteBytes(&png_buffer)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
             wait_for(
                 data_writer
                     .StoreAsync()
-                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                    .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
                     .into_future(),
             )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
             wait_for(
                 data_writer
                     .FlushAsync()
-                    .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                    .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
                     .into_future(),
             )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
         }
 
         let decoder = wait_for(
             BitmapDecoder::CreateWithIdAsync(
                 windows::Graphics::Imaging::BitmapDecoder::PngDecoderId().map_err(|e| {
-                    crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e))
+                    anyhow::anyhow!(format!("WinRT error: {:?}", e))
                 })?,
                 &stream,
             )
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
             .into_future(),
         )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
         let bitmap = wait_for(
             decoder
                 .GetSoftwareBitmapAsync()
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
                 .into_future(),
         )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
 
         Ok(bitmap)
     }
@@ -318,7 +317,7 @@ impl OcrEngineTrait for WindowsOcr {
         &self,
         frame: FrameRgba,
         lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         let engine = self.get_engine(lang_hint)?;
         let (processed, _) = Self::preprocess(frame);
         let bitmap = Self::frame_to_bitmap(processed)?;
@@ -326,13 +325,13 @@ impl OcrEngineTrait for WindowsOcr {
         let result = wait_for(
             engine
                 .RecognizeAsync(&bitmap)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
                 .into_future(),
         )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
         Ok(result
             .Text()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
             .to_string())
     }
 
@@ -340,7 +339,7 @@ impl OcrEngineTrait for WindowsOcr {
         &self,
         frame: FrameRgba,
         lang_hint: Option<&LanguageTag>,
-    ) -> Result<Vec<OcrTextLine>, crate::core::error::KError> {
+    ) -> anyhow::Result<Vec<OcrTextLine>> {
         let engine = self.get_engine(lang_hint)?;
         let (processed, scale) = Self::preprocess(frame);
         let bitmap = Self::frame_to_bitmap(processed)?;
@@ -348,24 +347,24 @@ impl OcrEngineTrait for WindowsOcr {
         let result = wait_for(
             engine
                 .RecognizeAsync(&bitmap)
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
                 .into_future(),
         )
-        .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+        .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
         let lines_api = result
             .Lines()
-            .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+            .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
 
         let mut out_lines = Vec::new();
         for line in lines_api {
             let text = line
                 .Text()
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?
                 .to_string();
 
             let words = line
                 .Words()
-                .map_err(|e| crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e)))?;
+                .map_err(|e| anyhow::anyhow!(format!("WinRT error: {:?}", e)))?;
             let mut min_x = f32::MAX;
             let mut min_y = f32::MAX;
             let mut max_x = f32::MIN;
@@ -374,7 +373,7 @@ impl OcrEngineTrait for WindowsOcr {
             let mut has_words = false;
             for word in words {
                 let rect = word.BoundingRect().map_err(|e| {
-                    crate::core::error::KError::Ocr(format!("WinRT error: {:?}", e))
+                    anyhow::anyhow!(format!("WinRT error: {:?}", e))
                 })?;
                 min_x = min_x.min(rect.X);
                 min_y = min_y.min(rect.Y);

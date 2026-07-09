@@ -195,7 +195,7 @@ impl TranslationPipeline {
                 text_detector_mode,
                 &img_proc_cfg,
                 jp_merge_vertical,
-            );
+            )?;
 
         // Line-level Garbage Filtering per group
         for group in &mut grouped_ocr_lines {

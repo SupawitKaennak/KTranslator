@@ -35,9 +35,9 @@ impl Translator for DeeplTranslator {
         _source: Option<&LanguageTag>,
         target: &LanguageTag,
         _context_hint: Option<&str>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         if self.api_key.is_empty() {
-            return Err(crate::core::error::KError::Translation(
+            return Err(anyhow::anyhow!(
                 "DeepL API key is empty".to_string(),
             ));
         }
@@ -60,7 +60,7 @@ impl Translator for DeeplTranslator {
             .json(&req_body)
             .send()
             .map_err(|e| {
-                crate::core::error::KError::Translation(format!(
+                anyhow::anyhow!(format!(
                     "DeepL request failed: {:?}",
                     e
                 ))
@@ -70,14 +70,14 @@ impl Translator for DeeplTranslator {
         let body_text = res.text().unwrap_or_default();
 
         if !status.is_success() {
-            return Err(crate::core::error::KError::Translation(format!(
+            return Err(anyhow::anyhow!(format!(
                 "DeepL API error {}: {}",
                 status, body_text
             )));
         }
 
         let resp: DeeplResponse = serde_json::from_str(&body_text).map_err(|e| {
-            crate::core::error::KError::Translation(format!(
+            anyhow::anyhow!(format!(
                 "Failed to parse DeepL API response: {}, response was: {}",
                 e, body_text
             ))
@@ -96,7 +96,7 @@ impl Translator for DeeplTranslator {
         &self,
         text: &str,
         _lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, crate::core::error::KError> {
+    ) -> anyhow::Result<String> {
         // DeepL cannot do OCR correction (it's not an LLM). We just return the original text.
         Ok(text.to_string())
     }

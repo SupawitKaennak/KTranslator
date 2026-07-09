@@ -62,7 +62,7 @@ pub fn show_settings_window(
     ctx: &egui::Context,
     settings_arc: Arc<Mutex<Settings>>,
     ctrl: &crate::core::usecases::settings_controller::SettingsController,
-    download_progress: crate::core::types::DownloadProgress,
+    model_arc: Arc<Mutex<crate::core::region_slot_state::AppModel>>,
     download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
     slots_runtime: &[crate::core::region_slot_state::SlotRuntimeState],
 ) -> SettingsWindowResponse {
@@ -71,6 +71,7 @@ pub fn show_settings_window(
     let close_flag_inner = close_flag.clone();
     let settings_inner = settings_arc.clone();
     let ctrl_inner = ctrl.clone();
+    let model_inner = model_arc.clone();
 
     // Extract the pristine captured frame from the first active slot that has one
     let sample_frame = slots_runtime
@@ -105,6 +106,8 @@ pub fn show_settings_window(
             .with_resizable(true)
             .with_always_on_top(),
         move |ctx, _| {
+            let download_progress = model_inner.lock().download_progress.clone();
+            
             if download_progress.is_downloading {
                 ctx.request_repaint_after(std::time::Duration::from_millis(80));
             }

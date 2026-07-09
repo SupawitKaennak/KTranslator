@@ -1,4 +1,3 @@
-use crate::core::error::KError;
 use crate::core::types::{LanguageTag, Rect};
 
 #[derive(Debug, Clone)]
@@ -31,7 +30,7 @@ pub struct OcrTextBlock {
 }
 
 pub trait FrameSource: Send + Sync {
-    fn capture_rect(&self, rect: Rect, display_id: u32) -> Result<FrameRgba, KError>;
+    fn capture_rect(&self, rect: Rect, display_id: u32) -> anyhow::Result<FrameRgba>;
 }
 
 #[allow(dead_code)] // trait contract; used by GeminiOcr and may be called directly in future
@@ -40,12 +39,12 @@ pub trait OcrEngine: Send + Sync {
         &self,
         frame: FrameRgba,
         lang_hint: Option<&LanguageTag>,
-    ) -> Result<String, KError>;
+    ) -> anyhow::Result<String>;
     fn recognize_lines(
         &self,
         frame: FrameRgba,
         lang_hint: Option<&LanguageTag>,
-    ) -> Result<Vec<OcrTextLine>, KError>;
+    ) -> anyhow::Result<Vec<OcrTextLine>>;
 }
 
 pub trait Translator: Send + Sync {
@@ -55,11 +54,11 @@ pub trait Translator: Send + Sync {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> Result<String, KError>;
+    ) -> anyhow::Result<String>;
 
     /// Optional: Post-process OCR text to fix character recognition errors based on language context.
     /// Default implementation simply returns the input text unmodified.
-    fn correct_text(&self, text: &str, _lang_hint: Option<&LanguageTag>) -> Result<String, KError> {
+    fn correct_text(&self, text: &str, _lang_hint: Option<&LanguageTag>) -> anyhow::Result<String> {
         Ok(text.to_string())
     }
 
@@ -70,8 +69,8 @@ pub trait Translator: Send + Sync {
         _frame: &FrameRgba,
         _source: Option<&LanguageTag>,
         _target: &LanguageTag,
-    ) -> Result<String, KError> {
-        Err(KError::Translation(
+    ) -> anyhow::Result<String> {
+        Err(anyhow::anyhow!(
             "Vision translation not supported by this provider".to_string(),
         ))
     }

@@ -70,7 +70,7 @@ pub fn render_tab_ocr(
     // MangaOCR: download section
     if *engine_ref == crate::infrastructure::settings::OcrEngineType::MangaOCR {
         ui.add_space(8.0);
-        if download_progress.is_downloading {
+        if download_progress.is_downloading && (download_progress.current_file.contains("Manga-OCR") || download_progress.current_file == "YOLO Text Detector") {
             ui.label(format!(
                 "{}: {}",
                 i18n.downloading, download_progress.current_file
@@ -181,7 +181,7 @@ pub fn render_tab_ocr(
 
         ui.add_space(6.0);
 
-        if download_progress.is_downloading {
+        if download_progress.is_downloading && download_progress.current_file.contains("PP-OCR") {
             ui.label(format!(
                 "{}: {}",
                 i18n.downloading, download_progress.current_file
@@ -323,6 +323,7 @@ pub fn render_tab_ocr(
                         if ui.button("Download (6MB)").clicked() {
                             let _ = download_trigger_tx
                                 .send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
+                            ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
                         }
                     });
                 }
@@ -359,6 +360,7 @@ pub fn render_tab_ocr(
                             let _ = download_trigger_tx.send(
                                 crate::infrastructure::settings::OcrEngineType::CraftDetector,
                             );
+                            ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
                         }
                     });
                 }

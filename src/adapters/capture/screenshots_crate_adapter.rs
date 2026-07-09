@@ -1,4 +1,3 @@
-use anyhow::Result;
 use parking_lot::Mutex;
 use screenshots::Screen;
 use std::time::{Duration, Instant};
@@ -28,13 +27,13 @@ impl ScreenshotsCapture {
         rect: Rect,
         display_id: u32,
         screens: &[Screen],
-    ) -> Result<FrameRgba, crate::core::error::KError> {
+    ) -> anyhow::Result<FrameRgba> {
         let screen = screens
             .iter()
             .find(|s| s.display_info.id == display_id)
             .or_else(|| screens.iter().find(|s| s.display_info.is_primary))
             .or_else(|| screens.first())
-            .ok_or_else(|| crate::core::error::KError::Capture("no display found".to_string()))?;
+            .ok_or_else(|| anyhow::anyhow!("no display found".to_string()))?;
 
         // GDI/Cross-platform capture
         let rel_x = (rect.x - screen.display_info.x as f32).max(0.0) as i32;
@@ -43,7 +42,7 @@ impl ScreenshotsCapture {
         let image = screen
             .capture_area(rel_x, rel_y, rect.w as u32, rect.h as u32)
             .map_err(|e| {
-                crate::core::error::KError::Capture(format!(
+                anyhow::anyhow!(format!(
                     "GDI/Cross-platform capture failed: {:?}",
                     e
                 ))
@@ -62,7 +61,7 @@ impl FrameSource for ScreenshotsCapture {
         &self,
         rect: Rect,
         display_id: u32,
-    ) -> Result<FrameRgba, crate::core::error::KError> {
+    ) -> anyhow::Result<FrameRgba> {
         let now = Instant::now();
         let mut screen_guard = self.screen_cache.lock();
 
@@ -76,7 +75,7 @@ impl FrameSource for ScreenshotsCapture {
             cached_screens
         } else {
             let fresh = Screen::all().map_err(|e| {
-                crate::core::error::KError::Capture(format!("enumerate screens: {:?}", e))
+                anyhow::anyhow!(format!("enumerate screens: {:?}", e))
             })?;
             let (_, cached) = screen_guard.insert((now, fresh));
             cached
