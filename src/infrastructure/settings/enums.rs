@@ -92,4 +92,6 @@ pub enum TextDetectorMode {
     YoloBubble,
     /// CRAFT Text Detector — precise character-level text region detection
     CraftRegion,
+    /// YOLO + Full Page OCR Hybrid — groups full page OCR results using YOLO bubbles
+    YoloFullPageHybrid,
 }

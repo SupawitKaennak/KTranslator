@@ -143,6 +143,7 @@ pub struct I18n {
     pub overlay_customization: &'static str,
     pub use_yolo_bubble: &'static str,
     pub show_yolo_debug_borders: &'static str,
+    pub yolo_full_page_hybrid: &'static str,
 
     // Debugging Panel
     pub dbg_telemetry: &'static str,
@@ -356,6 +357,7 @@ const EN: I18n = I18n {
     use_yolo_bubble: "Enable YOLO Speech Bubble OCR (Segment bubbles before running OCR)",
     show_yolo_debug_borders:
         "Show YOLO debug borders (Render red outlines around detected bubbles)",
+    yolo_full_page_hybrid: "YOLO + Full Page (Hybrid) - Accurate text detection grouped by YOLO",
     dbg_telemetry: "Advanced Pipeline Telemetry",
     capture_section: "Capture",
     offline: "Offline",
@@ -567,6 +569,7 @@ const TH: I18n = I18n {
     overlay_customization: "ปรับแต่งหน้าตาหน้าต่างแปล",
     use_yolo_bubble: "เปิดใช้งาน YOLO ตรวจจับกรอบคำพูด (สแกนกรอบคำพูดก่อนทำ OCR สำหรับทุกเอนจิน)",
     show_yolo_debug_borders: "แสดงกรอบตรวจจับของ YOLO (วาดเส้นสีแดงรอบกรอบคำพูดที่ตรวจเจอ)",
+    yolo_full_page_hybrid: "YOLO + Full Page (Hybrid) - สแกนเต็มหน้าจอและจับกลุ่มด้วย YOLO (ดีที่สุด)",
     dbg_telemetry: "ข้อมูลสถานะเชิงลึกของระบบ",
     capture_section: "การจับภาพหน้าจอ",
     offline: "ออฟไลน์",

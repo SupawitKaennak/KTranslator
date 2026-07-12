@@ -274,6 +274,9 @@ pub fn render_tab_ocr(
                 crate::infrastructure::settings::TextDetectorMode::CraftRegion => {
                     "CRAFT Text Region"
                 }
+                crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid => {
+                    "YOLO + Full Page (Hybrid)"
+                }
             })
             .show_ui(ui, |ui| {
                 ui.selectable_value(
@@ -291,15 +294,21 @@ pub fn render_tab_ocr(
                     crate::infrastructure::settings::TextDetectorMode::CraftRegion,
                     "CRAFT Text Region",
                 );
+                ui.selectable_value(
+                    &mut settings.text_detector,
+                    crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid,
+                    i18n.yolo_full_page_hybrid,
+                );
             });
     });
 
     // Synchronize legacy `use_yolo_bubble` setting
     settings.use_yolo_bubble =
-        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble;
+        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble || 
+        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid;
 
     match settings.text_detector {
-        crate::infrastructure::settings::TextDetectorMode::YoloBubble => {
+        crate::infrastructure::settings::TextDetectorMode::YoloBubble | crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid => {
             let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
             if !exists {
                 ui.add_space(8.0);
