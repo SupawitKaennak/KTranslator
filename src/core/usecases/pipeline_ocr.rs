@@ -22,7 +22,7 @@ pub fn perform_ocr(
     // Convert frame to DynamicImage once if any detector is active
     let dynamic_img = if matches!(
         text_detector_mode,
-        TextDetectorMode::YoloBubble | TextDetectorMode::CraftRegion
+        TextDetectorMode::YoloBubble | TextDetectorMode::CraftRegion | TextDetectorMode::YoloFullPageHybrid
     ) {
         image::RgbaImage::from_raw(frame.width, frame.height, (*frame.data).clone())
             .map(image::DynamicImage::ImageRgba8)
@@ -33,7 +33,7 @@ pub fn perform_ocr(
     // Run the selected text detector
     if let Some(ref dyn_img) = dynamic_img {
         match text_detector_mode {
-            TextDetectorMode::YoloBubble => {
+            TextDetectorMode::YoloBubble | TextDetectorMode::YoloFullPageHybrid => {
                 if let Some(detector) = yolo_detector {
                     if let Ok(mut bubbles) = detector.detect_bubbles(dyn_img) {
                         if !bubbles.is_empty() {
@@ -113,9 +113,10 @@ pub fn perform_ocr(
         }
     }
 
-    // If detection was successful, crop each detected region and run OCR on it
     let yolo_bubbles = detection_boxes.clone();
-    if detection_successful {
+
+    // Standard detection behavior (Crop & OCR)
+    if detection_successful && text_detector_mode != TextDetectorMode::YoloFullPageHybrid {
         for (b_idx, region) in detection_boxes.iter().enumerate() {
             let pad = 6;
             let crop_x = (region.x - pad as f32).max(0.0) as u32;
@@ -171,8 +172,9 @@ pub fn perform_ocr(
         }
     }
 
-    if !detection_successful {
-        // Fallback: Perform Image pre-processing IN-PLACE on frame
+    // Full Page OCR for None or YoloFullPageHybrid mode
+    if !detection_successful || text_detector_mode == TextDetectorMode::YoloFullPageHybrid {
+        // Perform Image pre-processing IN-PLACE on frame
         let (proc_data, proc_w, proc_h) =
             crate::core::usecases::image_processing_usecase::process_image_for_ocr(
                 &frame.data,
@@ -196,7 +198,45 @@ pub fn perform_ocr(
                         line.h /= scale;
                     }
                 }
-                if !lines.is_empty() {
+
+                if text_detector_mode == TextDetectorMode::YoloFullPageHybrid && detection_successful {
+                    // Hybrid logic: Assign lines to YOLO bubbles based on intersection
+                    let mut unassigned_lines = Vec::new();
+                    // Pre-allocate groups for each bubble
+                    let mut bubble_groups: Vec<Vec<OcrTextLine>> = vec![Vec::new(); yolo_bubbles.len()];
+
+                    for mut line in lines {
+                        let center_x = line.x + (line.w / 2.0);
+                        let center_y = line.y + (line.h / 2.0);
+                        
+                        let mut assigned = false;
+                        for (b_idx, bubble) in yolo_bubbles.iter().enumerate() {
+                            if center_x >= bubble.x && center_x <= bubble.x + bubble.w &&
+                               center_y >= bubble.y && center_y <= bubble.y + bubble.h {
+                                line.bubble_idx = Some(b_idx);
+                                bubble_groups[b_idx].push(line.clone());
+                                assigned = true;
+                                break;
+                            }
+                        }
+                        
+                        if !assigned {
+                            unassigned_lines.push(line);
+                        }
+                    }
+
+                    // Push populated bubble groups
+                    for group in bubble_groups {
+                        if !group.is_empty() {
+                            grouped_ocr_lines.push(group);
+                        }
+                    }
+                    
+                    // Push unassigned lines as a separate group for smart_merge to handle
+                    if !unassigned_lines.is_empty() {
+                        grouped_ocr_lines.push(unassigned_lines);
+                    }
+                } else if !lines.is_empty() {
                     grouped_ocr_lines.push(lines);
                 }
             }
