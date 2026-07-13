@@ -443,12 +443,12 @@ const EN: I18n = I18n {
     prov_google: "Google Translate",
     ppocr_mobile: "Fast: CN/EN Suite (Mobile ~15MB)",
     ppocr_server: "Precision: CN/EN Suite (Server ~194MB)",
-    ppocr_suite_cnen_mobile: "Fast: Chinese/English (v5 Mobile ~15MB)",
-    ppocr_suite_jp_mobile: "Fast: Japanese (v3 Mobile ~15MB)",
-    ppocr_suite_ko_mobile: "Fast: Korean (v5 Mobile ~15MB)",
-    ppocr_suite_th_mobile: "Fast: Thai (v5 Mobile ~15MB)",
-    ppocr_suite_latin_mobile: "Fast: Latin/Western Europe (v5 Mobile ~15MB)",
-    ppocr_suite_cyrillic_mobile: "Fast: Cyrillic/Eastern Europe (v5 Mobile ~15MB)",
+    ppocr_suite_cnen_mobile: "Fast: Chinese/English (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_jp_mobile: "Fast: Japanese (Det v4 + Rec v3, ~15MB)",
+    ppocr_suite_ko_mobile: "Fast: Korean (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_th_mobile: "Fast: Thai (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_latin_mobile: "Fast: Latin/Western Europe (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_cyrillic_mobile: "Fast: Cyrillic/Eastern Europe (Det v4 + Rec v5, ~15MB)",
 };
 
 const TH: I18n = I18n {
@@ -651,12 +651,12 @@ const TH: I18n = I18n {
     prov_google: "กูเกิลแปลภาษา (Google Translate)",
     ppocr_mobile: "ความเร็วสูง: ชุดภาษา จีน/อังกฤษ (Mobile ~15MB)",
     ppocr_server: "ความแม่นยำสูง: ชุดภาษา จีน/อังกฤษ (Server ~194MB)",
-    ppocr_suite_cnen_mobile: "ความเร็วสูง: จีน/อังกฤษ (v5 Mobile ~15MB)",
-    ppocr_suite_jp_mobile: "ความเร็วสูง: ภาษาญี่ปุ่น (v3 Mobile ~15MB)",
-    ppocr_suite_ko_mobile: "ความเร็วสูง: ภาษาเกาหลี (v5 Mobile ~15MB)",
-    ppocr_suite_th_mobile: "ความเร็วสูง: ภาษาไทย (v5 Mobile ~15MB)",
-    ppocr_suite_latin_mobile: "ความเร็วสูง: กลุ่มภาษาละติน/ยุโรปตะวันตก (v5 Mobile ~15MB)",
-    ppocr_suite_cyrillic_mobile: "ความเร็วสูง: กลุ่มภาษาซีริลลิก/ยุโรปตะวันออก (v5 Mobile ~15MB)",
+    ppocr_suite_cnen_mobile: "ความเร็วสูง: จีน/อังกฤษ (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_jp_mobile: "ความเร็วสูง: ภาษาญี่ปุ่น (Det v4 + Rec v3, ~15MB)",
+    ppocr_suite_ko_mobile: "ความเร็วสูง: ภาษาเกาหลี (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_th_mobile: "ความเร็วสูง: ภาษาไทย (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_latin_mobile: "ความเร็วสูง: กลุ่มภาษาละติน/ยุโรปตะวันตก (Det v4 + Rec v5, ~15MB)",
+    ppocr_suite_cyrillic_mobile: "ความเร็วสูง: กลุ่มภาษาซีริลลิก/ยุโรปตะวันออก (Det v4 + Rec v5, ~15MB)",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {
