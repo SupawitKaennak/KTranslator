@@ -408,11 +408,18 @@ impl TranslationPipeline {
             };
 
             if let Some(cached_trans) = cached {
+                let trans_lines = build_trans_lines(&cached_trans);
+                
                 let mut fc = cache_arc.lock();
                 crate::core::utils::enforce_cache_limit(&mut fc, max_cache_entries);
-                fc.insert(cache_key, (ocr_text.clone(), cached_trans.clone()));
+                fc.insert(cache_key, crate::core::types::CachedFrame {
+                    ocr_text: ocr_text.clone(),
+                    translated: cached_trans.clone(),
+                    ocr_lines: ocr_lines.clone(),
+                    trans_lines: trans_lines.clone(),
+                    yolo_bubbles: yolo_bubbles.clone(),
+                });
 
-                let trans_lines = build_trans_lines(&cached_trans);
                 return Ok(BgResult::Done {
                     slot_idx,
                     language_version,
@@ -431,10 +438,16 @@ impl TranslationPipeline {
             .map(|s| s.0 == target_lang.0)
             .unwrap_or(false)
         {
+            let trans_lines = build_trans_lines(&ocr_text);
             let mut cache = cache_arc.lock();
             crate::core::utils::enforce_cache_limit(&mut cache, max_cache_entries);
-            cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
-            let trans_lines = build_trans_lines(&ocr_text);
+            cache.insert(cache_key, crate::core::types::CachedFrame {
+                ocr_text: ocr_text.clone(),
+                translated: ocr_text.clone(),
+                ocr_lines: ocr_lines.clone(),
+                trans_lines: trans_lines.clone(),
+                yolo_bubbles: yolo_bubbles.clone(),
+            });
             return Ok(BgResult::Done {
                 slot_idx,
                 language_version,
@@ -453,10 +466,16 @@ impl TranslationPipeline {
             c.is_ascii_digit() || c.is_ascii_punctuation() || c.is_whitespace() || c == '…'
         });
         if is_trivial {
+            let trans_lines = build_trans_lines(&ocr_text);
             let mut cache = cache_arc.lock();
             crate::core::utils::enforce_cache_limit(&mut cache, max_cache_entries);
-            cache.insert(cache_key, (ocr_text.clone(), ocr_text.clone()));
-            let trans_lines = build_trans_lines(&ocr_text);
+            cache.insert(cache_key, crate::core::types::CachedFrame {
+                ocr_text: ocr_text.clone(),
+                translated: ocr_text.clone(),
+                ocr_lines: ocr_lines.clone(),
+                trans_lines: trans_lines.clone(),
+                yolo_bubbles: yolo_bubbles.clone(),
+            });
             return Ok(BgResult::Done {
                 slot_idx,
                 language_version,
@@ -526,6 +545,9 @@ impl TranslationPipeline {
             ),
             ocr_text.clone(),
             translated.clone(),
+            ocr_lines.clone(),
+            trans_lines.clone(),
+            yolo_bubbles.clone(),
             max_cache_entries,
         );
         Ok(BgResult::Done {

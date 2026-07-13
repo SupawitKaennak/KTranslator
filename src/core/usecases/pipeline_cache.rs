@@ -1,5 +1,5 @@
 use crate::core::pipeline_execution_result::BgResult;
-use crate::core::types::{TextTranslationCache, TranslationCache};
+use crate::core::types::{CachedFrame, TextTranslationCache, TranslationCache};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -11,17 +11,17 @@ pub fn check_cache(
     hash: u64,
 ) -> Option<BgResult> {
     let cache = cache_arc.lock();
-    if let Some((cached_ocr, cached_trans)) = cache.get(cache_key) {
+    if let Some(cached) = cache.get(cache_key) {
         tracing::debug!(slot = slot_idx, hash = %hash, "Cache hit for whole frame");
         return Some(BgResult::CacheHit {
             slot_idx,
             language_version,
-            ocr_text: cached_ocr.clone(),
-            translated: cached_trans.clone(),
+            ocr_text: cached.ocr_text.clone(),
+            translated: cached.translated.clone(),
             frame_hash: hash,
-            ocr_lines: Vec::new(),
-            trans_lines: vec![cached_trans.clone()],
-            yolo_bubbles: Vec::new(),
+            ocr_lines: cached.ocr_lines.clone(),
+            trans_lines: cached.trans_lines.clone(),
+            yolo_bubbles: cached.yolo_bubbles.clone(),
         });
     }
     None
@@ -34,11 +34,20 @@ pub fn update_cache(
     text_cache_key: (u64, Option<String>, String),
     ocr_text: String,
     translated: String,
+    ocr_lines: Vec<crate::core::ports::OcrTextLine>,
+    trans_lines: Vec<String>,
+    yolo_bubbles: Vec<crate::core::ports::OcrTextLine>,
     max_cache_entries: usize,
 ) {
     let mut frame_cache = cache_arc.lock();
     crate::core::utils::enforce_cache_limit(&mut frame_cache, max_cache_entries);
-    frame_cache.insert(cache_key, (ocr_text, translated.clone()));
+    frame_cache.insert(cache_key, CachedFrame {
+        ocr_text,
+        translated: translated.clone(),
+        ocr_lines,
+        trans_lines,
+        yolo_bubbles,
+    });
     drop(frame_cache);
 
     let mut text_cache = text_cache_arc.lock();

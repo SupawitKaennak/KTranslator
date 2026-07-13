@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use crate::core::ports::OcrTextLine;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct RegionId(pub usize); // 0..5
@@ -47,5 +48,14 @@ pub struct DownloadProgress {
     pub error: Option<String>,
 }
 
-pub type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), (String, String)>;
+#[derive(Debug, Clone)]
+pub struct CachedFrame {
+    pub ocr_text: String,
+    pub translated: String,
+    pub ocr_lines: Vec<OcrTextLine>,
+    pub trans_lines: Vec<String>,
+    pub yolo_bubbles: Vec<OcrTextLine>,
+}
+
+pub type TranslationCache = indexmap::IndexMap<(u64, Option<String>, String), CachedFrame>;
 pub type TextTranslationCache = indexmap::IndexMap<(u64, Option<String>, String), String>;
