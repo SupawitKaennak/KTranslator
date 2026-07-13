@@ -256,19 +256,19 @@ pub async fn download_ppocr_models(
         crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => PPOCR_MOBILE_MODELS[1].url,
         
         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile =>
-            "https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/japan_pp-ocrv3_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::KoreanMobile =>
-            "https://huggingface.co/cycloneboy/korean_PP-OCRv4_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/korean_pp-ocrv5_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::ThaiMobile =>
-            "https://huggingface.co/itextresearch/itext-th_PP-OCRv5_mobile_rec_infer/resolve/main/inference.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/th_pp-ocrv5_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::LatinMobile =>
-            "https://huggingface.co/cycloneboy/latin_PP-OCRv3_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/latin_pp-ocrv5_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile =>
-            "https://huggingface.co/cycloneboy/cyrillic_PP-OCRv3_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/cyrillic_pp-ocrv5_mobile_rec.onnx",
     };
 
     // 3. Dictionary URL
@@ -278,17 +278,23 @@ pub async fn download_ppocr_models(
         }
 
         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => {
-            PPOCR_DICT_JAPANESE.url
+            PPOCR_DICT_JAPANESE.url // v3 dict from paddle repo
         }
 
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => PPOCR_DICT_KOREAN.url,
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => {
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_korean_dict.txt"
+        }
 
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => PPOCR_DICT_THAI.url,
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => {
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_th_dict.txt"
+        }
 
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile => PPOCR_DICT_LATIN.url,
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile => {
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_latin_dict.txt"
+        }
 
         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
-            PPOCR_DICT_CYRILLIC.url
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_cyrillic_dict.txt"
         }
     };
 
