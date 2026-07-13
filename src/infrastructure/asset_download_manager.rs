@@ -63,22 +63,22 @@ pub const MANGA_MODELS: [ModelAsset<'static>; 10] = [
     },
 ];
 
-/// PP-OCRv4 Mobile models for Built-in PaddleOCR (det + rec + dict).
+/// PP-OCRv5 Mobile models for Built-in PaddleOCR (det + rec + dict).
 /// Total ~15MB — covers Chinese+English with high accuracy.
 pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
     ModelAsset {
-        name: "PP-OCRv4 Detection (Mobile)",
-        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv4_mobile_det.onnx",
+        name: "PP-OCRv5 Detection (Mobile)",
+        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv5_mobile_det.onnx",
         path: "models/ppocr/det.onnx",
     },
     ModelAsset {
-        name: "PP-OCRv4 Recognition (Mobile)",
-        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv4_mobile_rec.onnx",
+        name: "PP-OCRv5 Recognition (Mobile)",
+        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv5_mobile_rec.onnx",
         path: "models/ppocr/rec.onnx",
     },
     ModelAsset {
         name: "PP-OCR Dictionary (Standard)",
-        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocr_keys_v1.txt",
+        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_dict.txt",
         path: "models/ppocr/dict.txt",
     },
 ];
