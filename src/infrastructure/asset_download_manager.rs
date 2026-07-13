@@ -67,8 +67,8 @@ pub const MANGA_MODELS: [ModelAsset<'static>; 10] = [
 /// Total ~15MB — covers Chinese+English with high accuracy.
 pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
     ModelAsset {
-        name: "PP-OCRv5 Detection (Mobile)",
-        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv5_mobile_det.onnx",
+        name: "PP-OCRv4 Detection (Mobile)",
+        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv4_mobile_det.onnx",
         path: "models/ppocr/det.onnx",
     },
     ModelAsset {
@@ -179,7 +179,7 @@ async fn download_asset_list(
         if dest_path.exists() {
             if let Ok(meta) = fs::metadata(&dest_path) {
                 let is_onnx = dest_path.extension().and_then(|s| s.to_str()) == Some("onnx");
-                let threshold = if is_onnx { 10 * 1024 * 1024 } else { 5 * 1024 }; // 10MB for ONNX, 5KB for others
+                let threshold = if is_onnx { 1024 * 1024 } else { 5 * 1024 }; // 1MB for ONNX (mobile models are ~4MB), 5KB for others
 
                 if meta.len() > threshold {
                     continue;
