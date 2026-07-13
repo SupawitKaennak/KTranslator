@@ -140,15 +140,20 @@ fn merge_text(lines: &[OcrTextLine]) -> String {
                 .find(|s| !s.is_empty());
 
             let mut join_without_space = false;
+            let mut remove_hyphen = false;
             if let Some(prev) = prev_trimmed {
                 if prev.ends_with('-') {
                     join_without_space = true;
+                    if !is_asian {
+                        remove_hyphen = true;
+                    }
                 }
             }
 
             if join_without_space {
-                // Keep the hyphen (e.g. ETOU-SAN, BLOOD-LUST) but join WITHOUT inserting a separator space.
-                // This preserves semantic suffixes and hyphenated words perfectly for the translation engine.
+                if remove_hyphen && result.ends_with('-') {
+                    result.pop(); // Remove the hyphen that was appended from the previous line
+                }
                 result.push_str(trimmed);
             } else {
                 result.push_str(default_separator);
@@ -342,10 +347,10 @@ mod tests {
     #[test]
     fn test_merge_text_hyphenation() {
         let lines = vec![
-            create_line("SUPER-", 0.0, 0.0, 50.0, 15.0),
-            create_line("HERO", 0.0, 20.0, 50.0, 15.0),
+            create_line("DISAP-", 0.0, 0.0, 50.0, 15.0),
+            create_line("PEAR!", 0.0, 20.0, 50.0, 15.0),
         ];
-        assert_eq!(merge_text(&lines), "SUPER-HERO"); // Joined without extra space
+        assert_eq!(merge_text(&lines), "DISAPPEAR!"); // Joined and hyphen removed
     }
 
     #[test]
