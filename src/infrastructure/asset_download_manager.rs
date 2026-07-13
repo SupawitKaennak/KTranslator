@@ -91,30 +91,7 @@ pub const PPOCR_DICT_JAPANESE: ModelAsset<'static> = ModelAsset {
     path: "models/ppocr/japan_dict.txt",
 };
 
-pub const PPOCR_DICT_KOREAN: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Korean)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt",
-    path: "models/ppocr/korean_dict.txt",
-};
 
-pub const PPOCR_DICT_THAI: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Thai)",
-    url:
-        "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/th_dict.txt",
-    path: "models/ppocr/thai_dict.txt",
-};
-
-pub const PPOCR_DICT_LATIN: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Latin)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/latin_dict.txt",
-    path: "models/ppocr/latin_dict.txt",
-};
-
-pub const PPOCR_DICT_CYRILLIC: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Cyrillic)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/cyrillic_dict.txt",
-    path: "models/ppocr/cyrillic_dict.txt",
-};
 
 pub const BUBBLE_YOLO_MODEL: ModelAsset<'static> = ModelAsset {
     name: "YOLO Bubble Detector (Manga-Bubble-YOLO)",
