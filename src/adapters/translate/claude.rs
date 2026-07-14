@@ -3,6 +3,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::core::{ports::Translator, types::LanguageTag};
+use crate::infrastructure::settings::TranslationBehaviorSettings;
 
 use super::llm_shared_utilities;
 
@@ -11,14 +12,16 @@ pub struct ClaudeTranslator {
     client: Client,
     api_key: String,
     model: String,
-    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    base_url: String,
+    behavior: TranslationBehaviorSettings,
 }
 
 impl ClaudeTranslator {
     pub fn new(
         api_key: String,
         model: String,
-        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+        base_url: String,
+        behavior: Option<TranslationBehaviorSettings>,
     ) -> Result<Self> {
         let client =
             llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
@@ -27,7 +30,8 @@ impl ClaudeTranslator {
             client,
             api_key,
             model,
-            behavior,
+            base_url,
+            behavior: behavior.unwrap_or_default(),
         })
     }
 }
@@ -50,10 +54,10 @@ impl Translator for ClaudeTranslator {
             text,
             source,
             target,
-            self.behavior.as_ref(),
+            Some(&self.behavior),
             context_hint,
         );
-        let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.3);
+        let temp = llm_shared_utilities::get_temperature(Some(&self.behavior), 0.3);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
 
         let req_body = ClaudeRequest {
@@ -69,7 +73,7 @@ impl Translator for ClaudeTranslator {
 
         let res = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&req_body)
@@ -134,7 +138,7 @@ impl Translator for ClaudeTranslator {
 
         let res = self
             .client
-            .post("https://api.anthropic.com/v1/messages")
+            .post(format!("{}/messages", self.base_url))
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
             .json(&req_body)

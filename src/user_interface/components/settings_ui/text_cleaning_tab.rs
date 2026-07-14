@@ -71,6 +71,27 @@ pub fn render_tab_text_processing(
     ui.separator();
     ui.add_space(8.0);
 
+    super::section_header(ui, "Text Layout Analysis Heuristics");
+    ui.label(egui::RichText::new("Advanced tuning for bounding box merging. Lower values merge less (stricter), higher values merge more aggressively.").italics());
+    ui.add_space(6.0);
+
+    ui.horizontal(|ui| {
+        ui.label("Horizontal Merge Tolerance (X-Gap):");
+        ui.add(egui::Slider::new(&mut tp.layout.merge_x_gap, 0.1..=2.0).text("x char size"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("Vertical Merge Tolerance (Y-Gap):");
+        ui.add(egui::Slider::new(&mut tp.layout.merge_y_gap, 0.1..=2.0).text("x char size"));
+    });
+    ui.horizontal(|ui| {
+        ui.label("Inline Merge Tolerance (Same-Line X-Gap):");
+        ui.add(egui::Slider::new(&mut tp.layout.inline_x_gap, 0.1..=1.5).text("x char size"));
+    });
+
+    ui.add_space(16.0);
+    ui.separator();
+    ui.add_space(8.0);
+
     // ── Language-Specific Processing Section ──
     super::section_header(ui, i18n.txt_lang_spec);
     ui.label(

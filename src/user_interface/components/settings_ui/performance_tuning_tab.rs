@@ -162,5 +162,16 @@ pub fn render_tab_performance(
                 );
             });
             ui.end_row();
+
+            ui.label("Translation Trigger Delay (Debounce):");
+            ui.horizontal(|ui| {
+                ui.add(egui::Slider::new(&mut settings.realtime.debounce_timeout_ms, 50..=1000).step_by(50.0).text("ms"));
+                ui.label(
+                    egui::RichText::new("Wait time before translation (lower is faster, higher saves API calls)")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+            });
+            ui.end_row();
         });
 }

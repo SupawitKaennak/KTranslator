@@ -91,6 +91,13 @@ pub fn render_tab_ai_provider(
                 );
             }
             ui.add_space(4.0);
+            egui::CollapsingHeader::new("Advanced (Custom Endpoint)").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Base URL:");
+                    ui.text_edit_singleline(&mut settings.groq_base_url);
+                });
+            });
+            ui.add_space(4.0);
             ui.hyperlink_to(i18n.get_api_key, "https://console.groq.com/keys");
         }
         TranslationProvider::Ollama => {
@@ -196,6 +203,13 @@ pub fn render_tab_ai_provider(
                 ui.text_edit_singleline(&mut settings.claude_model);
             });
             ui.add_space(4.0);
+            egui::CollapsingHeader::new("Advanced (Custom Endpoint)").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Base URL:");
+                    ui.text_edit_singleline(&mut settings.claude_base_url);
+                });
+            });
+            ui.add_space(4.0);
             ui.hyperlink_to(i18n.get_api_key, "https://console.anthropic.com/settings/keys");
         }
         TranslationProvider::DeepSeek => {
@@ -219,6 +233,13 @@ pub fn render_tab_ai_provider(
                 );
             }
             ui.add_space(4.0);
+            egui::CollapsingHeader::new("Advanced (Custom Endpoint)").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Base URL:");
+                    ui.text_edit_singleline(&mut settings.deepseek_base_url);
+                });
+            });
+            ui.add_space(4.0);
             ui.hyperlink_to(i18n.get_api_key, "https://platform.deepseek.com/api_keys");
         }
         TranslationProvider::DeepL => {
@@ -226,6 +247,13 @@ pub fn render_tab_ai_provider(
             ui.horizontal(|ui| {
                 ui.label(format!("{}:", i18n.api_key));
                 ui.add(egui::TextEdit::singleline(&mut settings.deepl_api_key).password(true));
+            });
+            ui.add_space(4.0);
+            egui::CollapsingHeader::new("Advanced (Custom Endpoint)").show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label("Base URL:");
+                    ui.text_edit_singleline(&mut settings.deepl_base_url);
+                });
             });
             ui.add_space(4.0);
             ui.label(egui::RichText::new("Note: DeepL does not support custom prompts or translation styles. It is a dedicated Neural Machine Translation service.").color(ui.visuals().warn_fg_color));
@@ -368,10 +396,11 @@ fn try_fetch_groq(
     let key = settings.groq_api_key.clone();
     let m = models.clone();
     let f = fetching.clone();
+    let base_url = settings.groq_base_url.clone();
     let c = ctx.clone();
     *f.lock() = true;
     std::thread::spawn(move || {
-        match crate::adapters::translate::groq::GroqTranslator::list_models(&key) {
+        match crate::adapters::translate::groq::GroqTranslator::list_models(&key, &base_url) {
             Ok(list) => {
                 *m.lock() = if list.is_empty() { vec!["(No models found)".to_string()] } else { list };
             }

@@ -222,7 +222,13 @@ impl ResultDispatcher {
                             );
                             translation_cache
                                 .lock()
-                                .insert(cache_key, (ocr_text, translated.clone()));
+                                .insert(cache_key, crate::core::types::CachedFrame {
+                                    ocr_text: ocr_text.clone(),
+                                    translated: translated.clone(),
+                                    ocr_lines: ocr_lines.clone(),
+                                    trans_lines: trans_lines.clone(),
+                                    yolo_bubbles: yolo_bubbles.clone(),
+                                });
                         }
                     } else if !translated.trim().is_empty() {
                         slot.last_trans_lines = trans_lines.clone();

@@ -7,7 +7,12 @@ fn get_char_size(line: &OcrTextLine) -> f32 {
     line.h.min(line.w).max(12.0)
 }
 
-fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
+fn is_close(
+    a: &OcrTextLine,
+    b: &OcrTextLine,
+    jp_merge_vertical: bool,
+    layout: &crate::infrastructure::settings::TextLayoutSettings,
+) -> bool {
     let char_size_a = get_char_size(a);
     let char_size_b = get_char_size(b);
     let char_size = char_size_a.max(char_size_b);
@@ -31,7 +36,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         } else {
             0.0
         };
-        let close_horizontally = x_gap < char_size * 0.8; // Stricter X gap
+        let close_horizontally = x_gap < char_size * layout.merge_x_gap;
 
         if has_y_overlap && close_horizontally {
             // Extra column separation guard: if separate vertical columns are too far, don't merge
@@ -55,7 +60,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         } else {
             0.0
         };
-        let close_vertically = y_gap < char_size * 1.0; // Stricter Y gap
+        let close_vertically = y_gap < char_size * layout.merge_y_gap; // Uses configurable y gap
 
         if has_x_overlap && close_vertically {
             return true;
@@ -74,7 +79,7 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
         } else {
             0.0
         };
-        let close_vertically = y_gap < char_size * 0.6; // Stricter vertical space in standard text
+        let close_vertically = y_gap < char_size * layout.merge_y_gap;
 
         if has_x_overlap && close_vertically {
             return true;
@@ -99,8 +104,8 @@ fn is_close(a: &OcrTextLine, b: &OcrTextLine, jp_merge_vertical: bool) -> bool {
 
         // Strict inline checking:
         // 1. Must NOT have any horizontal overlap (if they overlap in X, they are separate overlapping columns/bubbles).
-        // 2. The horizontal gap must be very small (less than 35% of the average character size).
-        let close_horizontally = !has_x_overlap && x_gap > 0.0 && x_gap < char_size * 0.35; // Stricter gap
+        // 2. The horizontal gap must be less than the inline gap tolerance.
+        let close_horizontally = !has_x_overlap && x_gap > 0.0 && x_gap < char_size * layout.inline_x_gap;
 
         if has_y_overlap && close_horizontally {
             return true;
@@ -140,15 +145,20 @@ fn merge_text(lines: &[OcrTextLine]) -> String {
                 .find(|s| !s.is_empty());
 
             let mut join_without_space = false;
+            let mut remove_hyphen = false;
             if let Some(prev) = prev_trimmed {
                 if prev.ends_with('-') {
                     join_without_space = true;
+                    if !is_asian {
+                        remove_hyphen = true;
+                    }
                 }
             }
 
             if join_without_space {
-                // Keep the hyphen (e.g. ETOU-SAN, BLOOD-LUST) but join WITHOUT inserting a separator space.
-                // This preserves semantic suffixes and hyphenated words perfectly for the translation engine.
+                if remove_hyphen && result.ends_with('-') {
+                    result.pop(); // Remove the hyphen that was appended from the previous line
+                }
                 result.push_str(trimmed);
             } else {
                 result.push_str(default_separator);
@@ -164,6 +174,7 @@ pub fn build_blocks(
     lines: Vec<OcrTextLine>,
     smart_merge: bool,
     jp_merge_vertical: bool,
+    layout: &crate::infrastructure::settings::TextLayoutSettings,
 ) -> Vec<OcrTextBlock> {
     if lines.is_empty() {
         return vec![];
@@ -187,7 +198,7 @@ pub fn build_blocks(
             if block
                 .lines
                 .iter()
-                .any(|existing_line| is_close(&line, existing_line, jp_merge_vertical))
+                .any(|existing_line| is_close(&line, existing_line, jp_merge_vertical, layout))
             {
                 matched_idx = Some(i);
                 break;
@@ -342,10 +353,10 @@ mod tests {
     #[test]
     fn test_merge_text_hyphenation() {
         let lines = vec![
-            create_line("SUPER-", 0.0, 0.0, 50.0, 15.0),
-            create_line("HERO", 0.0, 20.0, 50.0, 15.0),
+            create_line("DISAP-", 0.0, 0.0, 50.0, 15.0),
+            create_line("PEAR!", 0.0, 20.0, 50.0, 15.0),
         ];
-        assert_eq!(merge_text(&lines), "SUPER-HERO"); // Joined without extra space
+        assert_eq!(merge_text(&lines), "DISAPPEAR!"); // Joined and hyphen removed
     }
 
     #[test]
@@ -354,7 +365,8 @@ mod tests {
             create_line("Line 1", 10.0, 10.0, 100.0, 15.0),
             create_line("Line 2", 10.0, 50.0, 100.0, 15.0),
         ];
-        let blocks = build_blocks(lines, false, false);
+        let layout = crate::infrastructure::settings::TextLayoutSettings::default();
+        let blocks = build_blocks(lines, false, false, &layout);
         assert_eq!(blocks.len(), 2);
         assert_eq!(blocks[0].source_text, "Line 1");
         assert_eq!(blocks[1].source_text, "Line 2");
@@ -366,7 +378,8 @@ mod tests {
             create_line("Line 1", 10.0, 10.0, 100.0, 15.0),
             create_line("Line 2", 12.0, 22.0, 100.0, 15.0), // Close to Line 1
         ];
-        let blocks = build_blocks(lines, true, false);
+        let layout = crate::infrastructure::settings::TextLayoutSettings::default();
+        let blocks = build_blocks(lines, true, false, &layout);
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].source_text, "Line 1 Line 2");
     }

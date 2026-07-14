@@ -201,6 +201,7 @@ impl BackgroundCoordinator {
                     text_cache_arc: text_translation_cache.clone(),
                     max_cache_entries: settings.perf.max_cache_entries,
                     smart_merge: settings.smart_merge,
+                    debounce_timeout_ms: settings.realtime.debounce_timeout_ms,
                     img_proc_cfg: settings.img_proc.clone(),
                     txt_proc_cfg: settings.txt_proc.clone(),
                     regex_rules: settings.regex_rules.clone(),

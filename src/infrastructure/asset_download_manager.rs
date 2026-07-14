@@ -63,7 +63,7 @@ pub const MANGA_MODELS: [ModelAsset<'static>; 10] = [
     },
 ];
 
-/// PP-OCRv4 Mobile models for Built-in PaddleOCR (det + rec + dict).
+/// PP-OCRv5 Mobile models for Built-in PaddleOCR (det + rec + dict).
 /// Total ~15MB — covers Chinese+English with high accuracy.
 pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
     ModelAsset {
@@ -72,13 +72,13 @@ pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
         path: "models/ppocr/det.onnx",
     },
     ModelAsset {
-        name: "PP-OCRv4 Recognition (Mobile)",
-        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv4_mobile_rec.onnx",
+        name: "PP-OCRv5 Recognition (Mobile)",
+        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv5_mobile_rec.onnx",
         path: "models/ppocr/rec.onnx",
     },
     ModelAsset {
         name: "PP-OCR Dictionary (Standard)",
-        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocr_keys_v1.txt",
+        url: "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_dict.txt",
         path: "models/ppocr/dict.txt",
     },
 ];
@@ -91,30 +91,7 @@ pub const PPOCR_DICT_JAPANESE: ModelAsset<'static> = ModelAsset {
     path: "models/ppocr/japan_dict.txt",
 };
 
-pub const PPOCR_DICT_KOREAN: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Korean)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/korean_dict.txt",
-    path: "models/ppocr/korean_dict.txt",
-};
 
-pub const PPOCR_DICT_THAI: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Thai)",
-    url:
-        "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/main/ppocr/utils/dict/th_dict.txt",
-    path: "models/ppocr/thai_dict.txt",
-};
-
-pub const PPOCR_DICT_LATIN: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Latin)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/latin_dict.txt",
-    path: "models/ppocr/latin_dict.txt",
-};
-
-pub const PPOCR_DICT_CYRILLIC: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Cyrillic)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/cyrillic_dict.txt",
-    path: "models/ppocr/cyrillic_dict.txt",
-};
 
 pub const BUBBLE_YOLO_MODEL: ModelAsset<'static> = ModelAsset {
     name: "YOLO Bubble Detector (Manga-Bubble-YOLO)",
@@ -160,7 +137,21 @@ pub use crate::core::types::DownloadProgress;
 async fn download_asset_list(
     assets: &[ModelAsset<'_>],
     progress_tx: &tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
+    force: bool,
 ) -> Result<()> {
+    // 1. Load overrides if any
+    let mut overrides = std::collections::HashMap::new();
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let override_path = exe_dir.join("override_models.json");
+            if let Ok(content) = fs::read_to_string(override_path) {
+                if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, String>>(&content) {
+                    overrides = map;
+                }
+            }
+        }
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .build()?;
@@ -175,11 +166,11 @@ async fn download_asset_list(
             }
         }
 
-        // Skip if exists and is valid size
-        if dest_path.exists() {
+        // Skip if exists and is valid size, UNLESS force is true
+        if !force && dest_path.exists() {
             if let Ok(meta) = fs::metadata(&dest_path) {
                 let is_onnx = dest_path.extension().and_then(|s| s.to_str()) == Some("onnx");
-                let threshold = if is_onnx { 10 * 1024 * 1024 } else { 5 * 1024 }; // 10MB for ONNX, 5KB for others
+                let threshold = if is_onnx { 1024 * 1024 } else { 5 * 1024 }; // 1MB for ONNX (mobile models are ~4MB), 5KB for others
 
                 if meta.len() > threshold {
                     continue;
@@ -187,6 +178,8 @@ async fn download_asset_list(
                     let _ = fs::remove_file(&dest_path);
                 }
             }
+        } else if force && dest_path.exists() {
+            let _ = fs::remove_file(&dest_path);
         }
 
         // Create directory
@@ -202,7 +195,16 @@ async fn download_asset_list(
         };
         let _ = progress_tx.send(progress.clone());
 
-        let mut response = client.get(asset.url).send().await?;
+        // Check if the URL is overridden by exact URL or by model name
+        let final_url = if let Some(url) = overrides.get(asset.url) {
+            url
+        } else if let Some(url) = overrides.get(asset.name) {
+            url
+        } else {
+            asset.url
+        };
+
+        let mut response = client.get(final_url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
 
         let mut file = fs::File::create(&dest_path)?;
@@ -228,8 +230,9 @@ async fn download_asset_list(
 /// Download Manga-OCR models.
 pub async fn download_models(
     progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
+    force: bool,
 ) -> Result<()> {
-    download_asset_list(&MANGA_MODELS, &progress_tx).await?;
+    download_asset_list(&MANGA_MODELS, &progress_tx, force).await?;
 
     let _ = progress_tx
         .send(DownloadProgress {
@@ -245,6 +248,7 @@ pub async fn download_models(
 /// Download PP-OCR models for Built-in PaddleOCR.
 pub async fn download_ppocr_models(
     progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
+    force: bool,
 ) -> Result<()> {
     let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
 
@@ -256,19 +260,19 @@ pub async fn download_ppocr_models(
         crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => PPOCR_MOBILE_MODELS[1].url,
         
         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile =>
-            "https://huggingface.co/cycloneboy/japan_PP-OCRv4_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/japan_pp-ocrv3_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::KoreanMobile =>
-            "https://huggingface.co/cycloneboy/korean_PP-OCRv4_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/korean_pp-ocrv5_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::ThaiMobile =>
-            "https://huggingface.co/itextresearch/itext-th_PP-OCRv5_mobile_rec_infer/resolve/main/inference.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/th_pp-ocrv5_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::LatinMobile =>
-            "https://huggingface.co/cycloneboy/latin_PP-OCRv3_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/latin_pp-ocrv5_mobile_rec.onnx",
 
         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile =>
-            "https://huggingface.co/cycloneboy/cyrillic_PP-OCRv3_rec_infer/resolve/main/model.onnx",
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/cyrillic_pp-ocrv5_mobile_rec.onnx",
     };
 
     // 3. Dictionary URL
@@ -278,17 +282,23 @@ pub async fn download_ppocr_models(
         }
 
         crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => {
-            PPOCR_DICT_JAPANESE.url
+            PPOCR_DICT_JAPANESE.url // v3 dict from paddle repo
         }
 
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => PPOCR_DICT_KOREAN.url,
+        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => {
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_korean_dict.txt"
+        }
 
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => PPOCR_DICT_THAI.url,
+        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => {
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_th_dict.txt"
+        }
 
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile => PPOCR_DICT_LATIN.url,
+        crate::infrastructure::settings::PpocrModelSuite::LatinMobile => {
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_latin_dict.txt"
+        }
 
         crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
-            PPOCR_DICT_CYRILLIC.url
+            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_cyrillic_dict.txt"
         }
     };
 
@@ -318,7 +328,7 @@ pub async fn download_ppocr_models(
         },
     ];
 
-    download_asset_list(&assets, &progress_tx).await?;
+    download_asset_list(&assets, &progress_tx, force).await?;
 
     let _ = progress_tx
         .send(DownloadProgress {
@@ -333,8 +343,9 @@ pub async fn download_ppocr_models(
 
 pub async fn download_bubble_yolo_model(
     progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
+    force: bool,
 ) -> Result<()> {
-    download_asset_list(&[BUBBLE_YOLO_MODEL], &progress_tx).await?;
+    download_asset_list(&[BUBBLE_YOLO_MODEL], &progress_tx, force).await?;
 
     let _ = progress_tx
         .send(DownloadProgress {
@@ -349,8 +360,9 @@ pub async fn download_bubble_yolo_model(
 
 pub async fn download_craft_model(
     progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
+    force: bool,
 ) -> Result<()> {
-    download_asset_list(&[CRAFT_TEXT_DETECTOR_MODEL], &progress_tx).await?;
+    download_asset_list(&[CRAFT_TEXT_DETECTOR_MODEL], &progress_tx, force).await?;
 
     let _ = progress_tx
         .send(DownloadProgress {

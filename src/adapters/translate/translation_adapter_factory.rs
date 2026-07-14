@@ -27,6 +27,7 @@ impl TranslatorFactory {
             TranslationProvider::Groq => GroqTranslator::new(
                 settings.groq_api_key.clone(),
                 settings.groq_model.clone(),
+                settings.groq_base_url.clone(),
                 Some(settings.trans_behavior.clone()),
             )
             .ok()
@@ -49,19 +50,23 @@ impl TranslatorFactory {
             TranslationProvider::Claude => ClaudeTranslator::new(
                 settings.claude_api_key.clone(),
                 settings.claude_model.clone(),
+                settings.claude_base_url.clone(),
                 Some(settings.trans_behavior.clone()),
             )
             .ok()
             .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
             TranslationProvider::DeepSeek => OpenAiTranslator::new(
-                "https://api.deepseek.com".to_string(), // DeepSeek uses OpenAI compatible API
+                settings.deepseek_base_url.clone(), // DeepSeek uses OpenAI compatible API
                 settings.deepseek_api_key.clone(),
                 settings.deepseek_model.clone(),
                 Some(settings.trans_behavior.clone()),
             )
             .ok()
             .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
-            TranslationProvider::DeepL => DeeplTranslator::new(settings.deepl_api_key.clone())
+            TranslationProvider::DeepL => DeeplTranslator::new(
+                settings.deepl_api_key.clone(),
+                settings.deepl_base_url.clone(),
+            )
                 .ok()
                 .map(|t| Arc::new(t) as Arc<dyn Translator + Send + Sync>),
             TranslationProvider::LmStudio => OpenAiTranslator::new(

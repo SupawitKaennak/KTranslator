@@ -15,7 +15,7 @@
 - **การเลือกพื้นที่เพื่อจับภาพหน้าจอ**: ผู้ใช้สามารถกำหนดขอบเขตพื้นที่หน้าจอเพื่อจับภาพข้อความ โดยสามารถย้ายตำแหน่ง ปรับขนาดกล่องเลือกได้แบบเรียลไทม์ และมีโหมดแสดงคำแปลทับตำแหน่งข้อความเดิม (Overlay Mode)
 - **ตัวเลือกเอนจิน OCR (ONNX Runtime)**:
   - Manga-OCR: โมเดลสแกนตัวอักษรภาษาญี่ปุ่นที่ครอบคลุมการอ่านทั้งแนวตั้งและแนวนอน
-  - PaddleOCR v4 (Mobile): โมเดลสแกนตัวอักษรรุ่นขนาดเล็ก
+  - PaddleOCR v4 & v5 (Mobile): ทำงานแบบไฮบริด (ใช้ v4 ในการตีกรอบ และ v5 ในการอ่านตัวอักษร) เพื่อความแม่นยำสูงสุดในหลายภาษาและฟอนต์ที่ซับซ้อน
   - Windows OCR: ระบบรู้จำอักขระผ่าน API บิวท์อินของระบบปฏิบัติการ Windows
 - **การประมวลผลด้วย GPU (Hardware Acceleration)**: รองรับการเชื่อมต่อกับไดรเวอร์การ์ดจอ NVIDIA CUDA, TensorRT และ DirectML บนระบบปฏิบัติการ Windows 
 - **การวิเคราะห์การจัดหน้า (Layout Analysis)**:
@@ -72,7 +72,7 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
 - **Region-Based Capture**: Users can draw bounding boxes on the screen to specify the capture area. These boxes can be resized and moved in real time. The software includes an Overlay Mode to render translated text directly over the original screen contents.
 - **OCR Engine Selection (ONNX Runtime)**:
   - Manga-OCR: A model for scanning Japanese text, covering both vertical and horizontal writing formats.
-  - PaddleOCR v4 (Mobile): A scaled-down model variant for lower memory footprint.
+  - PaddleOCR v4 & v5 (Mobile): A hybrid OCR pipeline (v4 for bounding box detection, v5 for text recognition) optimized for multi-language accuracy and complex fonts.
   - Windows OCR: Text recognition utilizing the built-in Windows API.
 - **Hardware Acceleration**: Integrates with NVIDIA CUDA, TensorRT, and DirectML APIs on Windows to route ONNX computations through the GPU.
 - **Layout Analysis**:
@@ -124,7 +124,7 @@ KTranslator V2 is a screen capture translation utility written in Rust. It utili
 - **Language:** Rust (edition 2021)
 - **UI Framework:** egui
 - **ML Runtime:** ONNX Runtime (ort) with CUDA, TensorRT, and DirectML support
-- **OCR:** Manga-OCR (Vision Encoder-Decoder) and PaddleOCR v4
+- **OCR:** Manga-OCR (Vision Encoder-Decoder) and PaddleOCR v4/v5 (Hybrid Mobile Pipeline)
 - **NLP:** wordninja, Thai word segmentation logic
 
 ### โครงการและข้อมูลอ้างอิงที่ใช้งาน (References)
