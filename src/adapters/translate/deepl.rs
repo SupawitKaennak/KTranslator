@@ -10,20 +10,23 @@ use super::llm_shared_utilities;
 pub struct DeeplTranslator {
     client: Client,
     api_key: String,
+    base_url: String,
 }
 
 impl DeeplTranslator {
-    pub fn new(api_key: String) -> Result<Self> {
+    pub fn new(api_key: String, base_url: String) -> Result<Self> {
         let client =
             llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
-        Ok(Self { client, api_key })
+        Ok(Self { client, api_key, base_url })
     }
 
-    fn get_endpoint(&self) -> &'static str {
-        if self.api_key.ends_with(":fx") {
-            "https://api-free.deepl.com/v2/translate"
+    fn get_endpoint(&self) -> String {
+        if !self.base_url.is_empty() {
+            self.base_url.clone()
+        } else if self.api_key.ends_with(":fx") {
+            "https://api-free.deepl.com/v2/translate".to_string()
         } else {
-            "https://api.deepl.com/v2/translate"
+            "https://api.deepl.com/v2/translate".to_string()
         }
     }
 }

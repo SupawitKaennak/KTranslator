@@ -33,6 +33,7 @@ pub struct Settings {
     #[serde(skip_serializing)]
     pub groq_api_key: String,
     pub groq_model: String,
+    pub groq_base_url: String,
     pub ollama_url: String,
     pub ollama_model: String,
     pub custom_openai_url: String,
@@ -43,11 +44,14 @@ pub struct Settings {
     #[serde(skip_serializing)]
     pub claude_api_key: String,
     pub claude_model: String,
+    pub claude_base_url: String,
     #[serde(skip_serializing)]
     pub deepseek_api_key: String,
     pub deepseek_model: String,
+    pub deepseek_base_url: String,
     #[serde(skip_serializing)]
     pub deepl_api_key: String,
+    pub deepl_base_url: String,
     pub lm_studio_url: String,
     pub lm_studio_model: String,
     pub azure_openai_url: String,
@@ -96,6 +100,7 @@ impl Default for Settings {
             gemini_model: "gemini-2.0-flash".to_string(),
             groq_api_key: String::new(),
             groq_model: "llama-3.3-70b-versatile".to_string(),
+            groq_base_url: "https://api.groq.com/openai/v1".to_string(),
             ollama_url: "http://localhost:11434".to_string(),
             ollama_model: "llama3.2:1b".to_string(),
             custom_openai_url: "https://api.openai.com/v1".to_string(),
@@ -104,9 +109,12 @@ impl Default for Settings {
             custom_openai_use_list: false,
             claude_api_key: String::new(),
             claude_model: "claude-3-5-sonnet-latest".to_string(),
+            claude_base_url: "https://api.anthropic.com/v1".to_string(),
             deepseek_api_key: String::new(),
             deepseek_model: "deepseek-chat".to_string(),
+            deepseek_base_url: "https://api.deepseek.com".to_string(),
             deepl_api_key: String::new(),
+            deepl_base_url: "https://api-free.deepl.com/v2".to_string(),
             lm_studio_url: "http://localhost:1234/v1".to_string(),
             lm_studio_model: String::new(),
             azure_openai_url: String::new(),

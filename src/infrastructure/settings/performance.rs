@@ -6,6 +6,7 @@ pub struct RealtimeStabilitySettings {
     pub stability_threshold_frames: u32, // Wait N identical text frames before translating (typewriter debounce)
     pub subtitle_persistence_ms: u64,    // Keep text on screen for N ms after source disappears
     pub context_window_size: u32,        // N previous segment translations passed as context
+    pub debounce_timeout_ms: u64,        // How long the screen needs to stay still before translation starts
 }
 
 impl Default for RealtimeStabilitySettings {
@@ -14,6 +15,7 @@ impl Default for RealtimeStabilitySettings {
             stability_threshold_frames: 1, // Default 1 (translates immediately on first full-text grab, or 2 for games)
             subtitle_persistence_ms: 2500, // Hold subtitles for 2.5 seconds
             context_window_size: 2,        // 2 prior segments
+            debounce_timeout_ms: 150,      // Default 150ms
         }
     }
 }

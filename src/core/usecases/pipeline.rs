@@ -14,7 +14,7 @@ use crate::core::{
 /// Force-proceed threshold: if a frame has been unstable for this long, proceed anyway.
 const FORCE_PROCEED_MS: u64 = 800;
 /// Minimum stable duration before debounce allows OCR/translation to proceed.
-const DEBOUNCE_STABLE_MS: u64 = 150;
+
 
 /// Orchestrates the end-to-end screen translation flow for a single frame.
 /// Decouples raw infrastructure access and hashing from task concurrency.
@@ -55,8 +55,8 @@ pub struct PipelineContext {
     pub text_cache_arc: Arc<Mutex<TextTranslationCache>>,
     pub max_cache_entries: usize,
 
-    // --- Processing config ---
     pub smart_merge: bool,
+    pub debounce_timeout_ms: u64,
     pub img_proc_cfg: crate::infrastructure::settings::ImageProcessingSettings,
     pub txt_proc_cfg: crate::infrastructure::settings::TextProcessingSettings,
     pub regex_rules: Vec<crate::infrastructure::settings::RegexRule>,
@@ -102,6 +102,7 @@ impl TranslationPipeline {
             text_cache_arc,
             max_cache_entries,
             smart_merge,
+            debounce_timeout_ms,
             img_proc_cfg,
             txt_proc_cfg,
             regex_rules,
@@ -163,8 +164,8 @@ impl TranslationPipeline {
             });
         }
 
-        // 3. Stable Debounce check: Reduced from 400ms to 150ms for hyper-reactive response
-        if unstable_dur < DEBOUNCE_STABLE_MS && !force_proceed {
+        // 3. Stable Debounce check
+        if unstable_dur < debounce_timeout_ms && !force_proceed {
             return Ok(BgResult::WaitingDebounce { slot_idx });
         }
 
@@ -209,6 +210,7 @@ impl TranslationPipeline {
                 group,
                 smart_merge,
                 jp_merge_vertical,
+                &txt_proc_cfg.layout,
             );
             blocks.append(&mut group_blocks);
         }

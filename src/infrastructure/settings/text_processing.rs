@@ -3,6 +3,24 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
+pub struct TextLayoutSettings {
+    pub merge_x_gap: f32, // Default 0.8
+    pub merge_y_gap: f32, // Default 0.6
+    pub inline_x_gap: f32, // Default 0.35
+}
+
+impl Default for TextLayoutSettings {
+    fn default() -> Self {
+        Self {
+            merge_x_gap: 0.8,
+            merge_y_gap: 0.6,
+            inline_x_gap: 0.35,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct TextProcessingSettings {
     pub remove_duplicates: bool,
     pub merge_broken_lines: bool,
@@ -31,6 +49,8 @@ pub struct TextProcessingSettings {
     pub th_zero_width_cleanup: bool,
 
     pub ar_rtl_correction: bool,
+
+    pub layout: TextLayoutSettings,
 }
 
 impl Default for TextProcessingSettings {
@@ -62,6 +82,8 @@ impl Default for TextProcessingSettings {
             th_zero_width_cleanup: true,
 
             ar_rtl_correction: true,
+
+            layout: TextLayoutSettings::default(),
         }
     }
 }

@@ -3,6 +3,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::core::{ports::Translator, types::LanguageTag};
+use crate::infrastructure::settings::TranslationBehaviorSettings;
 
 use super::llm_shared_utilities;
 
@@ -11,14 +12,16 @@ pub struct GroqTranslator {
     client: Client,
     api_key: String,
     model: String,
-    behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+    base_url: String,
+    behavior: TranslationBehaviorSettings,
 }
 
 impl GroqTranslator {
     pub fn new(
         api_key: String,
         model: String,
-        behavior: Option<crate::infrastructure::settings::TranslationBehaviorSettings>,
+        base_url: String,
+        behavior: Option<TranslationBehaviorSettings>,
     ) -> Result<Self> {
         let client =
             llm_shared_utilities::build_client(llm_shared_utilities::DEFAULT_TIMEOUT_SECS)?;
@@ -26,11 +29,12 @@ impl GroqTranslator {
             client,
             api_key,
             model,
-            behavior,
+            base_url,
+            behavior: behavior.unwrap_or_default(),
         })
     }
 
-    pub fn list_models(api_key: &str) -> Result<Vec<String>> {
+    pub fn list_models(api_key: &str, base_url: &str) -> Result<Vec<String>> {
         if api_key.trim().is_empty() {
             bail!("Groq API key is empty");
         }
@@ -40,7 +44,7 @@ impl GroqTranslator {
             .context("build http client")?;
 
         let resp = client
-            .get("https://api.groq.com/openai/v1/models")
+            .get(format!("{}/models", base_url))
             .header("Authorization", format!("Bearer {}", api_key))
             .send()
             .context("send groq listModels request")?;
@@ -83,10 +87,10 @@ impl Translator for GroqTranslator {
             text,
             source,
             target,
-            self.behavior.as_ref(),
+            Some(&self.behavior),
             context_hint,
         );
-        let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.2);
+        let temp = llm_shared_utilities::get_temperature(Some(&self.behavior), 0.2);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);
 
         let req = GroqChatRequest {
@@ -107,7 +111,7 @@ impl Translator for GroqTranslator {
 
         let resp = self
             .client
-            .post("https://api.groq.com/openai/v1/chat/completions")
+            .post(format!("{}/chat/completions", self.base_url))
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&req)
             .send()

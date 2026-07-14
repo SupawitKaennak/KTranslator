@@ -138,6 +138,19 @@ async fn download_asset_list(
     assets: &[ModelAsset<'_>],
     progress_tx: &tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
 ) -> Result<()> {
+    // 1. Load overrides if any
+    let mut overrides = std::collections::HashMap::new();
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let override_path = exe_dir.join("override_models.json");
+            if let Ok(content) = fs::read_to_string(override_path) {
+                if let Ok(map) = serde_json::from_str::<std::collections::HashMap<String, String>>(&content) {
+                    overrides = map;
+                }
+            }
+        }
+    }
+
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .build()?;
@@ -179,7 +192,16 @@ async fn download_asset_list(
         };
         let _ = progress_tx.send(progress.clone());
 
-        let mut response = client.get(asset.url).send().await?;
+        // Check if the URL is overridden by exact URL or by model name
+        let final_url = if let Some(url) = overrides.get(asset.url) {
+            url
+        } else if let Some(url) = overrides.get(asset.name) {
+            url
+        } else {
+            asset.url
+        };
+
+        let mut response = client.get(final_url).send().await?;
         let total_size = response.content_length().unwrap_or(0);
 
         let mut file = fs::File::create(&dest_path)?;
