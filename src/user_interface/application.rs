@@ -119,12 +119,21 @@ impl App {
             tracing::info!("Periodic cache cleanup completed");
         }
 
-        // 1b. Handle Download Trigger
+        // 1b. Handle Download Triggers
         while let Ok(engine_type) = self.downloads.trigger_rx.try_recv() {
             self.model.lock().download_progress.is_downloading = true; // Force UI awake
             let actual_tx = self.downloads.progress_tx.clone();
             let ctx_clone = ctx.clone();
             let model_clone = self.model.clone();
+
+            // DROPPING THE CURRENT ENGINE TO RELEASE FILE LOCKS!
+            // If the user clicks Reinstall, the current engine might be locking the .onnx files.
+            // By replacing it with WindowsOcr, the old engine's Arc drops and ONNX Runtime releases the file handles.
+            self.services.ocr_engine = std::sync::Arc::new(crate::adapters::ocr::windows_native_ocr_adapter::WindowsOcr::new());
+            // Also idle the pipeline slots just in case they were holding any references
+            for slot in &mut self.slots_runtime {
+                slot.status = "Idle".to_string();
+            }
             
             std::thread::spawn(move || {
                 let rt = tokio::runtime::Runtime::new().unwrap();
@@ -143,16 +152,16 @@ impl App {
 
                     match engine_type {
                         crate::infrastructure::settings::OcrEngineType::MangaOCR => {
-                            let _ = crate::infrastructure::asset_download_manager::download_models(proxy_tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_models(proxy_tx, true).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
-                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx, true).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
-                            let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(proxy_tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(proxy_tx, true).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::CraftDetector => {
-                            let _ = crate::infrastructure::asset_download_manager::download_craft_model(proxy_tx).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_craft_model(proxy_tx, true).await;
                         }
                         _ => {}
                     }
