@@ -125,6 +125,9 @@ impl App {
             let actual_tx = self.downloads.progress_tx.clone();
             let ctx_clone = ctx.clone();
             let model_clone = self.model.clone();
+            // Capture the current in-memory ppocr_model so the correct suite is downloaded
+            // even if the user hasn't saved settings yet.
+            let ppocr_suite = self.settings.ppocr_model;
 
             // DROPPING THE CURRENT ENGINE TO RELEASE FILE LOCKS!
             // If the user clicks Reinstall, the current engine might be locking the .onnx files.
@@ -155,7 +158,7 @@ impl App {
                             let _ = crate::infrastructure::asset_download_manager::download_models(proxy_tx, true).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
-                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx, true).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx, true, ppocr_suite).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
                             let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(proxy_tx, true).await;

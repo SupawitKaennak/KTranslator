@@ -64,9 +64,10 @@ impl BackgroundCoordinator {
             return;
         }
 
-        let yolo_detector = if settings.use_yolo_bubble
+        let yolo_detector = if settings.text_detector
+            == crate::infrastructure::settings::TextDetectorMode::YoloBubble
             || settings.text_detector
-                == crate::infrastructure::settings::TextDetectorMode::YoloBubble
+                == crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid
         {
             let mut guard = self.yolo_bubble.lock();
             if guard.is_none()

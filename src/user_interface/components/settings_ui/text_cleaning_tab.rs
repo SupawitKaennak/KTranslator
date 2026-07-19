@@ -109,7 +109,6 @@ pub fn render_tab_text_processing(
             ui.checkbox(&mut tp.jp_merge_vertical, i18n.jp_merge_v);
             ui.checkbox(&mut tp.jp_kana_normalization, i18n.jp_kana_norm);
             ui.checkbox(&mut tp.jp_remove_furigana, i18n.jp_strip_furi);
-            ui.checkbox(&mut tp.jp_preserve_honorifics, i18n.jp_honorifics);
         });
         ui.end_row();
 

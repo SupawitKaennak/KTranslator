@@ -25,7 +25,8 @@ pub struct Settings {
     pub game_ocr_engine: OcrEngineType,
     pub manga_ocr_engine: OcrEngineType,
     pub document_ocr_engine: OcrEngineType,
-    pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
+    #[serde(skip)] // Legacy field — engine is now selected per-mode (game/manga/document_ocr_engine)
+    pub ocr_engine: OcrEngineType,
     pub ppocr_model: PpocrModelSuite,
     #[serde(skip_serializing)]
     pub gemini_api_key: String,
@@ -71,6 +72,7 @@ pub struct Settings {
     pub overlay_text_align: TextAlign,
 
     pub use_yolo_bubble: bool,
+    #[serde(skip)] // Legacy — derived from text_detector enum at runtime
     pub show_yolo_debug_borders: bool,
     pub text_detector: TextDetectorMode,
 

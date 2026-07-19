@@ -111,14 +111,6 @@ pub fn render_tab_performance(
             });
             ui.end_row();
 
-            ui.label(format!("{}:", i18n.perf_batching));
-            ui.add_enabled_ui(is_custom, |ui| {
-                ui.checkbox(
-                    &mut perf.enable_batching,
-                    "Batch short strings into single API requests",
-                );
-            });
-            ui.end_row();
 
             ui.label(format!("{}:", i18n.perf_memory));
             ui.horizontal(|ui| {
@@ -142,26 +134,6 @@ pub fn render_tab_performance(
             });
             ui.end_row();
 
-            ui.label(format!("{}:", i18n.perf_vram));
-            ui.horizontal(|ui| {
-                ui.add_enabled(
-                    is_custom,
-                    egui::Slider::new(&mut perf.vram_limit_mb, 0..=24576)
-                        .step_by(512.0)
-                        .text("MB"),
-                );
-                let tooltip_str = if perf.vram_limit_mb == 0 {
-                    "Unlimited"
-                } else {
-                    "Hard cap"
-                };
-                ui.label(
-                    egui::RichText::new(tooltip_str)
-                        .small()
-                        .color(egui::Color32::GRAY),
-                );
-            });
-            ui.end_row();
 
             ui.label("Translation Trigger Delay (Debounce):");
             ui.horizontal(|ui| {

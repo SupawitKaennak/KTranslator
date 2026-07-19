@@ -37,11 +37,9 @@ pub struct TextProcessingSettings {
     pub enable_ocr_merge: bool,
     pub enable_spell_correction: bool,
 
-    // ── Language-Specific Processing ──
     pub jp_merge_vertical: bool,
     pub jp_kana_normalization: bool,
     pub jp_remove_furigana: bool,
-    pub jp_preserve_honorifics: bool,
 
     pub cn_conversion: ChineseConversionMode,
 
@@ -74,7 +72,6 @@ impl Default for TextProcessingSettings {
             jp_merge_vertical: true,
             jp_kana_normalization: true,
             jp_remove_furigana: true,
-            jp_preserve_honorifics: false,
 
             cn_conversion: ChineseConversionMode::None,
 

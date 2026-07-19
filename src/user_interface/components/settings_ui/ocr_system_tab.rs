@@ -302,11 +302,6 @@ pub fn render_tab_ocr(
             });
     });
 
-    // Synchronize legacy `use_yolo_bubble` setting
-    settings.use_yolo_bubble =
-        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble || 
-        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid;
-
     match settings.text_detector {
         crate::infrastructure::settings::TextDetectorMode::YoloBubble | crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid => {
             let exists = crate::infrastructure::asset_download_manager::check_bubble_yolo_exists();
