@@ -163,13 +163,41 @@ pub fn show_settings_window(
                             });
                         }
                     }
+                    
+                    ui.with_layout(egui::Layout::bottom_up(egui::Align::Center), |ui| {
+                        ui.add_space(8.0);
+                        if ui.button(egui::RichText::new(i18n.settings_reset_defaults).color(egui::Color32::RED)).clicked() {
+                            let mut s = settings_inner.lock();
+                            let gemini_key = s.gemini_api_key.clone();
+                            let groq_key = s.groq_api_key.clone();
+                            let custom_key = s.custom_openai_api_key.clone();
+                            let claude_key = s.claude_api_key.clone();
+                            let deepseek_key = s.deepseek_api_key.clone();
+                            let deepl_key = s.deepl_api_key.clone();
+                            let azure_key = s.azure_openai_api_key.clone();
+                            
+                            *s = crate::infrastructure::settings::Settings::default();
+                            
+                            s.gemini_api_key = gemini_key;
+                            s.groq_api_key = groq_key;
+                            s.custom_openai_api_key = custom_key;
+                            s.claude_api_key = claude_key;
+                            s.deepseek_api_key = deepseek_key;
+                            s.deepl_api_key = deepl_key;
+                            s.azure_openai_api_key = azure_key;
+                            
+                            ctx.request_repaint();
+                            ctx.request_repaint_of(egui::ViewportId::ROOT);
+                        }
+                        ui.add_space(8.0);
+                        ui.separator();
+                    });
                 });
 
             // ── Right Content Panel ──
             egui::CentralPanel::default().show(ctx, |ui| {
                 let mut settings = settings_inner.lock();
                 let initial_settings = settings.clone();
-                let i18n = get_i18n(settings.ui_language);
 
                 egui::ScrollArea::vertical().show(ui, |ui| match active_tab {
                     SettingsTab::General => render_tab_general(ui, &mut settings, i18n),

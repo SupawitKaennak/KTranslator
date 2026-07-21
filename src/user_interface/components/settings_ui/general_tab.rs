@@ -54,7 +54,7 @@ pub fn render_tab_general(
         .num_columns(2)
         .spacing([20.0, 12.0])
         .show(ui, |ui| {
-            ui.label("Debounce Delay (Frames):");
+            ui.label(i18n.gen_debounce_frames);
             ui.horizontal(|ui| {
                 ui.add(
                     egui::Slider::new(&mut real.stability_threshold_frames, 1..=10).text("Frames"),
@@ -67,7 +67,7 @@ pub fn render_tab_general(
             });
             ui.end_row();
 
-            ui.label("Subtitle Persistence:");
+            ui.label(i18n.gen_sub_persistence);
             ui.horizontal(|ui| {
                 ui.add(
                     egui::Slider::new(&mut real.subtitle_persistence_ms, 0..=10000)

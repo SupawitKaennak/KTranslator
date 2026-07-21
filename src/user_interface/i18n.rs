@@ -236,6 +236,59 @@ pub struct I18n {
     pub ppocr_suite_th_mobile: &'static str,
     pub ppocr_suite_latin_mobile: &'static str,
     pub ppocr_suite_cyrillic_mobile: &'static str,
+
+    // --- Newly added i18n fields ---
+    pub beh_style_balance: &'static str,
+    pub beh_ai_creativity: &'static str,
+    pub beh_voice_tone: &'static str,
+    pub beh_prompt_placeholders: &'static str,
+    pub beh_system_prompt: &'static str,
+    pub beh_single_line_prompt: &'static str,
+    pub beh_multi_line_prompt: &'static str,
+    pub beh_reset_prompts: &'static str,
+    pub beh_ai_memory: &'static str,
+    pub beh_context_memory: &'static str,
+
+    pub txt_layout_heuristics: &'static str,
+    pub txt_layout_adv_desc: &'static str,
+    pub txt_merge_x: &'static str,
+    pub txt_merge_y: &'static str,
+    pub txt_inline_x: &'static str,
+    pub lang_chinese: &'static str,
+    pub lang_thai: &'static str,
+
+    pub perf_desc: &'static str,
+    pub perf_preset: &'static str,
+    pub perf_batch_trans: &'static str,
+    pub perf_debounce: &'static str,
+    pub perf_frame_stability: &'static str,
+    pub perf_vram_limit: &'static str,
+
+    pub ocr_llm_post: &'static str,
+    pub ocr_adv_models: &'static str,
+    pub ocr_detector_mode: &'static str,
+    pub download_6mb: &'static str,
+    pub download_83mb: &'static str,
+
+    pub img_live_preview: &'static str,
+    pub img_live_preview_desc: &'static str,
+    pub img_grayscale: &'static str,
+    pub img_invert_colors: &'static str,
+
+    pub gen_debounce_frames: &'static str,
+    pub gen_sub_persistence: &'static str,
+
+    pub dict_engine_header: &'static str,
+    pub google_api_desc: &'static str,
+    pub deepl_note: &'static str,
+    pub pos_x: &'static str,
+    pub pos_y: &'static str,
+
+    pub overlay_frame_viewer: &'static str,
+    pub overlay_ocr: &'static str,
+    pub overlay_trans: &'static str,
+
+    pub settings_reset_defaults: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -449,6 +502,59 @@ const EN: I18n = I18n {
     ppocr_suite_th_mobile: "Fast: Thai (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_latin_mobile: "Fast: Latin/Western Europe (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_cyrillic_mobile: "Fast: Cyrillic/Eastern Europe (Det v4 + Rec v5, ~15MB)",
+
+    // --- Newly added EN strings ---
+    beh_style_balance: "Style Balance:",
+    beh_ai_creativity: "AI Creativity:",
+    beh_voice_tone: "Voice Tone:",
+    beh_prompt_placeholders: "Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}",
+    beh_system_prompt: "System Prompt (Role & Guidelines):",
+    beh_single_line_prompt: "Single-line User Prompt Template:",
+    beh_multi_line_prompt: "Multi-line Batch User Prompt Template:",
+    beh_reset_prompts: "Reset to Default Prompts",
+    beh_ai_memory: "AI Memory & Context",
+    beh_context_memory: "Context Memory:",
+
+    txt_layout_heuristics: "Text Layout Analysis Heuristics",
+    txt_layout_adv_desc: "Advanced tuning for bounding box merging. Lower values merge less (stricter), higher values merge more aggressively.",
+    txt_merge_x: "Horizontal Merge Tolerance (X-Gap):",
+    txt_merge_y: "Vertical Merge Tolerance (Y-Gap):",
+    txt_inline_x: "Inline Merge Tolerance (Same-Line X-Gap):",
+    lang_chinese: "Chinese:",
+    lang_thai: "Thai:",
+
+    perf_desc: "Fine-tune thread execution, hardware acceleration, and cache footprints for maximal frame stability.",
+    perf_preset: "Power & Speed Preset",
+    perf_batch_trans: "Batch Translation:",
+    perf_debounce: "Translation Trigger Delay (Debounce):",
+    perf_frame_stability: "Frame Stability Threshold:",
+    perf_vram_limit: "VRAM Limit:",
+
+    ocr_llm_post: "LLM OCR Post-processing",
+    ocr_adv_models: "Advanced Text Detection Models",
+    ocr_detector_mode: "Text Detector Mode:",
+    download_6mb: "Download (6MB)",
+    download_83mb: "Download (83MB)",
+
+    img_live_preview: "Live Preview Processed Image",
+    img_live_preview_desc: "Real-time preview of filters applied before OCR engine extraction:",
+    img_grayscale: "Grayscale:",
+    img_invert_colors: "Invert Colors:",
+
+    gen_debounce_frames: "Debounce Delay (Frames):",
+    gen_sub_persistence: "Subtitle Persistence:",
+
+    dict_engine_header: "Custom Dictionary / Glossary Engine",
+    google_api_desc: "Using public Google Translate API. No API Key required.",
+    deepl_note: "Note: DeepL does not support custom prompts or translation styles. It is a dedicated Neural Machine Translation service.",
+    pos_x: "X:",
+    pos_y: "Y:",
+
+    overlay_frame_viewer: "Frame Viewer (Embedded)",
+    overlay_ocr: "OCR:",
+    overlay_trans: "Translation:",
+
+    settings_reset_defaults: "↺ Reset Defaults",
 };
 
 const TH: I18n = I18n {
@@ -657,6 +763,59 @@ const TH: I18n = I18n {
     ppocr_suite_th_mobile: "ความเร็วสูง: ภาษาไทย (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_latin_mobile: "ความเร็วสูง: กลุ่มภาษาละติน/ยุโรปตะวันตก (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_cyrillic_mobile: "ความเร็วสูง: กลุ่มภาษาซีริลลิก/ยุโรปตะวันออก (Det v4 + Rec v5, ~15MB)",
+
+    // --- Newly added TH strings ---
+    beh_style_balance: "สมดุลของสไตล์แปล:",
+    beh_ai_creativity: "ระดับความอิสระของ AI:",
+    beh_voice_tone: "โทนเสียงภาษา:",
+    beh_prompt_placeholders: "ตัวแปรที่ใช้ได้: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}",
+    beh_system_prompt: "System Prompt (บทบาทและข้อกำหนด):",
+    beh_single_line_prompt: "โครงสร้าง Prompt บรรทัดเดียว:",
+    beh_multi_line_prompt: "โครงสร้าง Prompt แบบหลายบรรทัด (Batch):",
+    beh_reset_prompts: "รีเซ็ต Prompt เป็นค่าเริ่มต้น",
+    beh_ai_memory: "ความจำและบริบทของ AI",
+    beh_context_memory: "จำนวนบริบทความจำย้อนหลัง:",
+
+    txt_layout_heuristics: "การวิเคราะห์โครงสร้างกล่องข้อความ",
+    txt_layout_adv_desc: "ตั้งค่าการรวมกลุ่มกล่องข้อความ ค่าที่น้อยกว่าจะทำให้รวมยากขึ้น ค่าที่มากกว่าจะผสานข้อความที่ห่างกันได้ง่ายขึ้น",
+    txt_merge_x: "ระยะห่างแนวนอนสูงสุด (X-Gap):",
+    txt_merge_y: "ระยะห่างแนวตั้งสูงสุด (Y-Gap):",
+    txt_inline_x: "ระยะห่างเว้นวรรคบรรทัดเดียวกัน (Same-Line X-Gap):",
+    lang_chinese: "ภาษาจีน:",
+    lang_thai: "ภาษาไทย:",
+
+    perf_desc: "ปรับแต่งการประมวลผล การใช้ฮาร์ดแวร์ และหน่วยความจำ เพื่อความลื่นไหลสูงสุดของเฟรมเรต",
+    perf_preset: "โหมดความเร็วและประสิทธิภาพ",
+    perf_batch_trans: "แปลแบบรวบยอด (Batch Translation):",
+    perf_debounce: "หน่วงเวลาทริกเกอร์แปล (Debounce):",
+    perf_frame_stability: "ค่าความนิ่งของภาพ (Stability Threshold):",
+    perf_vram_limit: "ขีดจำกัดหน่วยความจำการ์ดจอ (VRAM):",
+
+    ocr_llm_post: "การปรับแก้ OCR ด้วย AI (Post-processing)",
+    ocr_adv_models: "โมเดลตรวจจับข้อความขั้นสูง (Advanced Text Detection)",
+    ocr_detector_mode: "โหมดตัวตรวจจับข้อความ:",
+    download_6mb: "ดาวน์โหลด (6MB)",
+    download_83mb: "ดาวน์โหลด (83MB)",
+
+    img_live_preview: "แสดงภาพตัวอย่างแบบเรียลไทม์",
+    img_live_preview_desc: "พรีวิวภาพหลังจากใส่ฟิลเตอร์ก่อนส่งเข้ากระบวนการอ่านข้อความ (OCR):",
+    img_grayscale: "ภาพขาวดำ (Grayscale):",
+    img_invert_colors: "กลับสีภาพ (Invert Colors):",
+
+    gen_debounce_frames: "หน่วงเวลาอัปเดตแผง Debug (เฟรม):",
+    gen_sub_persistence: "ระยะเวลาค้างข้อความซับไตเติล:",
+
+    dict_engine_header: "พจนานุกรมส่วนตัว / ระบบอภิธานศัพท์",
+    google_api_desc: "ใช้งานผ่านระบบ Google Translate API สาธารณะ ไม่จำเป็นต้องใช้ API Key",
+    deepl_note: "หมายเหตุ: DeepL ไม่รองรับการกำหนดสไตล์แปลหรือ Custom Prompt เน้นใช้แปลประโยคพื้นฐานอย่างแม่นยำเท่านั้น",
+    pos_x: "พิกัด X:",
+    pos_y: "พิกัด Y:",
+
+    overlay_frame_viewer: "กล้องส่องเฟรมย่อส่วน",
+    overlay_ocr: "อ่านข้อความ:",
+    overlay_trans: "คำแปล:",
+
+    settings_reset_defaults: "↺ คืนค่ามาตรฐาน",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {

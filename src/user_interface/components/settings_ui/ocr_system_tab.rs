@@ -236,7 +236,7 @@ pub fn render_tab_ocr(
     ui.separator();
     ui.add_space(8.0);
 
-    super::section_header(ui, "LLM OCR Post-processing");
+    super::section_header(ui, i18n.ocr_llm_post);
     ui.add_space(4.0);
 
     ui.checkbox(
@@ -255,7 +255,7 @@ pub fn render_tab_ocr(
     ui.add_space(8.0);
 
     // ── Advanced Text Detection Models ──
-    super::section_header(ui, "Advanced Text Detection Models");
+    super::section_header(ui, i18n.ocr_adv_models);
     ui.label(
         egui::RichText::new("AI-powered pre-processing to locate text regions before OCR.")
             .small()
@@ -264,7 +264,7 @@ pub fn render_tab_ocr(
     ui.add_space(4.0);
 
     ui.horizontal(|ui| {
-        ui.label("Text Detector Mode:");
+        ui.label(i18n.ocr_detector_mode);
         egui::ComboBox::from_id_salt("text_detector_mode")
             .selected_text(match settings.text_detector {
                 crate::infrastructure::settings::TextDetectorMode::None => "None (Full Frame)",
@@ -324,7 +324,7 @@ pub fn render_tab_ocr(
                             egui::Color32::from_rgb(235, 120, 0),
                             "⚠ YOLO Speech Bubble model (yolo26n.onnx) is not installed.",
                         );
-                        if ui.button("Download (6MB)").clicked() {
+                        if ui.button(i18n.download_6mb).clicked() {
                             let _ = download_trigger_tx
                                 .send(crate::infrastructure::settings::OcrEngineType::BubbleYOLO);
                             ui.ctx().request_repaint_of(egui::ViewportId::ROOT);
@@ -360,7 +360,7 @@ pub fn render_tab_ocr(
                             egui::Color32::from_rgb(235, 120, 0),
                             "⚠ CRAFT Text Detector model is not installed.",
                         );
-                        if ui.button("Download (83MB)").clicked() {
+                        if ui.button(i18n.download_83mb).clicked() {
                             let _ = download_trigger_tx.send(
                                 crate::infrastructure::settings::OcrEngineType::CraftDetector,
                             );

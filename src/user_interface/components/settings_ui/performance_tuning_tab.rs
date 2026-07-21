@@ -7,14 +7,14 @@ pub fn render_tab_performance(
     i18n: &crate::user_interface::i18n::I18n,
 ) {
     super::section_header(ui, i18n.tab_performance);
-    ui.label(egui::RichText::new("Fine-tune thread execution, hardware acceleration, and cache footprints for maximal frame stability.").small().color(egui::Color32::GRAY));
+    ui.label(egui::RichText::new(i18n.perf_desc).small().color(egui::Color32::GRAY));
     ui.add_space(12.0);
 
     // Enforce default locks immediately
     settings.perf.enforce_preset_locks();
 
     // ── Presets Selector ──
-    ui.label(egui::RichText::new("Power & Speed Preset").strong());
+    ui.label(egui::RichText::new(i18n.perf_preset).strong());
     ui.add_space(4.0);
     ui.horizontal(|ui| {
         use crate::infrastructure::settings::PerformancePreset;
@@ -111,7 +111,7 @@ pub fn render_tab_performance(
             });
             ui.end_row();
 
-            ui.label("Batch Translation:");
+            ui.label(i18n.perf_batch_trans);
             ui.add_enabled_ui(is_custom, |ui| {
                 ui.checkbox(&mut perf.enable_batching, "Send all OCR lines as one API call (faster)");
             });
@@ -140,7 +140,7 @@ pub fn render_tab_performance(
             ui.end_row();
 
 
-            ui.label("Translation Trigger Delay (Debounce):");
+            ui.label(i18n.perf_debounce);
             ui.horizontal(|ui| {
                 ui.add(egui::Slider::new(&mut settings.realtime.debounce_timeout_ms, 50..=1000).step_by(50.0).text("ms"));
                 ui.label(
@@ -151,7 +151,7 @@ pub fn render_tab_performance(
             });
             ui.end_row();
 
-            ui.label("Frame Stability Threshold:");
+            ui.label(i18n.perf_frame_stability);
             ui.horizontal(|ui| {
                 ui.add_enabled(
                     is_custom,
@@ -166,7 +166,7 @@ pub fn render_tab_performance(
             });
             ui.end_row();
 
-            ui.label("VRAM Limit:");
+            ui.label(i18n.perf_vram_limit);
             ui.horizontal(|ui| {
                 ui.add_enabled(
                     is_custom,

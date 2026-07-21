@@ -12,9 +12,9 @@ pub struct TextLayoutSettings {
 impl Default for TextLayoutSettings {
     fn default() -> Self {
         Self {
-            merge_x_gap: 0.8,
-            merge_y_gap: 0.6,
-            inline_x_gap: 0.35,
+            merge_x_gap: 0.8, // Generous gap for vertical manga columns
+            merge_y_gap: 0.6, // Generous gap for horizontal stacked lines
+            inline_x_gap: 0.35, // Standard word spacing tolerance
         }
     }
 }

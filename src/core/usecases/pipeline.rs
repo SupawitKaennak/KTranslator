@@ -122,7 +122,7 @@ impl TranslationPipeline {
         let frame = capture.capture_rect(rect, display_id)?;
 
         *last_frame_arc.lock() = Some(frame.clone());
-        ctx.request_repaint();
+        crate::core::utils::wake_up_ui(&ctx, slot_idx);
         let hash = smart_hash(&frame.data);
         let now = crate::core::utils::now_ms();
 
@@ -184,7 +184,7 @@ impl TranslationPipeline {
             slot_idx,
             status: "Scanning Text...".to_string(),
         });
-        ctx.request_repaint();
+        crate::core::utils::wake_up_ui(&ctx, slot_idx);
 
         let (mut grouped_ocr_lines, yolo_bubbles, _bubble_detection_successful) =
             crate::core::usecases::pipeline_ocr::perform_ocr(
@@ -494,7 +494,7 @@ impl TranslationPipeline {
             slot_idx,
             status: "AI Translating...".to_string(),
         });
-        ctx.request_repaint();
+        crate::core::utils::wake_up_ui(&ctx, slot_idx);
 
         // Inject Glossary guidance directly to the translated input stream seamlessly
         let mut text_to_translate = ocr_text.clone();

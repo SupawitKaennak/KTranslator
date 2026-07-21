@@ -71,21 +71,21 @@ pub fn render_tab_text_processing(
     ui.separator();
     ui.add_space(8.0);
 
-    super::section_header(ui, "Text Layout Analysis Heuristics");
-    ui.label(egui::RichText::new("Advanced tuning for bounding box merging. Lower values merge less (stricter), higher values merge more aggressively.").italics());
+    super::section_header(ui, i18n.txt_layout_heuristics);
+    ui.label(egui::RichText::new(i18n.txt_layout_adv_desc).italics());
     ui.add_space(6.0);
 
     ui.horizontal(|ui| {
-        ui.label("Horizontal Merge Tolerance (X-Gap):");
-        ui.add(egui::Slider::new(&mut tp.layout.merge_x_gap, 0.1..=2.0).text("x char size"));
+        ui.label(i18n.txt_merge_x);
+        ui.add(egui::Slider::new(&mut tp.layout.merge_x_gap, 0.0..=5.0).step_by(0.01).max_decimals(2).text("x char size"));
     });
     ui.horizontal(|ui| {
-        ui.label("Vertical Merge Tolerance (Y-Gap):");
-        ui.add(egui::Slider::new(&mut tp.layout.merge_y_gap, 0.1..=2.0).text("x char size"));
+        ui.label(i18n.txt_merge_y);
+        ui.add(egui::Slider::new(&mut tp.layout.merge_y_gap, 0.0..=5.0).step_by(0.01).max_decimals(2).text("x char size"));
     });
     ui.horizontal(|ui| {
-        ui.label("Inline Merge Tolerance (Same-Line X-Gap):");
-        ui.add(egui::Slider::new(&mut tp.layout.inline_x_gap, 0.1..=1.5).text("x char size"));
+        ui.label(i18n.txt_inline_x);
+        ui.add(egui::Slider::new(&mut tp.layout.inline_x_gap, 0.0..=5.0).step_by(0.01).max_decimals(2).text("x char size"));
     });
 
     ui.add_space(16.0);
@@ -113,7 +113,7 @@ pub fn render_tab_text_processing(
         ui.end_row();
 
         // Chinese
-        ui.label(egui::RichText::new("Chinese:").strong());
+        ui.label(egui::RichText::new(i18n.lang_chinese).strong());
         ui.horizontal(|ui| {
             egui::ComboBox::from_id_salt("cn_conv_sel")
                 .selected_text(match tp.cn_conversion {
@@ -131,7 +131,7 @@ pub fn render_tab_text_processing(
         ui.end_row();
 
         // Thai
-        ui.label(egui::RichText::new("Thai:").strong());
+        ui.label(egui::RichText::new(i18n.lang_thai).strong());
         ui.vertical(|ui| {
             egui::ComboBox::from_id_salt("th_seg_sel")
                 .selected_text(match tp.th_segmentation {

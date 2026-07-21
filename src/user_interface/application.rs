@@ -61,11 +61,12 @@ impl App {
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
         let snapshot = { self.model.lock().clone() };
+        let i18n = crate::user_interface::i18n::get_i18n(self.settings.ui_language);
         for (i, slot) in snapshot.slots.iter().enumerate() {
             if !slot.popup_open {
                 continue;
             }
-            transparent_overlay_renderer::render_popup_viewport(ctx, i, &self.model);
+            transparent_overlay_renderer::render_popup_viewport(ctx, i, &self.model, i18n);
         }
     }
 
@@ -79,6 +80,7 @@ impl App {
                 self.slots_runtime.push(SlotRuntimeState::new());
             }
 
+            let i18n = crate::user_interface::i18n::get_i18n(self.settings.ui_language);
             transparent_overlay_renderer::render_overlay_viewport(
                 ctx,
                 i,
@@ -86,6 +88,7 @@ impl App {
                 &self.slots_runtime[i],
                 &self.settings,
                 &self.services.platform,
+                i18n,
             );
 
             live_frame::render_live_frame_viewport(
@@ -701,7 +704,10 @@ impl eframe::App for App {
         // Sync active child viewports only when their visual state might have changed.
         // This avoids spamming wgpu with 144+ repaint requests per second unnecessarily,
         // which was causing severe lock contention, stuttering, and eventual GPU deadlocks.
-        if should_sync_children {
+        if should_sync_children || processed_any {
+            if self.show_settings {
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
+            }
             let m = self.model.lock();
             let num_slots = m.slots.len();
             for i in 0..num_slots {

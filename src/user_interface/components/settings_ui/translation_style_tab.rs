@@ -55,14 +55,14 @@ pub fn render_tab_translation_behavior(
             .num_columns(2)
             .spacing([20.0, 10.0])
             .show(ui, |ui| {
-                ui.label("Style Balance:");
+                ui.label(i18n.beh_style_balance);
                 ui.add(
                     egui::Slider::new(&mut beh.literal_natural_slider, 0.0..=1.0)
                         .text("Literal ↔ Natural"),
                 );
                 ui.end_row();
 
-                ui.label("AI Creativity:");
+                ui.label(i18n.beh_ai_creativity);
                 ui.add(
                     egui::Slider::new(&mut beh.creativity, 0.0..=1.0).text("Low (Strict) ↔ High"),
                 );
@@ -75,7 +75,7 @@ pub fn render_tab_translation_behavior(
 
         super::section_header(ui, i18n.beh_tone_rules);
         ui.horizontal(|ui| {
-            ui.label("Voice Tone:");
+            ui.label(i18n.beh_voice_tone);
             egui::ComboBox::from_id_salt("tone_combobox")
                 .selected_text(format!("{:?}", beh.tone))
                 .show_ui(ui, |ui| {
@@ -138,22 +138,22 @@ pub fn render_tab_translation_behavior(
             egui::CollapsingHeader::new("Edit Prompt Templates")
                 .default_open(true)
                 .show(ui, |ui| {
-                    ui.label(egui::RichText::new("Placeholders: {source_lang}, {target_lang}, {text}, {count}, {numbered_lines}").small().color(egui::Color32::GRAY));
+                    ui.label(egui::RichText::new(i18n.beh_prompt_placeholders).small().color(egui::Color32::GRAY));
                     ui.add_space(6.0);
 
-                    ui.label("System Prompt (Role & Guidelines):");
+                    ui.label(i18n.beh_system_prompt);
                     ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.system_prompt).desired_rows(3).desired_width(f32::INFINITY));
                     ui.add_space(6.0);
 
-                    ui.label("Single-line User Prompt Template:");
+                    ui.label(i18n.beh_single_line_prompt);
                     ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.single_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
                     ui.add_space(6.0);
 
-                    ui.label("Multi-line Batch User Prompt Template:");
+                    ui.label(i18n.beh_multi_line_prompt);
                     ui.add(egui::TextEdit::multiline(&mut beh.custom_prompts.multi_line_user_prompt).desired_rows(2).desired_width(f32::INFINITY));
                     ui.add_space(4.0);
 
-                    if ui.button("Reset to Default Prompts").clicked() {
+                    if ui.button(i18n.beh_reset_prompts).clicked() {
                         beh.custom_prompts = crate::infrastructure::settings::CustomPromptSettings {
                             enabled: true,
                             ..Default::default()
@@ -166,9 +166,9 @@ pub fn render_tab_translation_behavior(
         ui.separator();
         ui.add_space(8.0);
 
-        super::section_header(ui, "AI Memory & Context");
+        super::section_header(ui, i18n.beh_ai_memory);
         ui.horizontal(|ui| {
-            ui.label("Context Memory:");
+            ui.label(i18n.beh_context_memory);
             ui.add(
                 egui::Slider::new(&mut settings.realtime.context_window_size, 0..=5)
                     .text("Segments"),

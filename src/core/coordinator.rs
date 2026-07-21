@@ -254,7 +254,7 @@ impl SlotTask {
             match result {
                 Ok(res) => {
                     let _ = tx_inner.send(res);
-                    ctx_worker.request_repaint();
+                    crate::core::utils::wake_up_ui(&ctx_worker, slot_idx);
                 }
                 Err(e) => {
                     let _ = tx_inner.send(BgResult::Error {
@@ -262,7 +262,7 @@ impl SlotTask {
                         language_version,
                         err: format!("{e:#}"),
                     });
-                    ctx_worker.request_repaint();
+                    crate::core::utils::wake_up_ui(&ctx_worker, slot_idx);
                 }
             }
         }));
@@ -273,7 +273,7 @@ impl SlotTask {
                 language_version,
                 err: "Background thread panicked (system error)".to_string(),
             });
-            ctx_for_panic.request_repaint();
+            crate::core::utils::wake_up_ui(&ctx_for_panic, slot_idx);
         }
     }
 }
