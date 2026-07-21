@@ -44,7 +44,8 @@ fn main() -> eframe::Result<()> {
             .with_icon(std::sync::Arc::new(icon_data))
             .with_always_on_top()
             .with_resizable(true)
-            .with_transparent(true),
+            .with_transparent(true)
+            .with_inner_size([550.0, 300.0]),
         wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
             present_mode: eframe::wgpu::PresentMode::AutoNoVsync,
             ..Default::default()
