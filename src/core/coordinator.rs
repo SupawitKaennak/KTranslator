@@ -76,6 +76,7 @@ impl BackgroundCoordinator {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector::new(
                         settings.perf.gpu_backend,
+                        settings.perf.vram_limit_mb,
                     ),
                 ));
             }
@@ -94,6 +95,7 @@ impl BackgroundCoordinator {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector::new(
                         settings.perf.gpu_backend,
+                        settings.perf.vram_limit_mb,
                     ),
                 ));
             }

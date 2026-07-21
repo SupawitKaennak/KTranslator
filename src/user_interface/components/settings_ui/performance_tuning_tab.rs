@@ -111,6 +111,11 @@ pub fn render_tab_performance(
             });
             ui.end_row();
 
+            ui.label("Batch Translation:");
+            ui.add_enabled_ui(is_custom, |ui| {
+                ui.checkbox(&mut perf.enable_batching, "Send all OCR lines as one API call (faster)");
+            });
+            ui.end_row();
 
             ui.label(format!("{}:", i18n.perf_memory));
             ui.horizontal(|ui| {
@@ -143,6 +148,34 @@ pub fn render_tab_performance(
                         .small()
                         .color(egui::Color32::GRAY),
                 );
+            });
+            ui.end_row();
+
+            ui.label("Frame Stability Threshold:");
+            ui.horizontal(|ui| {
+                ui.add_enabled(
+                    is_custom,
+                    egui::Slider::new(&mut settings.realtime.stability_threshold_frames, 1..=10)
+                        .text("Frames"),
+                );
+                ui.label(
+                    egui::RichText::new("Identical frames required before translating (higher = less jitter for fast-scrolling text)")
+                        .small()
+                        .color(egui::Color32::GRAY),
+                );
+            });
+            ui.end_row();
+
+            ui.label("VRAM Limit:");
+            ui.horizontal(|ui| {
+                ui.add_enabled(
+                    is_custom,
+                    egui::Slider::new(&mut perf.vram_limit_mb, 0..=24576)
+                        .step_by(512.0)
+                        .text("MB"),
+                );
+                let tooltip_str = if perf.vram_limit_mb == 0 { "Unlimited" } else { "Hard cap applied to ONNX sessions" };
+                ui.label(egui::RichText::new(tooltip_str).small().color(egui::Color32::GRAY));
             });
             ui.end_row();
         });

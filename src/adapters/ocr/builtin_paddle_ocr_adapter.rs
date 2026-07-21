@@ -16,6 +16,7 @@ pub struct BuiltinPaddleOcr {
     models_dir: String,
     model_suite: Arc<Mutex<PpocrModelSuite>>,
     gpu_backend: crate::infrastructure::settings::GpuBackend,
+    vram_limit_mb: u32,
 }
 
 impl BuiltinPaddleOcr {
@@ -23,12 +24,14 @@ impl BuiltinPaddleOcr {
         models_dir: String,
         model_suite: PpocrModelSuite,
         gpu_backend: crate::infrastructure::settings::GpuBackend,
+        vram_limit_mb: u32,
     ) -> Self {
         Self {
             pipeline: Arc::new(Mutex::new(None)),
             models_dir,
             model_suite: Arc::new(Mutex::new(model_suite)),
             gpu_backend,
+            vram_limit_mb,
         }
     }
 
@@ -107,13 +110,19 @@ impl BuiltinPaddleOcr {
         let rec_str = rec_path.to_string_lossy().to_string();
         let dict_str = dict_path.to_string_lossy().to_string();
 
+        let vram_bytes = if self.vram_limit_mb > 0 {
+            Some(self.vram_limit_mb as usize * 1024 * 1024)
+        } else {
+            None
+        };
+
         let mut execution_providers = Vec::new();
         match self.gpu_backend {
             crate::infrastructure::settings::GpuBackend::Cuda
             | crate::infrastructure::settings::GpuBackend::TensorRt => {
                 execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::CUDA {
                     device_id: Some(0),
-                    gpu_mem_limit: None,
+                    gpu_mem_limit: vram_bytes,
                     arena_extend_strategy: None,
                     cudnn_conv_algo_search: None,
                     cudnn_conv_use_max_workspace: None,
@@ -127,7 +136,7 @@ impl BuiltinPaddleOcr {
             crate::infrastructure::settings::GpuBackend::Auto => {
                 execution_providers.push(oar_ocr::core::config::OrtExecutionProvider::CUDA {
                     device_id: Some(0),
-                    gpu_mem_limit: None,
+                    gpu_mem_limit: vram_bytes,
                     arena_extend_strategy: None,
                     cudnn_conv_algo_search: None,
                     cudnn_conv_use_max_workspace: None,

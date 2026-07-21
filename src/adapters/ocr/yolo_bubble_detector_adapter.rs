@@ -15,13 +15,15 @@ pub type BubbleBox = DetectionBox;
 pub struct YoloBubbleDetector {
     session: Arc<Mutex<Option<Session>>>,
     gpu_backend: GpuBackend,
+    vram_limit_mb: u32,
 }
 
 impl YoloBubbleDetector {
-    pub fn new(gpu_backend: GpuBackend) -> Self {
+    pub fn new(gpu_backend: GpuBackend, vram_limit_mb: u32) -> Self {
         Self {
             session: Arc::new(Mutex::new(None)),
             gpu_backend,
+            vram_limit_mb,
         }
     }
 
@@ -50,6 +52,7 @@ impl YoloBubbleDetector {
         let session = super::onnx_inference_engine::OnnxEngine::create_session(
             &resolved_path,
             self.gpu_backend,
+            self.vram_limit_mb,
         )?;
         *session_guard = Some(session);
         Ok(())

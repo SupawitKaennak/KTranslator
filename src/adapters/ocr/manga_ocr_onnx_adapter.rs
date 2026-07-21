@@ -20,12 +20,13 @@ pub struct OnnxMangaRecognizer {
     tokenizer: Arc<Mutex<Option<Tokenizer>>>,
     models_dir: std::path::PathBuf,
     gpu_backend: GpuBackend,
+    vram_limit_mb: u32,
     decoder_start_token_id: i64,
     eos_token_id: i64,
 }
 
 impl OnnxMangaRecognizer {
-    pub fn new<P: AsRef<Path>>(models_dir: P, gpu_backend: GpuBackend) -> Self {
+    pub fn new<P: AsRef<Path>>(models_dir: P, gpu_backend: GpuBackend, vram_limit_mb: u32) -> Self {
         Self {
             encoder: Arc::new(Mutex::new(None)),
             decoder: Arc::new(Mutex::new(None)),
@@ -33,6 +34,7 @@ impl OnnxMangaRecognizer {
             tokenizer: Arc::new(Mutex::new(None)),
             models_dir: models_dir.as_ref().to_path_buf(),
             gpu_backend,
+            vram_limit_mb,
             decoder_start_token_id: 2,
             eos_token_id: 3,
         }
@@ -80,13 +82,18 @@ impl OnnxMangaRecognizer {
         let encoder = super::onnx_inference_engine::OnnxEngine::create_session(
             &encoder_path,
             self.gpu_backend,
+            self.vram_limit_mb,
         )?;
         let decoder = super::onnx_inference_engine::OnnxEngine::create_session(
             &decoder_path,
             self.gpu_backend,
+            self.vram_limit_mb,
         )?;
-        let yolo =
-            super::onnx_inference_engine::OnnxEngine::create_session(&yolo_path, self.gpu_backend)?;
+        let yolo = super::onnx_inference_engine::OnnxEngine::create_session(
+            &yolo_path,
+            self.gpu_backend,
+            self.vram_limit_mb,
+        )?;
 
         let tokenizer = Tokenizer::from_file(tokenizer_path)
             .map_err(|e| anyhow::anyhow!("Tokenizer Error: {}", e))?;
