@@ -31,6 +31,7 @@ impl OcrAdapterFactory {
                         "models/ppocr".to_string(),
                         settings.ppocr_model,
                         settings.perf.gpu_backend,
+                        settings.perf.vram_limit_mb,
                     )
                 }) {
                     Ok(engine) => (Arc::new(engine), None),
@@ -46,6 +47,7 @@ impl OcrAdapterFactory {
                 Arc::new(OnnxMangaRecognizer::new(
                     "models/manga-ocr",
                     settings.perf.gpu_backend,
+                    settings.perf.vram_limit_mb,
                 )),
                 None,
             ),

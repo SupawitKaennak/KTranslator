@@ -141,16 +141,6 @@ pub fn render_overlay_viewport(
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
                     let yolo_bubbles = slot.last_yolo_bubbles.clone();
-                    tracing::debug!(
-                        slot = slot_idx,
-                        overlay_mode = slot.overlay_mode,
-                        has_translation = !slot.last_translation.is_empty(),
-                        translation_len = slot.last_translation.len(),
-                        ocr_lines_count = slot.last_ocr_lines.len(),
-                        trans_lines_count = slot.last_trans_lines.len(),
-                        show_overlay,
-                        "overlay_viewport paint check"
-                    );
                     drop(m);
 
                     if show_overlay {
@@ -158,34 +148,38 @@ pub fn render_overlay_viewport(
                         // The OS uses pure black RGB(0,0,0) as the transparent window color key.
                         // Full black pixels are made transparent by Windows DWM.
                         // Font anti-aliasing blending can cause near-black pixels to round down to 0,0,0.
-                        // Shift very dark colors to a safe minimum RGB(12,12,12) to ensure a perfectly solid overlay.
+                        // Shift very dark colors dynamically to ensure they don't multiply to 0 (which becomes a transparent hole).
+                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
+                        let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(12).max(1);
+
                         let mut bg_r = overlay_settings.overlay_bg_color[0];
                         let mut bg_g = overlay_settings.overlay_bg_color[1];
                         let mut bg_b = overlay_settings.overlay_bg_color[2];
-                        if bg_r <= 8 && bg_g <= 8 && bg_b <= 8 {
-                            bg_r = 12; bg_g = 12; bg_b = 12;
+                        if bg_r < safe_bg_val && bg_g < safe_bg_val && bg_b < safe_bg_val {
+                            bg_r = safe_bg_val; bg_g = safe_bg_val; bg_b = safe_bg_val;
                         }
+
+                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
+                        let safe_txt_val = if txt_a > 0.0 { (0.5 / txt_a).ceil() as u8 } else { 1 }.min(12).max(1);
 
                         let mut txt_r = overlay_settings.overlay_text_color[0];
                         let mut txt_g = overlay_settings.overlay_text_color[1];
                         let mut txt_b = overlay_settings.overlay_text_color[2];
-                        if txt_r <= 8 && txt_g <= 8 && txt_b <= 8 {
-                            txt_r = 12; txt_g = 12; txt_b = 12;
+                        if txt_r < safe_txt_val && txt_g < safe_txt_val && txt_b < safe_txt_val {
+                            txt_r = safe_txt_val; txt_g = safe_txt_val; txt_b = safe_txt_val;
                         }
 
-                        let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
                         let overlay_bg_color = egui::Color32::from_rgba_premultiplied(
-                            (bg_r as f32 * bg_a) as u8,
-                            (bg_g as f32 * bg_a) as u8,
-                            (bg_b as f32 * bg_a) as u8,
+                            (bg_r as f32 * bg_a).round() as u8,
+                            (bg_g as f32 * bg_a).round() as u8,
+                            (bg_b as f32 * bg_a).round() as u8,
                             overlay_settings.overlay_bg_color[3],
                         );
 
-                        let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
                         let overlay_text_color = egui::Color32::from_rgba_premultiplied(
-                            (txt_r as f32 * txt_a) as u8,
-                            (txt_g as f32 * txt_a) as u8,
-                            (txt_b as f32 * txt_a) as u8,
+                            (txt_r as f32 * txt_a).round() as u8,
+                            (txt_g as f32 * txt_a).round() as u8,
+                            (txt_b as f32 * txt_a).round() as u8,
                             overlay_settings.overlay_text_color[3],
                         );
                         let overlay_padding = overlay_settings.overlay_padding;

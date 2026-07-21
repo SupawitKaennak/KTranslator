@@ -85,13 +85,6 @@ pub const PPOCR_MOBILE_MODELS: [ModelAsset<'static>; 3] = [
 
 
 
-pub const PPOCR_DICT_JAPANESE: ModelAsset<'static> = ModelAsset {
-    name: "PP-OCR Dictionary (Japanese)",
-    url: "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/japan_dict.txt",
-    path: "models/ppocr/japan_dict.txt",
-};
-
-
 
 pub const BUBBLE_YOLO_MODEL: ModelAsset<'static> = ModelAsset {
     name: "YOLO Bubble Detector (Manga-Bubble-YOLO)",
@@ -105,30 +98,26 @@ pub const CRAFT_TEXT_DETECTOR_MODEL: ModelAsset<'static> = ModelAsset {
     path: "models/craft/craft.onnx",
 };
 
-pub fn check_bubble_yolo_exists() -> bool {
-    let mut p = PathBuf::from(BUBBLE_YOLO_MODEL.path);
+/// Generic helper to check if a model file exists and is large enough to be valid.
+pub fn check_model_exists(asset: &ModelAsset<'_>, min_bytes: u64) -> bool {
+    let mut p = PathBuf::from(asset.path);
     if let Ok(exe_path) = std::env::current_exe() {
         if let Some(exe_dir) = exe_path.parent() {
-            p = exe_dir.join(BUBBLE_YOLO_MODEL.path);
-        }
-    }
-    p.exists()
-        && fs::metadata(&p)
-            .map(|m| m.len() > 5 * 1024 * 1024)
-            .unwrap_or(false)
-}
-
-pub fn check_craft_exists() -> bool {
-    let mut p = PathBuf::from(CRAFT_TEXT_DETECTOR_MODEL.path);
-    if let Ok(exe_path) = std::env::current_exe() {
-        if let Some(exe_dir) = exe_path.parent() {
-            p = exe_dir.join(CRAFT_TEXT_DETECTOR_MODEL.path);
+            p = exe_dir.join(asset.path);
         }
     }
     match fs::metadata(&p) {
-        Ok(m) => m.is_file() && m.len() > 1024 * 1024,
+        Ok(m) => m.is_file() && m.len() > min_bytes,
         Err(_) => false,
     }
+}
+
+pub fn check_bubble_yolo_exists() -> bool {
+    check_model_exists(&BUBBLE_YOLO_MODEL, 5 * 1024 * 1024)
+}
+
+pub fn check_craft_exists() -> bool {
+    check_model_exists(&CRAFT_TEXT_DETECTOR_MODEL, 1024 * 1024)
 }
 
 pub use crate::core::types::DownloadProgress;
@@ -246,63 +235,16 @@ pub async fn download_models(
 }
 
 /// Download PP-OCR models for Built-in PaddleOCR.
+/// `suite` is passed explicitly (from the current in-memory settings) rather than
+/// re-loading from disk, so the correct model set is always downloaded.
 pub async fn download_ppocr_models(
     progress_tx: tokio::sync::mpsc::UnboundedSender<DownloadProgress>,
     force: bool,
+    suite: crate::infrastructure::settings::PpocrModelSuite,
 ) -> Result<()> {
-    let settings = crate::infrastructure::settings::load_settings().unwrap_or_default();
-
-    // 1. Detection Model URL
     let det_url = PPOCR_MOBILE_MODELS[0].url;
-
-    // 2. Recognition Model URL
-    let rec_url = match settings.ppocr_model {
-        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => PPOCR_MOBILE_MODELS[1].url,
-        
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile =>
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/japan_pp-ocrv3_mobile_rec.onnx",
-
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile =>
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/korean_pp-ocrv5_mobile_rec.onnx",
-
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile =>
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/th_pp-ocrv5_mobile_rec.onnx",
-
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile =>
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/latin_pp-ocrv5_mobile_rec.onnx",
-
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile =>
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/cyrillic_pp-ocrv5_mobile_rec.onnx",
-    };
-
-    // 3. Dictionary URL
-    let dict_url = match settings.ppocr_model {
-        crate::infrastructure::settings::PpocrModelSuite::CnEnMobile => {
-            PPOCR_MOBILE_MODELS[2].url
-        }
-
-        crate::infrastructure::settings::PpocrModelSuite::JapaneseMobile => {
-            PPOCR_DICT_JAPANESE.url // v3 dict from paddle repo
-        }
-
-        crate::infrastructure::settings::PpocrModelSuite::KoreanMobile => {
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_korean_dict.txt"
-        }
-
-        crate::infrastructure::settings::PpocrModelSuite::ThaiMobile => {
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_th_dict.txt"
-        }
-
-        crate::infrastructure::settings::PpocrModelSuite::LatinMobile => {
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_latin_dict.txt"
-        }
-
-        crate::infrastructure::settings::PpocrModelSuite::CyrillicMobile => {
-            "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_cyrillic_dict.txt"
-        }
-    };
-
-    let folder_name = settings.ppocr_model.folder_name();
+    let (rec_url, dict_url) = suite.get_urls();
+    let folder_name = suite.folder_name();
 
     // Construct persistent path names within isolated subset directories
     let base_p = format!("models/ppocr/{}", folder_name);

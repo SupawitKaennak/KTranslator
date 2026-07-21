@@ -13,12 +13,14 @@ const TICK_HASH_FOLLOWUP_MS: u64 = 30;
 const TICK_DEBOUNCE_POLL_MS: u64 = 16;
 /// Rate limit exponential backoff base (seconds).
 const RATE_LIMIT_BASE_SECS: u64 = 30;
-/// Bad request retry delay (milliseconds).
+/// Server/network error base retry delay (milliseconds).
+const SERVER_ERROR_BASE_MS: u64 = 5_000;
+/// Default error base retry delay (milliseconds).
+const DEFAULT_ERROR_BASE_MS: u64 = 3_000;
+/// Maximum retry delay cap (milliseconds) — 2 minutes.
+const MAX_RETRY_DELAY_MS: u64 = 120_000;
+/// Bad request retry delay (milliseconds) — fixed, no backoff.
 const BAD_REQUEST_RETRY_MS: u64 = 10_000;
-/// Server/network error retry delay (milliseconds).
-const SERVER_ERROR_RETRY_MS: u64 = 5_000;
-/// Default error retry delay (milliseconds).
-const DEFAULT_ERROR_RETRY_MS: u64 = 3_000;
 
 pub struct ResultDispatcher;
 
@@ -418,7 +420,7 @@ impl ResultDispatcher {
                 let multiplier = 2u64.pow(runtime.error_streak.saturating_sub(1).min(5));
                 let secs = RATE_LIMIT_BASE_SECS * multiplier;
                 (
-                    secs * 1000,
+                    (secs * 1000).min(MAX_RETRY_DELAY_MS),
                     format!(
                         "Region {}: API rate limit hit — retrying in {secs}s",
                         slot_idx + 1
@@ -434,18 +436,24 @@ impl ResultDispatcher {
                     ),
                 )
             } else if is_server_err {
+                // Exponential backoff: 5s → 10s → 20s → 40s → 80s → 120s (cap)
+                let multiplier = 2u64.pow(runtime.error_streak.saturating_sub(1).min(5));
+                let delay_ms = (SERVER_ERROR_BASE_MS * multiplier).min(MAX_RETRY_DELAY_MS);
+                let delay_secs = delay_ms / 1000;
                 (
-                    SERVER_ERROR_RETRY_MS,
+                    delay_ms,
                     format!(
-                        "Region {}: Server/Network error — retrying in {}s",
-                        slot_idx + 1,
-                        SERVER_ERROR_RETRY_MS / 1000
+                        "Region {}: Server/Network error — retrying in {delay_secs}s",
+                        slot_idx + 1
                     ),
                 )
             } else {
+                // Exponential backoff for unknown errors: 3s → 6s → 12s → … → 120s (cap)
+                let multiplier = 2u64.pow(runtime.error_streak.saturating_sub(1).min(5));
+                let delay_ms = (DEFAULT_ERROR_BASE_MS * multiplier).min(MAX_RETRY_DELAY_MS);
                 let first_line = err.lines().next().unwrap_or(&err).trim().to_string();
                 (
-                    DEFAULT_ERROR_RETRY_MS,
+                    delay_ms,
                     format!("Region {}: {first_line}", slot_idx + 1),
                 )
             };

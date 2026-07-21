@@ -19,7 +19,7 @@ pub fn render_tab_debugging(
 
     ui.checkbox(
         &mut settings.show_yolo_debug_borders,
-        "Show Text Detection Borders (YOLO/CRAFT Debug)",
+        i18n.show_yolo_debug_borders,
     );
     ui.add_space(10.0);
 

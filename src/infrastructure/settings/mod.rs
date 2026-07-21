@@ -25,7 +25,8 @@ pub struct Settings {
     pub game_ocr_engine: OcrEngineType,
     pub manga_ocr_engine: OcrEngineType,
     pub document_ocr_engine: OcrEngineType,
-    pub ocr_engine: OcrEngineType, // Keep for backward compatibility or as fallback
+    #[serde(skip)] // Legacy field — engine is now selected per-mode (game/manga/document_ocr_engine)
+    pub ocr_engine: OcrEngineType,
     pub ppocr_model: PpocrModelSuite,
     #[serde(skip_serializing)]
     pub gemini_api_key: String,
@@ -143,6 +144,21 @@ impl Default for Settings {
             realtime: RealtimeStabilitySettings::default(),
             perf: PerformanceSettings::default(),
         }
+    }
+}
+
+impl Settings {
+    /// Reset all settings to factory defaults while keeping stored API keys.
+    pub fn reset_preserving_secrets(&self) -> Self {
+        let mut fresh = Settings::default();
+        fresh.gemini_api_key = self.gemini_api_key.clone();
+        fresh.groq_api_key = self.groq_api_key.clone();
+        fresh.custom_openai_api_key = self.custom_openai_api_key.clone();
+        fresh.claude_api_key = self.claude_api_key.clone();
+        fresh.deepseek_api_key = self.deepseek_api_key.clone();
+        fresh.deepl_api_key = self.deepl_api_key.clone();
+        fresh.azure_openai_api_key = self.azure_openai_api_key.clone();
+        fresh
     }
 }
 

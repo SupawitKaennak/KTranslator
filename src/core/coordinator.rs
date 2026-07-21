@@ -39,6 +39,11 @@ impl BackgroundCoordinator {
         }
     }
 
+    pub fn invalidate_detectors(&self) {
+        *self.yolo_bubble.lock() = None;
+        *self.craft_text.lock() = None;
+    }
+
     #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
     pub fn tick(
         &self,
@@ -64,9 +69,10 @@ impl BackgroundCoordinator {
             return;
         }
 
-        let yolo_detector = if settings.use_yolo_bubble
+        let yolo_detector = if settings.text_detector
+            == crate::infrastructure::settings::TextDetectorMode::YoloBubble
             || settings.text_detector
-                == crate::infrastructure::settings::TextDetectorMode::YoloBubble
+                == crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid
         {
             let mut guard = self.yolo_bubble.lock();
             if guard.is_none()
@@ -75,6 +81,7 @@ impl BackgroundCoordinator {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::yolo_bubble_detector_adapter::YoloBubbleDetector::new(
                         settings.perf.gpu_backend,
+                        settings.perf.vram_limit_mb,
                     ),
                 ));
             }
@@ -93,6 +100,7 @@ impl BackgroundCoordinator {
                 *guard = Some(Arc::new(
                     crate::adapters::ocr::craft_text_detector_adapter::CraftTextDetector::new(
                         settings.perf.gpu_backend,
+                        settings.perf.vram_limit_mb,
                     ),
                 ));
             }

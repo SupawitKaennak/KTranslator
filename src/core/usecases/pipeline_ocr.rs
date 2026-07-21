@@ -24,7 +24,16 @@ pub fn perform_ocr(
         text_detector_mode,
         TextDetectorMode::YoloBubble | TextDetectorMode::CraftRegion | TextDetectorMode::YoloFullPageHybrid
     ) {
-        image::RgbaImage::from_raw(frame.width, frame.height, (*frame.data).clone())
+        // frame.data is BGRA from Windows GDI. Swap B and R to make it proper RGBA
+        let mut rgba_data = (*frame.data).clone();
+        for chunk in rgba_data.chunks_exact_mut(4) {
+            let b = chunk[0];
+            let r = chunk[2];
+            chunk[0] = r;
+            chunk[2] = b;
+        }
+
+        image::RgbaImage::from_raw(frame.width, frame.height, rgba_data)
             .map(image::DynamicImage::ImageRgba8)
     } else {
         None

@@ -77,15 +77,15 @@ pub fn render_tab_text_processing(
 
     ui.horizontal(|ui| {
         ui.label("Horizontal Merge Tolerance (X-Gap):");
-        ui.add(egui::Slider::new(&mut tp.layout.merge_x_gap, 0.1..=2.0).text("x char size"));
+        ui.add(egui::Slider::new(&mut tp.layout.merge_x_gap, 0.0..=5.0).step_by(0.01).max_decimals(2).text("x char size"));
     });
     ui.horizontal(|ui| {
         ui.label("Vertical Merge Tolerance (Y-Gap):");
-        ui.add(egui::Slider::new(&mut tp.layout.merge_y_gap, 0.1..=2.0).text("x char size"));
+        ui.add(egui::Slider::new(&mut tp.layout.merge_y_gap, 0.0..=5.0).step_by(0.01).max_decimals(2).text("x char size"));
     });
     ui.horizontal(|ui| {
         ui.label("Inline Merge Tolerance (Same-Line X-Gap):");
-        ui.add(egui::Slider::new(&mut tp.layout.inline_x_gap, 0.1..=1.5).text("x char size"));
+        ui.add(egui::Slider::new(&mut tp.layout.inline_x_gap, 0.0..=5.0).step_by(0.01).max_decimals(2).text("x char size"));
     });
 
     ui.add_space(16.0);
@@ -109,7 +109,6 @@ pub fn render_tab_text_processing(
             ui.checkbox(&mut tp.jp_merge_vertical, i18n.jp_merge_v);
             ui.checkbox(&mut tp.jp_kana_normalization, i18n.jp_kana_norm);
             ui.checkbox(&mut tp.jp_remove_furigana, i18n.jp_strip_furi);
-            ui.checkbox(&mut tp.jp_preserve_honorifics, i18n.jp_honorifics);
         });
         ui.end_row();
 

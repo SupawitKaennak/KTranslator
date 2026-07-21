@@ -23,6 +23,23 @@ use crate::{
 // App
 // ---------------------------------------------------------------------------
 
+/// Request repaint on all active child viewports (overlay, live frame, popup).
+pub(crate) fn request_child_viewport_repaints(ctx: &egui::Context, model: &AppModel) {
+    for (i, slot) in model.slots.iter().enumerate() {
+        if slot.enabled {
+            if slot.show_frame && slot.rect.is_some() {
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_live_{i}")));
+            }
+            if slot.overlay_mode && slot.rect.is_some() {
+                ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("frame_overlay_{i}")));
+            }
+        }
+        if slot.popup_open {
+            ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{i}")));
+        }
+    }
+}
+
 pub struct App {
     pub(crate) model: Arc<Mutex<AppModel>>,
     pub(crate) settings: Settings,
@@ -52,11 +69,126 @@ pub struct App {
     pub(crate) error_dismiss_rx: mpsc::Receiver<()>,
 
     pub(crate) downloads: crate::user_interface::application_services::DownloadManager,
+
+    /// Shared flag: settings viewport sets this; main window reads it for cross-viewport sync.
+    pub(crate) settings_sync_pending: Arc<std::sync::atomic::AtomicBool>,
+
+    pub(crate) settings_save_pending: bool,
+    pub(crate) last_settings_update_ms: u64,
 }
 
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         crate::user_interface::application_initializer::build_app(cc)
+    }
+
+    fn force_reprocess_all_slots(&mut self) {
+        {
+            let mut model = self.model.lock();
+            for slot in &mut model.slots {
+                slot.last_ocr_text.clear();
+                slot.last_translation.clear();
+                slot.last_ocr_lines.clear();
+                slot.last_trans_lines.clear();
+                slot.last_yolo_bubbles.clear();
+                slot.stable_hash = 0;
+                slot.stable_since_ms = 0;
+                slot.next_tick_at_ms = 0;
+                slot.pending_text.clear();
+            }
+        }
+        for runtime in &mut self.slots_runtime {
+            runtime.last_hash = 0;
+            runtime.first_unstable_at = 0;
+            runtime.last_stable_ocr_text.clear();
+            runtime.persistent_translation.lock().take();
+            runtime.persistent_ocr_lines.lock().clear();
+            runtime.persistent_trans_lines.lock().clear();
+            runtime.recent_translations.clear();
+        }
+        self.caches.translation.lock().clear();
+        self.caches.text_translation.lock().clear();
+    }
+
+    fn apply_settings_update(&mut self, ctx: &egui::Context, updated: Settings) {
+        let current_engine_type =
+            crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
+                &updated,
+            );
+        let old_engine_type =
+            crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
+                &self.settings,
+            );
+        let rebuild_ocr = current_engine_type != old_engine_type
+            || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
+
+        let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
+        let realtime_changed = updated.realtime != self.settings.realtime;
+        let txt_proc_changed = updated.txt_proc != self.settings.txt_proc;
+        let img_proc_changed = updated.img_proc != self.settings.img_proc;
+        let text_detector_changed = updated.text_detector != self.settings.text_detector;
+        let overlay_display_changed = updated.overlay_bg_color != self.settings.overlay_bg_color
+            || updated.overlay_text_color != self.settings.overlay_text_color
+            || updated.overlay_font_size != self.settings.overlay_font_size
+            || updated.overlay_padding != self.settings.overlay_padding
+            || updated.overlay_corner_radius != self.settings.overlay_corner_radius
+            || updated.overlay_text_align != self.settings.overlay_text_align
+            || updated.show_yolo_debug_borders != self.settings.show_yolo_debug_borders;
+
+        let rebuild_trans = updated.provider != self.settings.provider
+            || updated.gemini_api_key != self.settings.gemini_api_key
+            || updated.gemini_model != self.settings.gemini_model
+            || updated.groq_api_key != self.settings.groq_api_key
+            || updated.groq_model != self.settings.groq_model
+            || updated.ollama_url != self.settings.ollama_url
+            || updated.ollama_model != self.settings.ollama_model
+            || updated.custom_openai_url != self.settings.custom_openai_url
+            || updated.custom_openai_api_key != self.settings.custom_openai_api_key
+            || updated.custom_openai_model != self.settings.custom_openai_model
+            || trans_behavior_changed;
+
+        if text_detector_changed || updated.perf.gpu_backend != self.settings.perf.gpu_backend {
+            self.coordinator.invalidate_detectors();
+        }
+
+        self.settings = updated;
+        self.settings_save_pending = true;
+        self.last_settings_update_ms = crate::core::utils::now_ms();
+
+        if rebuild_trans {
+            self.services.translator = create_translator(&self.settings);
+            if trans_behavior_changed {
+                self.caches.translation.lock().clear();
+                self.caches.text_translation.lock().clear();
+            }
+        }
+        if realtime_changed || txt_proc_changed || img_proc_changed || text_detector_changed {
+            self.force_reprocess_all_slots();
+        } else if trans_behavior_changed {
+            for rt in &mut self.slots_runtime {
+                rt.recent_translations.clear();
+            }
+            self.caches.translation.lock().clear();
+            self.caches.text_translation.lock().clear();
+        }
+
+        if rebuild_ocr {
+            let (new_engine, err_opt) =
+                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(
+                    &self.settings,
+                );
+            self.services.ocr_engine = new_engine;
+            if let Some(err) = err_opt {
+                self.err_handler.report_simple(err);
+            }
+        }
+
+        if overlay_display_changed || img_proc_changed || text_detector_changed {
+            let snapshot = self.model.lock().clone();
+            request_child_viewport_repaints(ctx, &snapshot);
+        }
+
+        ctx.request_repaint();
     }
 
     fn ui_popups(&mut self, ctx: &egui::Context) {
@@ -125,6 +257,9 @@ impl App {
             let actual_tx = self.downloads.progress_tx.clone();
             let ctx_clone = ctx.clone();
             let model_clone = self.model.clone();
+            // Capture the current in-memory ppocr_model so the correct suite is downloaded
+            // even if the user hasn't saved settings yet.
+            let ppocr_suite = self.settings.ppocr_model;
 
             // DROPPING THE CURRENT ENGINE TO RELEASE FILE LOCKS!
             // If the user clicks Reinstall, the current engine might be locking the .onnx files.
@@ -155,7 +290,7 @@ impl App {
                             let _ = crate::infrastructure::asset_download_manager::download_models(proxy_tx, true).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BuiltinPaddle => {
-                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx, true).await;
+                            let _ = crate::infrastructure::asset_download_manager::download_ppocr_models(proxy_tx, true, ppocr_suite).await;
                         }
                         crate::infrastructure::settings::OcrEngineType::BubbleYOLO => {
                             let _ = crate::infrastructure::asset_download_manager::download_bubble_yolo_model(proxy_tx, true).await;
@@ -235,9 +370,9 @@ impl App {
         processed_any
     }
 
-    fn ui_settings(&mut self, ctx: &egui::Context) {
+    fn ui_settings(&mut self, ctx: &egui::Context) -> bool {
         if !self.show_settings {
-            return;
+            return false;
         }
 
         let settings_arc = self.settings_ctrl.begin_edit(&self.settings);
@@ -249,69 +384,14 @@ impl App {
             self.model.clone(),
             self.downloads.trigger_tx.clone(),
             &self.slots_runtime,
+            self.settings_sync_pending.clone(),
         );
 
         let updated = settings_arc.lock().clone();
+        let mut settings_changed = false;
         if updated != self.settings {
-            let current_engine_type =
-                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
-                    &updated,
-                );
-            let old_engine_type =
-                crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::get_active_engine_type(
-                    &self.settings,
-                );
-            let rebuild_ocr = current_engine_type != old_engine_type
-                || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
-
-            let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
-            let realtime_changed = updated.realtime != self.settings.realtime;
-            let txt_proc_changed = updated.txt_proc != self.settings.txt_proc;
-            let rebuild_trans = updated.provider != self.settings.provider
-                || updated.gemini_api_key != self.settings.gemini_api_key
-                || updated.gemini_model != self.settings.gemini_model
-                || updated.groq_api_key != self.settings.groq_api_key
-                || updated.groq_model != self.settings.groq_model
-                || updated.ollama_url != self.settings.ollama_url
-                || updated.ollama_model != self.settings.ollama_model
-                || updated.custom_openai_url != self.settings.custom_openai_url
-                || updated.custom_openai_api_key != self.settings.custom_openai_api_key
-                || updated.custom_openai_model != self.settings.custom_openai_model
-                || trans_behavior_changed;
-
-            self.settings = updated;
-            if let Err(e) = save_settings(&self.settings) {
-                self.err_handler.report_simple(format!("{e:#}"));
-            } else {
-                if rebuild_trans {
-                    self.services.translator = create_translator(&self.settings);
-                    if trans_behavior_changed {
-                        self.caches.translation.lock().clear();
-                        self.caches.text_translation.lock().clear();
-                    }
-                }
-                if realtime_changed || txt_proc_changed {
-                    for rt in &mut self.slots_runtime {
-                        rt.recent_translations.clear();
-                    }
-                    self.caches.translation.lock().clear();
-                    self.caches.text_translation.lock().clear();
-                }
-
-                if rebuild_ocr {
-                    let (new_engine, err_opt) =
-                        crate::adapters::ocr::ocr_adapter_factory::OcrAdapterFactory::create_engine(
-                            &self.settings,
-                        );
-                    self.services.ocr_engine = new_engine;
-                    if let Some(err) = err_opt {
-                        self.err_handler.report_simple(err);
-                    }
-                }
-            }
-
-            // Request immediate repaint to show live update results on screen
-            ctx.request_repaint();
+            settings_changed = true;
+            self.apply_settings_update(ctx, updated);
         }
 
         let close_requested = ctx
@@ -327,6 +407,11 @@ impl App {
             );
             ctx.request_repaint();
         }
+
+        settings_changed
+            || self
+                .settings_sync_pending
+                .swap(false, std::sync::atomic::Ordering::Relaxed)
     }
 
     fn ui_error_popup(&mut self, ctx: &egui::Context) {
@@ -423,12 +508,22 @@ impl App {
 
 impl eframe::App for App {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        // Essential for transparent viewports:
-        // Force the GPU background clear color to be fully transparent.
         [0.0, 0.0, 0.0, 0.0]
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.settings_save_pending {
+            let now = crate::core::utils::now_ms();
+            if now.saturating_sub(self.last_settings_update_ms) > 1000 {
+                self.settings_save_pending = false;
+                if let Err(e) = save_settings(&self.settings) {
+                    self.err_handler.report_simple(format!("Failed to save settings: {e:#}"));
+                }
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_millis(500));
+            }
+        }
+
         let i18n = get_i18n(self.settings.ui_language);
         let processed_any = self.tick_background(ctx);
         self.ui_error_popup(ctx);
@@ -445,9 +540,10 @@ impl eframe::App for App {
 
         // Track if user interacted with UI to trigger a child sync (e.g. clicked Clear Cache)
         let ui_interacted = ctx.is_using_pointer() || ctx.wants_keyboard_input() || ctx.input(|i| i.pointer.any_click());
-        // Settings window can also request a sync by setting this flag
-        let force_sync = ctx.data_mut(|d| d.remove_temp::<bool>(egui::Id::new("force_sync_children"))).unwrap_or(false);
-        let should_sync_children = processed_any || ui_interacted || force_sync;
+        let settings_sync_pending = self
+            .settings_sync_pending
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let should_sync_children = processed_any || ui_interacted || settings_sync_pending;
 
         if let Some(sess) = &self.region_session {
             run_region_viewport(
@@ -539,7 +635,8 @@ impl eframe::App for App {
                             visuals.widgets.open.corner_radius = 6.0.into();
                             ctx.set_visuals(visuals);
                             ctx.request_repaint_of(egui::ViewportId::from_hash_of("settings_viewport"));
-                            ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
+                            self.settings_sync_pending
+                                .store(true, std::sync::atomic::Ordering::Relaxed);
                             let _ = save_settings(&self.settings);
                         }
 
@@ -656,20 +753,16 @@ impl eframe::App for App {
             }
         });
 
-        // Request resize if the current window height is different
-        let current_size = ctx.screen_rect().size();
-        if (current_size.y - required_height).abs() > 2.0
-            || (current_size.x - required_width).abs() > 2.0
-        {
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(
-                required_width,
-                required_height,
-            )));
-        }
 
-        self.ui_settings(ctx);
+
+        let settings_changed = self.ui_settings(ctx);
         self.ui_popups(ctx);
         self.ui_frames(ctx);
+
+        if settings_changed {
+            let snapshot = self.model.lock().clone();
+            request_child_viewport_repaints(ctx, &snapshot);
+        }
 
         let mut min_wait_ms = u64::MAX;
         if self.model.lock().running {
@@ -698,7 +791,7 @@ impl eframe::App for App {
         // Sync active child viewports only when their visual state might have changed.
         // This avoids spamming wgpu with 144+ repaint requests per second unnecessarily,
         // which was causing severe lock contention, stuttering, and eventual GPU deadlocks.
-        if should_sync_children {
+        if should_sync_children || self.show_settings {
             let m = self.model.lock();
             let num_slots = m.slots.len();
             for i in 0..num_slots {
@@ -715,6 +808,12 @@ impl eframe::App for App {
                     ctx.request_repaint_of(egui::ViewportId::from_hash_of(format!("popup_{}", i)));
                 }
             }
+        }
+    }
+
+    fn on_exit(&mut self) {
+        if self.settings_save_pending {
+            let _ = save_settings(&self.settings);
         }
     }
 }

@@ -65,6 +65,7 @@ pub fn show_settings_window(
     model_arc: Arc<Mutex<crate::core::region_slot_state::AppModel>>,
     download_trigger_tx: std::sync::mpsc::Sender<crate::infrastructure::settings::OcrEngineType>,
     slots_runtime: &[crate::core::region_slot_state::SlotRuntimeState],
+    settings_sync_pending: Arc<std::sync::atomic::AtomicBool>,
 ) -> SettingsWindowResponse {
     let close_flag = Arc::new(AtomicBool::new(false));
 
@@ -72,6 +73,7 @@ pub fn show_settings_window(
     let settings_inner = settings_arc.clone();
     let ctrl_inner = ctrl.clone();
     let model_inner = model_arc.clone();
+    let sync_flag = settings_sync_pending.clone();
 
     // Extract the pristine captured frame from the first active slot that has one
     let sample_frame = slots_runtime
@@ -207,13 +209,18 @@ pub fn show_settings_window(
                 // If any setting was actually modified, notify the main window to sync
                 // the child viewports (like overlay) so settings take effect in real-time.
                 if *settings != initial_settings {
-                    ctx.data_mut(|d| d.insert_temp(egui::Id::new("force_sync_children"), true));
+                    sync_flag.store(true, std::sync::atomic::Ordering::Relaxed);
                     ctx.request_repaint_of(egui::ViewportId::ROOT);
+                    let snapshot = model_inner.lock().clone();
+                    crate::user_interface::application::request_child_viewport_repaints(
+                        ctx,
+                        &snapshot,
+                    );
                 }
 
                 // Ensure dynamic tabs like Image Processing (live preview), Debugging,
                 // and Download Progress update in real-time even when mouse is idle
-                ctx.request_repaint_after(std::time::Duration::from_millis(150));
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
             });
         },
     );

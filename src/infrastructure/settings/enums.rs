@@ -47,6 +47,37 @@ impl PpocrModelSuite {
             PpocrModelSuite::CyrillicMobile => "mobile_cyrillic",
         }
     }
+
+    /// Returns (rec_url, dict_url) for this model suite.
+    /// The detection model URL is shared across all suites and lives in PPOCR_MOBILE_MODELS[0].
+    pub fn get_urls(&self) -> (&'static str, &'static str) {
+        match self {
+            PpocrModelSuite::CnEnMobile => (
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/pp-ocrv5_mobile_rec.onnx",
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_dict.txt",
+            ),
+            PpocrModelSuite::JapaneseMobile => (
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/japan_pp-ocrv3_mobile_rec.onnx",
+                "https://raw.githubusercontent.com/PaddlePaddle/PaddleOCR/release/2.7/ppocr/utils/dict/japan_dict.txt",
+            ),
+            PpocrModelSuite::KoreanMobile => (
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/korean_pp-ocrv5_mobile_rec.onnx",
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_korean_dict.txt",
+            ),
+            PpocrModelSuite::ThaiMobile => (
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/th_pp-ocrv5_mobile_rec.onnx",
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_th_dict.txt",
+            ),
+            PpocrModelSuite::LatinMobile => (
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/latin_pp-ocrv5_mobile_rec.onnx",
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_latin_dict.txt",
+            ),
+            PpocrModelSuite::CyrillicMobile => (
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/cyrillic_pp-ocrv5_mobile_rec.onnx",
+                "https://github.com/GreatV/oar-ocr/releases/download/v0.3.0/ppocrv5_cyrillic_dict.txt",
+            ),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

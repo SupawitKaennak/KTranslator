@@ -236,6 +236,31 @@ pub struct I18n {
     pub ppocr_suite_th_mobile: &'static str,
     pub ppocr_suite_latin_mobile: &'static str,
     pub ppocr_suite_cyrillic_mobile: &'static str,
+
+    // Reset settings
+    pub reset_settings: &'static str,
+    pub reset_defaults: &'static str,
+    pub reset_confirm_msg: &'static str,
+    pub reset_confirm_yes: &'static str,
+    pub cancel: &'static str,
+
+    // General / stability
+    pub realtime_stability_desc: &'static str,
+    pub debounce_delay: &'static str,
+    pub debounce_delay_hint: &'static str,
+    pub subtitle_persistence: &'static str,
+    pub subtitle_persistence_hint: &'static str,
+
+    // OCR text detection
+    pub text_detector_mode: &'static str,
+    pub text_detector_desc: &'static str,
+    pub detector_none: &'static str,
+    pub detector_yolo: &'static str,
+    pub detector_craft: &'static str,
+    pub llm_ocr_post: &'static str,
+    pub llm_ocr_correction: &'static str,
+    pub llm_ocr_warning: &'static str,
+    pub advanced_text_detection: &'static str,
 }
 
 const EN: I18n = I18n {
@@ -449,6 +474,25 @@ const EN: I18n = I18n {
     ppocr_suite_th_mobile: "Fast: Thai (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_latin_mobile: "Fast: Latin/Western Europe (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_cyrillic_mobile: "Fast: Cyrillic/Eastern Europe (Det v4 + Rec v5, ~15MB)",
+    reset_settings: "Reset Settings",
+    reset_defaults: "Reset to Default Settings",
+    reset_confirm_msg: "Reset all settings to factory defaults? API keys will be kept.",
+    reset_confirm_yes: "Yes, Reset All",
+    cancel: "Cancel",
+    realtime_stability_desc: "Prevent screen flickering and stabilize typewriter subtitles in games.",
+    debounce_delay: "Debounce Delay (Frames):",
+    debounce_delay_hint: "Wait for scrolling text to stop",
+    subtitle_persistence: "Subtitle Persistence:",
+    subtitle_persistence_hint: "Hold text after dialogue disappears",
+    text_detector_mode: "Text Detector Mode:",
+    text_detector_desc: "AI-powered pre-processing to locate text regions before OCR.",
+    detector_none: "None (Full Frame)",
+    detector_yolo: "YOLO Speech Bubble",
+    detector_craft: "CRAFT Text Region",
+    llm_ocr_post: "LLM OCR Post-processing",
+    llm_ocr_correction: "Use LLM to correct OCR typos before translation",
+    llm_ocr_warning: "Warning: This requires calling the LLM API twice per frame, which doubles latency and token usage.",
+    advanced_text_detection: "Advanced Text Detection Models",
 };
 
 const TH: I18n = I18n {
@@ -657,6 +701,25 @@ const TH: I18n = I18n {
     ppocr_suite_th_mobile: "ความเร็วสูง: ภาษาไทย (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_latin_mobile: "ความเร็วสูง: กลุ่มภาษาละติน/ยุโรปตะวันตก (Det v4 + Rec v5, ~15MB)",
     ppocr_suite_cyrillic_mobile: "ความเร็วสูง: กลุ่มภาษาซีริลลิก/ยุโรปตะวันออก (Det v4 + Rec v5, ~15MB)",
+    reset_settings: "รีเซ็ตการตั้งค่า",
+    reset_defaults: "รีเซ็ตเป็นค่าเริ่มต้น",
+    reset_confirm_msg: "รีเซ็ตการตั้งค่าทั้งหมดเป็นค่าเริ่มต้น? รหัส API จะยังคงอยู่",
+    reset_confirm_yes: "ใช่ รีเซ็ตทั้งหมด",
+    cancel: "ยกเลิก",
+    realtime_stability_desc: "ป้องกันหน้าจอกะพริบและทำให้ซับไตเติลแบบพิมพ์ทีละตัวเสถียรขึ้นในเกม",
+    debounce_delay: "ดีเลย์ Debounce (เฟรม):",
+    debounce_delay_hint: "รอให้ข้อความเลื่อนหยุดก่อน",
+    subtitle_persistence: "คงซับไตเติลไว้:",
+    subtitle_persistence_hint: "แสดงข้อความต่อหลังบทสนทนาหายไป",
+    text_detector_mode: "โหมดตรวจจับข้อความ:",
+    text_detector_desc: "ประมวลผล AI ก่อน OCR เพื่อหาตำแหน่งข้อความในภาพ",
+    detector_none: "ไม่ใช้ (สแกนทั้งเฟรม)",
+    detector_yolo: "YOLO กรอบคำพูด",
+    detector_craft: "CRAFT ตรวจจับข้อความ",
+    llm_ocr_post: "ปรับแก้ OCR ด้วย LLM",
+    llm_ocr_correction: "ใช้ LLM แก้คำผิดจาก OCR ก่อนแปล",
+    llm_ocr_warning: "คำเตือน: ต้องเรียก LLM API สองครั้งต่อเฟรม ทำให้ช้าลงและใช้ token เพิ่ม",
+    advanced_text_detection: "โมเดลตรวจจับข้อความขั้นสูง",
 };
 
 pub fn get_i18n(lang: UiLanguage) -> &'static I18n {

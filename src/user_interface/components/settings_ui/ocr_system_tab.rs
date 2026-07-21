@@ -236,17 +236,17 @@ pub fn render_tab_ocr(
     ui.separator();
     ui.add_space(8.0);
 
-    super::section_header(ui, "LLM OCR Post-processing");
+    super::section_header(ui, i18n.llm_ocr_post);
     ui.add_space(4.0);
 
     ui.checkbox(
         &mut settings.enable_llm_ocr_correction,
-        "Use LLM to correct OCR typos before translation",
+        i18n.llm_ocr_correction,
     );
     if settings.enable_llm_ocr_correction {
         ui.colored_label(
             egui::Color32::from_rgb(255, 180, 100),
-            "⚠ Warning: This requires calling the LLM API twice per frame, which doubles latency and token usage.",
+            i18n.llm_ocr_warning,
         );
     }
 
@@ -255,44 +255,40 @@ pub fn render_tab_ocr(
     ui.add_space(8.0);
 
     // ── Advanced Text Detection Models ──
-    super::section_header(ui, "Advanced Text Detection Models");
+    super::section_header(ui, i18n.advanced_text_detection);
     ui.label(
-        egui::RichText::new("AI-powered pre-processing to locate text regions before OCR.")
+        egui::RichText::new(i18n.text_detector_desc)
             .small()
             .color(egui::Color32::GRAY),
     );
     ui.add_space(4.0);
 
     ui.horizontal(|ui| {
-        ui.label("Text Detector Mode:");
+        ui.label(i18n.text_detector_mode);
         egui::ComboBox::from_id_salt("text_detector_mode")
             .selected_text(match settings.text_detector {
-                crate::infrastructure::settings::TextDetectorMode::None => "None (Full Frame)",
-                crate::infrastructure::settings::TextDetectorMode::YoloBubble => {
-                    "YOLO Speech Bubble"
-                }
-                crate::infrastructure::settings::TextDetectorMode::CraftRegion => {
-                    "CRAFT Text Region"
-                }
+                crate::infrastructure::settings::TextDetectorMode::None => i18n.detector_none,
+                crate::infrastructure::settings::TextDetectorMode::YoloBubble => i18n.detector_yolo,
+                crate::infrastructure::settings::TextDetectorMode::CraftRegion => i18n.detector_craft,
                 crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid => {
-                    "YOLO + Full Page (Hybrid)"
+                    i18n.yolo_full_page_hybrid
                 }
             })
             .show_ui(ui, |ui| {
                 ui.selectable_value(
                     &mut settings.text_detector,
                     crate::infrastructure::settings::TextDetectorMode::None,
-                    "None (Full Frame)",
+                    i18n.detector_none,
                 );
                 ui.selectable_value(
                     &mut settings.text_detector,
                     crate::infrastructure::settings::TextDetectorMode::YoloBubble,
-                    "YOLO Speech Bubble",
+                    i18n.detector_yolo,
                 );
                 ui.selectable_value(
                     &mut settings.text_detector,
                     crate::infrastructure::settings::TextDetectorMode::CraftRegion,
-                    "CRAFT Text Region",
+                    i18n.detector_craft,
                 );
                 ui.selectable_value(
                     &mut settings.text_detector,
@@ -301,11 +297,6 @@ pub fn render_tab_ocr(
                 );
             });
     });
-
-    // Synchronize legacy `use_yolo_bubble` setting
-    settings.use_yolo_bubble =
-        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloBubble || 
-        settings.text_detector == crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid;
 
     match settings.text_detector {
         crate::infrastructure::settings::TextDetectorMode::YoloBubble | crate::infrastructure::settings::TextDetectorMode::YoloFullPageHybrid => {
