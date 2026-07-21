@@ -84,8 +84,8 @@ pub fn set_window_capture_exclusion(hwnd_raw: isize, hide_from_capture: bool) {
     let _ = hide_from_capture;
 }
 
-/// Sets the global window alpha transparency, preserving the color key.
-pub fn set_window_alpha(hwnd_raw: isize, alpha: u8) {
+/// Sets the global window alpha transparency, preserving the color key if needed.
+pub fn set_window_alpha(hwnd_raw: isize, alpha: u8, hide_from_capture: bool) {
     #[cfg(target_os = "windows")]
     unsafe {
         let hwnd = HWND(hwnd_raw as *mut _);
@@ -93,10 +93,15 @@ pub fn set_window_alpha(hwnd_raw: isize, alpha: u8) {
         if (ex_style & WS_EX_LAYERED.0 as i32) == 0 {
             let _ = SetWindowLongW(hwnd, GWL_EXSTYLE, ex_style | WS_EX_LAYERED.0 as i32);
         }
-        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_COLORKEY | LWA_ALPHA);
+        if hide_from_capture {
+            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_COLORKEY | LWA_ALPHA);
+        } else {
+            let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), alpha, LWA_ALPHA);
+        }
     }
     let _ = hwnd_raw;
     let _ = alpha;
+    let _ = hide_from_capture;
 }
 
 /// Clears the custom window region, restoring the window to solid (no holes).

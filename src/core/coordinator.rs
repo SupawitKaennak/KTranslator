@@ -39,6 +39,11 @@ impl BackgroundCoordinator {
         }
     }
 
+    pub fn invalidate_detectors(&self) {
+        *self.yolo_bubble.lock() = None;
+        *self.craft_text.lock() = None;
+    }
+
     #[allow(clippy::too_many_arguments, clippy::ptr_arg)]
     pub fn tick(
         &self,
@@ -254,7 +259,7 @@ impl SlotTask {
             match result {
                 Ok(res) => {
                     let _ = tx_inner.send(res);
-                    crate::core::utils::wake_up_ui(&ctx_worker, slot_idx);
+                    ctx_worker.request_repaint();
                 }
                 Err(e) => {
                     let _ = tx_inner.send(BgResult::Error {
@@ -262,7 +267,7 @@ impl SlotTask {
                         language_version,
                         err: format!("{e:#}"),
                     });
-                    crate::core::utils::wake_up_ui(&ctx_worker, slot_idx);
+                    ctx_worker.request_repaint();
                 }
             }
         }));
@@ -273,7 +278,7 @@ impl SlotTask {
                 language_version,
                 err: "Background thread panicked (system error)".to_string(),
             });
-            crate::core::utils::wake_up_ui(&ctx_for_panic, slot_idx);
+            ctx_for_panic.request_repaint();
         }
     }
 }

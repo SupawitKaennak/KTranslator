@@ -1,0 +1,135 @@
+# File Tree: KTranslator
+
+**Generated:** 7/21/2026, 12:42:13 PM
+**Root Path:** `e:\Rust language\KTranslator`
+
+```
+├── .cargo
+│   └── config.toml
+├── assets
+│   ├── fonts
+│   │   ├── NotoSans-Regular.ttf
+│   │   ├── NotoSansArabic-Regular.ttf
+│   │   ├── NotoSansDevanagari-Regular.ttf
+│   │   ├── NotoSansJP-Regular.otf
+│   │   ├── NotoSansKR-Regular.otf
+│   │   ├── NotoSansSC-Regular.otf
+│   │   ├── NotoSansTC-Regular.otf
+│   │   └── NotoSansThai.ttf
+│   └── icons
+│       ├── icon.ico
+│       └── icon.png
+├── data
+│   └── frequency_dictionary_en_82_765.txt
+├── models
+│   ├── bubble-yolo
+│   │   └── .gitkeep
+│   └── craft
+│       └── .gitkeep
+├── src
+│   ├── adapters
+│   │   ├── capture
+│   │   │   ├── mod.rs
+│   │   │   └── screenshots_crate_adapter.rs
+│   │   ├── ocr
+│   │   │   ├── builtin_paddle_ocr_adapter.rs
+│   │   │   ├── craft_text_detector_adapter.rs
+│   │   │   ├── manga_ocr_onnx_adapter.rs
+│   │   │   ├── mod.rs
+│   │   │   ├── non_max_suppression_utils.rs
+│   │   │   ├── ocr_adapter_factory.rs
+│   │   │   ├── onnx_inference_engine.rs
+│   │   │   ├── windows_native_ocr_adapter.rs
+│   │   │   └── yolo_bubble_detector_adapter.rs
+│   │   ├── translate
+│   │   │   ├── azure.rs
+│   │   │   ├── claude.rs
+│   │   │   ├── deepl.rs
+│   │   │   ├── gemini.rs
+│   │   │   ├── google.rs
+│   │   │   ├── groq.rs
+│   │   │   ├── llm_shared_utilities.rs
+│   │   │   ├── mod.rs
+│   │   │   ├── ollama.rs
+│   │   │   ├── openai.rs
+│   │   │   └── translation_adapter_factory.rs
+│   │   └── mod.rs
+│   ├── core
+│   │   ├── usecases
+│   │   │   ├── error_handler.rs
+│   │   │   ├── glossary_replacement_engine.rs
+│   │   │   ├── image_processing_usecase.rs
+│   │   │   ├── mod.rs
+│   │   │   ├── pipeline.rs
+│   │   │   ├── pipeline_cache.rs
+│   │   │   ├── pipeline_ocr.rs
+│   │   │   ├── regex_replacement_engine.rs
+│   │   │   ├── settings_controller.rs
+│   │   │   ├── text_formatting_usecase.rs
+│   │   │   └── translation_runner_usecase.rs
+│   │   ├── background_result_dispatcher.rs
+│   │   ├── chinese_convert.rs
+│   │   ├── coordinator.rs
+│   │   ├── llm_prompt_builder.rs
+│   │   ├── mod.rs
+│   │   ├── pipeline_execution_result.rs
+│   │   ├── ports.rs
+│   │   ├── region_slot_state.rs
+│   │   ├── spell_correction.rs
+│   │   ├── text_cleaning_pipeline.rs
+│   │   ├── text_layout_analyzer.rs
+│   │   ├── types.rs
+│   │   └── utils.rs
+│   ├── infrastructure
+│   │   ├── platform
+│   │   │   ├── mod.rs
+│   │   │   └── windows.rs
+│   │   ├── settings
+│   │   │   ├── enums.rs
+│   │   │   ├── image_processing.rs
+│   │   │   ├── mod.rs
+│   │   │   ├── performance.rs
+│   │   │   ├── rules.rs
+│   │   │   ├── text_processing.rs
+│   │   │   └── translation.rs
+│   │   ├── asset_download_manager.rs
+│   │   ├── mod.rs
+│   │   ├── thai_word_segmenter.rs
+│   │   └── win32.rs
+│   ├── user_interface
+│   │   ├── components
+│   │   │   ├── settings_ui
+│   │   │   │   ├── ai_provider_tab.rs
+│   │   │   │   ├── debugging_tab.rs
+│   │   │   │   ├── dictionary_rules_tab.rs
+│   │   │   │   ├── display_settings_tab.rs
+│   │   │   │   ├── general_tab.rs
+│   │   │   │   ├── image_processing_tab.rs
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── ocr_system_tab.rs
+│   │   │   │   ├── performance_tuning_tab.rs
+│   │   │   │   ├── text_cleaning_tab.rs
+│   │   │   │   └── translation_style_tab.rs
+│   │   │   ├── mod.rs
+│   │   │   └── region_slot_panel.rs
+│   │   ├── application.rs
+│   │   ├── application_initializer.rs
+│   │   ├── application_services.rs
+│   │   ├── font_loader_setup.rs
+│   │   ├── i18n.rs
+│   │   ├── live_frame.rs
+│   │   ├── mod.rs
+│   │   ├── region_selection_overlay.rs
+│   │   └── transparent_overlay_renderer.rs
+│   └── main.rs
+├── .gitattributes
+├── .gitignore
+├── Cargo.lock
+├── Cargo.toml
+├── LICENSE
+├── README.md
+└── build.rs
+```
+
+---
+*Generated by FileTree Pro Extension*

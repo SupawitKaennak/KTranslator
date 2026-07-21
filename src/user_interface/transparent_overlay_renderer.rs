@@ -20,7 +20,6 @@ pub fn render_overlay_viewport(
     runtime: &SlotRuntimeState,
     settings: &Settings,
     platform: &Arc<dyn PlatformServices>,
-    i18n: &'static crate::user_interface::i18n::I18n,
 ) {
     let ppp = ctx.native_pixels_per_point().unwrap_or(1.0);
 
@@ -86,7 +85,7 @@ pub fn render_overlay_viewport(
             crate::user_interface::font_loader_setup::setup_fonts(ctx);
             if matches!(class, egui::ViewportClass::Embedded) {
                 egui::CentralPanel::default().show(ctx, |ui| {
-                    ui.label(i18n.overlay_frame_viewer);
+                    ui.label("Frame Viewer (Embedded)");
                 });
                 return;
             }
@@ -142,16 +141,6 @@ pub fn render_overlay_viewport(
                     let trans_lines  = slot.last_trans_lines.clone();
                     let fallback_text = slot.last_translation.clone();
                     let yolo_bubbles = slot.last_yolo_bubbles.clone();
-                    tracing::debug!(
-                        slot = slot_idx,
-                        overlay_mode = slot.overlay_mode,
-                        has_translation = !slot.last_translation.is_empty(),
-                        translation_len = slot.last_translation.len(),
-                        ocr_lines_count = slot.last_ocr_lines.len(),
-                        trans_lines_count = slot.last_trans_lines.len(),
-                        show_overlay,
-                        "overlay_viewport paint check"
-                    );
                     drop(m);
 
                     if show_overlay {
@@ -508,7 +497,6 @@ pub fn render_popup_viewport(
     ctx: &egui::Context,
     slot_idx: usize,
     model_arc: &Arc<Mutex<AppModel>>,
-    i18n: &'static crate::user_interface::i18n::I18n,
 ) {
     let title = format!("Region {} (Popup)", slot_idx + 1);
     let viewport_id = egui::ViewportId::from_hash_of(format!("popup_{}", slot_idx));
@@ -539,11 +527,11 @@ pub fn render_popup_viewport(
 
             let show_content = |ui: &mut egui::Ui| {
                 if !last_ocr_text.is_empty() {
-                    ui.label(i18n.overlay_ocr);
+                    ui.label("OCR:");
                     ui.monospace(&last_ocr_text);
                 }
                 ui.separator();
-                ui.label(i18n.overlay_trans);
+                ui.label("Translation:");
                 if last_trans_lines.is_empty() {
                     ui.monospace("(waiting...)");
                 } else {

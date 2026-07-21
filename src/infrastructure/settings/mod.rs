@@ -72,7 +72,6 @@ pub struct Settings {
     pub overlay_text_align: TextAlign,
 
     pub use_yolo_bubble: bool,
-    #[serde(skip)] // Legacy — derived from text_detector enum at runtime
     pub show_yolo_debug_borders: bool,
     pub text_detector: TextDetectorMode,
 
@@ -145,6 +144,21 @@ impl Default for Settings {
             realtime: RealtimeStabilitySettings::default(),
             perf: PerformanceSettings::default(),
         }
+    }
+}
+
+impl Settings {
+    /// Reset all settings to factory defaults while keeping stored API keys.
+    pub fn reset_preserving_secrets(&self) -> Self {
+        let mut fresh = Settings::default();
+        fresh.gemini_api_key = self.gemini_api_key.clone();
+        fresh.groq_api_key = self.groq_api_key.clone();
+        fresh.custom_openai_api_key = self.custom_openai_api_key.clone();
+        fresh.claude_api_key = self.claude_api_key.clone();
+        fresh.deepseek_api_key = self.deepseek_api_key.clone();
+        fresh.deepl_api_key = self.deepl_api_key.clone();
+        fresh.azure_openai_api_key = self.azure_openai_api_key.clone();
+        fresh
     }
 }
 

@@ -54,31 +54,31 @@ pub struct TextProcessingSettings {
 impl Default for TextProcessingSettings {
     fn default() -> Self {
         Self {
-            remove_duplicates: false, // Keep false by default to ensure 1-to-1 layout bounding box mapping
-            merge_broken_lines: true,
-            merge_subtitle_fragments: true,
-            remove_garbage: true,
-            recurring_suppression: true,
-            repeated_char_collapse: true,
+            remove_duplicates: false,
+            merge_broken_lines: false,
+            merge_subtitle_fragments: false,
+            remove_garbage: false,
+            recurring_suppression: false,
+            repeated_char_collapse: false,
             min_text_length: 1,
             special_char_ratio_limit: 0.6,
-            consonant_spam_filter: true,
-            kana_spam_filter: true,
-            punctuation_normalization: true,
+            consonant_spam_filter: false,
+            kana_spam_filter: false,
+            punctuation_normalization: false,
             enable_wordninja: false,
-            enable_ocr_merge: true,
+            enable_ocr_merge: false,
             enable_spell_correction: false,
 
-            jp_merge_vertical: true,
-            jp_kana_normalization: true,
-            jp_remove_furigana: true,
+            jp_merge_vertical: false,
+            jp_kana_normalization: false,
+            jp_remove_furigana: false,
 
             cn_conversion: ChineseConversionMode::None,
 
             th_segmentation: ThaiSegmentationMode::Standard,
-            th_zero_width_cleanup: true,
+            th_zero_width_cleanup: false,
 
-            ar_rtl_correction: true,
+            ar_rtl_correction: false,
 
             layout: TextLayoutSettings::default(),
         }

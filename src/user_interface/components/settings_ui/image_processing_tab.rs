@@ -14,8 +14,8 @@ pub fn render_tab_image_processing(
     let img_proc = &mut settings.img_proc;
 
     // --- LIVE PREVIEW SECTION ---
-    super::section_header(ui, i18n.img_live_preview);
-    ui.label(i18n.img_live_preview_desc);
+    super::section_header(ui, "Live Preview Processed Image");
+    ui.label("Real-time preview of filters applied before OCR engine extraction:");
     ui.add_space(4.0);
 
     // Let's handle vector allocation cleanly to satisfy strict compiler references:
@@ -83,11 +83,11 @@ pub fn render_tab_image_processing(
         .num_columns(2)
         .spacing([20.0, 10.0])
         .show(ui, |ui| {
-            ui.label(i18n.img_grayscale);
+            ui.label("Grayscale:");
             ui.checkbox(&mut img_proc.grayscale, "Convert to Monochrome");
             ui.end_row();
 
-            ui.label(i18n.img_invert_colors);
+            ui.label("Invert Colors:");
             ui.checkbox(&mut img_proc.invert, "Negative Mapping (White on Black)");
             ui.end_row();
 

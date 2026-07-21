@@ -118,5 +118,8 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
         error_dismiss_tx: err_tx,
         error_dismiss_rx: err_rx,
         downloads,
+        settings_sync_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+        settings_save_pending: false,
+        last_settings_update_ms: 0,
     }
 }

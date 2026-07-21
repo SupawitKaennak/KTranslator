@@ -58,12 +58,12 @@ impl Default for TranslationBehaviorSettings {
     fn default() -> Self {
         Self {
             literal_natural_slider: 0.5,
-            preserve_formatting: true,
-            preserve_line_breaks: true,
-            preserve_punctuation: true,
+            preserve_formatting: false,
+            preserve_line_breaks: false,
+            preserve_punctuation: false,
             preserve_honorifics: false,
-            preserve_emojis: true,
-            contextual_translation: true,
+            preserve_emojis: false,
+            contextual_translation: false,
             creativity: 0.2,
             profanity_filter: false,
             tone: TranslationTone::Auto,

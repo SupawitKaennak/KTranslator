@@ -185,15 +185,7 @@ pub fn render_live_frame_viewport(
                 egui::StrokeKind::Inside,
             );
 
-            // Invisible hit-testing border so the user can easily grab corners/edges for resizing.
-            // wgpu alpha compositing means fully transparent pixels pass mouse clicks to the game.
-            // Alpha=1 is visually invisible but opaque enough for Windows to catch mouse events.
-            painter.rect_stroke(
-                full,
-                0.0,
-                egui::Stroke::new(HANDLE * 2.0, egui::Color32::from_rgba_premultiplied(1, 1, 1, 1)),
-                egui::StrokeKind::Inside,
-            );
+
 
             let pointer = ctx.input(|i| i.pointer.latest_pos());
             if let Some(p) = pointer {
@@ -342,7 +334,7 @@ pub fn render_live_frame_viewport(
                 let last_alpha_id = egui::Id::new(("last_alpha", slot_idx));
                 let last_alpha = ctx.data(|d| d.get_temp::<u8>(last_alpha_id));
                 if last_alpha != Some(alpha) {
-                    crate::infrastructure::win32::set_window_alpha(raw, alpha);
+                    crate::infrastructure::win32::set_window_alpha(raw, alpha, current_hide);
                     ctx.data_mut(|d| d.insert_temp(last_alpha_id, alpha));
                 }
             }

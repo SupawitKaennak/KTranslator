@@ -94,7 +94,7 @@ pub fn render_tab_custom_rules(
     ui.add_space(8.0);
 
     // ── Glossary / Custom Dictionary ──
-    super::section_header(ui, i18n.dict_engine_header);
+    super::section_header(ui, "Custom Dictionary / Glossary Engine");
     ui.label(egui::RichText::new(i18n.gloss_adv_desc).italics());
     ui.add_space(6.0);
 

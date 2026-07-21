@@ -9,19 +9,6 @@ pub fn now_ms() -> u64 {
         .as_millis() as u64
 }
 
-/// Wakes up the main window and all active child viewports.
-/// This is necessary because eframe's background window might be occlusion-culled
-/// by Windows if covered by a game. Explicitly requesting repaint of the child
-/// viewports (which are always-on-top and not occluded) ensures the eframe event loop wakes up.
-#[inline]
-pub fn wake_up_ui(ctx: &eframe::egui::Context, slot_idx: usize) {
-    ctx.request_repaint();
-    ctx.request_repaint_of(eframe::egui::ViewportId::from_hash_of(format!("frame_overlay_{}", slot_idx)));
-    ctx.request_repaint_of(eframe::egui::ViewportId::from_hash_of(format!("frame_live_{}", slot_idx)));
-    ctx.request_repaint_of(eframe::egui::ViewportId::from_hash_of(format!("popup_{}", slot_idx)));
-    ctx.request_repaint_of(eframe::egui::ViewportId::from_hash_of("settings_viewport"));
-}
-
 /// FNV-1a hash for byte slices.
 /// Used for fast content-addressable deduplication of OCR frames and text.
 ///

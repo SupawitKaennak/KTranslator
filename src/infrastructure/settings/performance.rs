@@ -57,8 +57,8 @@ impl Default for PerformanceSettings {
             preset: PerformancePreset::Balanced,
             worker_threads: 4,
             gpu_backend: GpuBackend::Auto,
-            parallel_ocr: true,
-            enable_batching: true,
+            parallel_ocr: false,
+            enable_batching: false,
             memory_cleanup_interval_secs: 300, // 5 minutes
             max_cache_entries: 5000,
             vram_limit_mb: 0,

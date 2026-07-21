@@ -190,7 +190,7 @@ pub fn render_tab_ai_provider(
         }
         TranslationProvider::Google => {
             super::section_header(ui, &format!("Google Translate {}", i18n.config_for));
-            ui.label(i18n.google_api_desc);
+            ui.label("Using public Google Translate API. No API Key required.");
         }
         TranslationProvider::Claude => {
             super::section_header(ui, &format!("{} {}", i18n.prov_claude, i18n.config_for));
@@ -256,7 +256,7 @@ pub fn render_tab_ai_provider(
                 });
             });
             ui.add_space(4.0);
-            ui.label(egui::RichText::new(i18n.deepl_note).color(ui.visuals().warn_fg_color));
+            ui.label(egui::RichText::new("Note: DeepL does not support custom prompts or translation styles. It is a dedicated Neural Machine Translation service.").color(ui.visuals().warn_fg_color));
             ui.add_space(4.0);
             ui.hyperlink_to(i18n.get_api_key, "https://www.deepl.com/pro-api");
         }
