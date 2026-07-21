@@ -340,7 +340,7 @@ impl App {
             return;
         }
 
-        let viewport_id = egui::ViewportId::from_hash_of("error_popup");
+        let mut is_open = true;
         let tx = self.error_dismiss_tx.clone();
         let errors: Vec<String> = self
             .err_handler
@@ -349,20 +349,13 @@ impl App {
             .map(|e| e.message)
             .collect();
 
-        ctx.show_viewport_deferred(
-            viewport_id,
-            egui::ViewportBuilder::default()
-                .with_title("KTranslator - Error Report")
-                .with_inner_size([450.0, 220.0])
-                .with_always_on_top()
-                .with_decorations(true)
-                .with_resizable(false),
-            move |ctx, _| {
-                if ctx.input(|i| i.viewport().close_requested()) {
-                    let _ = tx.send(());
-                }
-
-                egui::CentralPanel::default().show(ctx, |ui| {
+        egui::Window::new("KTranslator - Error Report")
+            .id(egui::Id::new("error_popup_window"))
+            .default_size([450.0, 220.0])
+            .collapsible(false)
+            .resizable(false)
+            .open(&mut is_open)
+            .show(ctx, |ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(10.0);
                         ui.heading(
@@ -389,9 +382,11 @@ impl App {
                             let _ = tx.send(());
                         }
                     });
-                });
-            },
-        );
+            });
+
+        if !is_open {
+            let _ = self.error_dismiss_tx.send(());
+        }
     }
 
     /// Enforces cache size limits by removing oldest entries if cache exceeds max_cache_entries
