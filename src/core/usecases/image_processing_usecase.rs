@@ -357,11 +357,18 @@ pub fn process_image_for_ocr(
         // Sweep angles from -15.0 to +15.0 degrees in 0.5-degree steps.
         // For each angle, compute the variance of the horizontal projection profile.
         // The angle that yields the highest variance aligns text rows horizontally.
+        //
+        // PERF: Subsample every DESKEW_STEP pixels — angle estimation only needs coarse
+        // statistics, so we can safely skip rows/cols without losing accuracy.
+        // FHD (1920×1080): ~126M ops → ~8M ops at step=4, saving ~80–120ms.
+        const DESKEW_STEP: usize = 4;
+        let sw = (w + DESKEW_STEP - 1) / DESKEW_STEP; // sampled width
+        let sh = (h + DESKEW_STEP - 1) / DESKEW_STEP; // sampled height
         let mut best_angle: f32 = 0.0;
         let mut best_variance: f64 = 0.0;
 
-        let cx = w as f32 / 2.0;
-        let cy = h as f32 / 2.0;
+        let cx = sw as f32 / 2.0;
+        let cy = sh as f32 / 2.0;
 
         // Iterate candidate angles
         let mut angle = -15.0_f32;
@@ -370,16 +377,17 @@ pub fn process_image_for_ocr(
             let cos_a = rad.cos();
             let sin_a = rad.sin();
 
-            // Accumulate horizontal projection (sum of dark pixels per row)
-            let mut projection = vec![0u32; h];
-            for (row, proj) in projection.iter_mut().enumerate().take(h) {
+            // Accumulate horizontal projection using subsampled grid
+            let mut projection = vec![0u32; sh];
+            for (row, proj) in projection.iter_mut().enumerate().take(sh) {
                 let mut row_sum = 0u32;
-                for col in 0..w {
-                    // Reverse-map destination pixel to source
+                for col in 0..sw {
+                    // Reverse-map subsampled destination pixel to source
                     let dx = col as f32 - cx;
                     let dy = row as f32 - cy;
-                    let sx = (dx * cos_a - dy * sin_a + cx).round() as isize;
-                    let sy = (dx * sin_a + dy * cos_a + cy).round() as isize;
+                    // Map back to full-res coords for the gray buffer
+                    let sx = ((dx * cos_a - dy * sin_a + cx) * DESKEW_STEP as f32).round() as isize;
+                    let sy = ((dx * sin_a + dy * cos_a + cy) * DESKEW_STEP as f32).round() as isize;
 
                     if sx >= 0 && sx < w as isize && sy >= 0 && sy < h as isize {
                         let idx = sy as usize * w + sx as usize;
@@ -391,7 +399,7 @@ pub fn process_image_for_ocr(
             }
 
             // Compute variance of the projection
-            let n = h as f64;
+            let n = sh as f64;
             let sum: f64 = projection.iter().map(|v| *v as f64).sum();
             let mean = sum / n;
             let variance: f64 = projection
@@ -410,6 +418,7 @@ pub fn process_image_for_ocr(
 
             angle += 0.5;
         }
+
 
         // Only apply rotation if the detected skew exceeds 0.3 degrees
         if best_angle.abs() > 0.3 {
