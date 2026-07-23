@@ -13,6 +13,7 @@ pub struct SlotUiResponse {
 }
 
 pub const LANGUAGE_OPTIONS: &[(&str, &str)] = &[
+    ("Auto Detect", "auto"),
     ("Thai (th)", "th"),
     ("English (en)", "en"),
     ("Japanese (ja)", "ja"),
@@ -119,12 +120,12 @@ pub fn render_slot_item(
 
             ui.label(format!("{}:", i18n.from));
 
-            // Define source language code: Default to "en" (English) if None
+            // Define source language code: Default to "auto" (Auto Detect) if None
             let mut current_src = slot
                 .source_lang
                 .as_ref()
                 .map(|l| l.0.clone())
-                .unwrap_or_else(|| "en".to_string());
+                .unwrap_or_else(|| "auto".to_string());
 
             let mut src_changed = false;
             egui::ComboBox::from_id_salt(format!("src_{slot_idx}"))
@@ -133,10 +134,9 @@ pub fn render_slot_item(
                         .iter()
                         .find(|(_, code)| *code == current_src)
                         .map(|(name, _)| *name)
-                        .unwrap_or("English (en)"),
+                        .unwrap_or("Auto Detect"),
                 )
                 .show_ui(ui, |ui| {
-                    // Render all language options (No Auto Detect)
                     for (name, code) in LANGUAGE_OPTIONS {
                         if ui
                             .selectable_value(&mut current_src, code.to_string(), *name)
@@ -147,9 +147,13 @@ pub fn render_slot_item(
                     }
                 });
 
-            if src_changed || slot.source_lang.is_none() {
+            if src_changed {
                 let old_src = slot.source_lang.clone();
-                slot.source_lang = Some(LanguageTag(current_src));
+                if current_src == "auto" {
+                    slot.source_lang = None;
+                } else {
+                    slot.source_lang = Some(LanguageTag(current_src));
+                }
                 tracing::info!(
                     "Slot {} source language forced/changed: {:?} -> {:?}",
                     slot_idx,
@@ -173,6 +177,9 @@ pub fn render_slot_item(
                 )
                 .show_ui(ui, |ui| {
                     for (name, code) in LANGUAGE_OPTIONS {
+                        if *code == "auto" {
+                            continue; // Skip Auto Detect for Target Language
+                        }
                         if ui
                             .selectable_value(&mut current_tgt, code.to_string(), *name)
                             .clicked()

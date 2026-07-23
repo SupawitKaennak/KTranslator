@@ -75,6 +75,8 @@ pub struct App {
 
     pub(crate) settings_save_pending: bool,
     pub(crate) last_settings_update_ms: u64,
+    pub(crate) reprocess_pending: bool,
+    pub(crate) last_reprocess_update_ms: u64,
 }
 
 impl App {
@@ -120,7 +122,8 @@ impl App {
                 &self.settings,
             );
         let rebuild_ocr = current_engine_type != old_engine_type
-            || updated.perf.gpu_backend != self.settings.perf.gpu_backend;
+            || updated.perf.gpu_backend != self.settings.perf.gpu_backend
+            || updated.ppocr_model != self.settings.ppocr_model;
 
         let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
         let realtime_changed = updated.realtime != self.settings.realtime;
@@ -163,7 +166,8 @@ impl App {
             }
         }
         if realtime_changed || txt_proc_changed || img_proc_changed || text_detector_changed {
-            self.force_reprocess_all_slots();
+            self.reprocess_pending = true;
+            self.last_reprocess_update_ms = crate::core::utils::now_ms();
         } else if trans_behavior_changed {
             for rt in &mut self.slots_runtime {
                 rt.recent_translations.clear();
@@ -516,11 +520,26 @@ impl eframe::App for App {
             let now = crate::core::utils::now_ms();
             if now.saturating_sub(self.last_settings_update_ms) > 1000 {
                 self.settings_save_pending = false;
-                if let Err(e) = save_settings(&self.settings) {
-                    self.err_handler.report_simple(format!("Failed to save settings: {e:#}"));
-                }
+                let settings_clone = self.settings.clone();
+                std::thread::spawn(move || {
+                    if let Err(e) = save_settings(&settings_clone) {
+                        tracing::error!("Failed to save settings: {e:#}");
+                        // We can't use err_handler easily from here without passing it cleanly,
+                        // but logging it is sufficient for background save.
+                    }
+                });
             } else {
                 ctx.request_repaint_after(std::time::Duration::from_millis(500));
+            }
+        }
+
+        if self.reprocess_pending {
+            let now = crate::core::utils::now_ms();
+            if now.saturating_sub(self.last_reprocess_update_ms) > 500 {
+                self.reprocess_pending = false;
+                self.force_reprocess_all_slots();
+            } else {
+                ctx.request_repaint_after(std::time::Duration::from_millis(100));
             }
         }
 
@@ -785,7 +804,9 @@ impl eframe::App for App {
         let is_downloading = self.model.lock().download_progress.is_downloading;
         let any_slot_busy = self.slots_runtime.iter().any(|r| r.busy);
         if any_slot_busy || is_downloading {
-            ctx.request_repaint_after(std::time::Duration::from_millis(80));
+            // FIX #5: Lowered from 80ms → 20ms. The background thread already calls request_repaint()
+            // on completion, so this is just a safety fallback for worst-case scheduling jitter.
+            ctx.request_repaint_after(std::time::Duration::from_millis(20));
         }
         
         // Sync active child viewports only when their visual state might have changed.

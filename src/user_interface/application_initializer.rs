@@ -121,5 +121,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
         settings_sync_pending: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         settings_save_pending: false,
         last_settings_update_ms: 0,
+        reprocess_pending: false,
+        last_reprocess_update_ms: 0,
     }
 }

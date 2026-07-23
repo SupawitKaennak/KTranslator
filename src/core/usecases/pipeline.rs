@@ -231,7 +231,52 @@ impl TranslationPipeline {
             .join("\n");
         let mut ocr_text_base = TextCleaner::clean(&raw_ocr_text, &txt_proc_cfg);
 
-        // Optional: LLM OCR Correction
+        // FIX #2: Early text-cache check BEFORE LLM OCR correction.
+        // If we already translated this raw OCR text before, skip the expensive
+        // LLM correction API call (saves 500–2000ms per hit).
+        // Note: The cached_trans was already post-processed (glossary, regex, segmentation)
+        // when it was originally stored, so we can use it directly.
+        {
+            let raw_text_hash = crate::core::utils::fnv_hash_str(&ocr_text_base);
+            let tc_key = (
+                raw_text_hash,
+                source_lang.as_ref().map(|l| l.0.clone()),
+                target_lang.0.clone(),
+            );
+            let cached = {
+                let tc = text_cache_arc.lock();
+                tc.get(&tc_key).cloned()
+            };
+            if let Some(cached_trans) = cached {
+                // Simple split by newline — the cached value was post-processed when stored.
+                let trans_lines: Vec<String> = cached_trans
+                    .split('\n')
+                    .map(|s| s.to_string())
+                    .collect();
+                let mut fc = cache_arc.lock();
+                crate::core::utils::enforce_cache_limit(&mut fc, max_cache_entries);
+                fc.insert(cache_key, crate::core::types::CachedFrame {
+                    ocr_text: ocr_text_base.clone(),
+                    translated: cached_trans.clone(),
+                    ocr_lines: ocr_lines.clone(),
+                    trans_lines: trans_lines.clone(),
+                    yolo_bubbles: yolo_bubbles.clone(),
+                });
+                return Ok(BgResult::Done {
+                    slot_idx,
+                    language_version,
+                    ocr_text: ocr_text_base,
+                    translated: cached_trans,
+                    frame_hash: hash,
+                    ocr_lines,
+                    trans_lines,
+                    yolo_bubbles: yolo_bubbles.clone(),
+                });
+            }
+        }
+
+
+        // Optional: LLM OCR Correction (only runs when no early cache hit above)
         if enable_llm_ocr_correction {
             if let Some(translator_arc) = &translator {
                 let _ = status_tx.send(BgResult::StatusUpdate {
@@ -255,6 +300,7 @@ impl TranslationPipeline {
                 }
             }
         }
+
 
         // Helper check: Perfect Translation Memory Hit
         if let Some(memory_trans) =

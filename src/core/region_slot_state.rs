@@ -56,7 +56,7 @@ impl Default for RegionSlot {
             enabled: false,
             show_frame: false,
             rect: None,
-            source_lang: Some(LanguageTag("en".to_string())),
+            source_lang: None,
             target_lang: LanguageTag("en".to_string()),
             stable_hash: 0,
             stable_since_ms: 0,

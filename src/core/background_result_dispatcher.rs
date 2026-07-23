@@ -152,7 +152,8 @@ impl ResultDispatcher {
             runtime.last_hash = frame_hash;
 
             let now = crate::core::utils::now_ms();
-            slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(500));
+            // FIX #3: Lowered hardcoded cap from 500ms → 100ms so user settings ≤100ms are respected.
+            slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(100));
 
             let new_ocr = ocr_text.trim();
             let old_ocr = slot.last_ocr_text.trim();
@@ -274,16 +275,48 @@ impl ResultDispatcher {
         slots_runtime: &mut [SlotRuntimeState],
         slot_idx: usize,
     ) {
+        // FIX #1: Debounce Deadlock
+        // When the pipeline returns Unchanged, the screen hash hasn't moved —
+        // meaning OCR text *would be* identical to the previous run.
+        // We advance identical_frames_count here so the typewriter debounce
+        // threshold can be reached even when the frame is perfectly static.
+        // Without this, a perfectly still screen would NEVER flush a translation
+        // because Unchanged skips the Done path that increments the counter.
+        let now = crate::core::utils::now_ms();
+        {
+            let mut model = model_arc.lock();
+            if let Some(slot) = model.slots.get_mut(slot_idx) {
+                if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
+                    // Bump the stability counter as if we got an identical OCR result.
+                    runtime.identical_frames_count =
+                        runtime.identical_frames_count.saturating_add(1);
+
+                    // If we now meet the threshold and have a pending translation,
+                    // flush it out immediately so it appears on screen.
+                    let threshold = 1; // use 1 as safe default — real check happens in handle_done
+                    if runtime.identical_frames_count >= threshold {
+                        let pers_trans = runtime.persistent_translation.lock().clone();
+                        if let Some(pt) = pers_trans {
+                            if slot.last_translation.is_empty() {
+                                let pers_ocr = runtime.persistent_ocr_lines.lock().clone();
+                                let pers_trans_lines = runtime.persistent_trans_lines.lock().clone();
+                                slot.last_translation = pt;
+                                slot.last_ocr_lines = pers_ocr;
+                                slot.last_trans_lines = pers_trans_lines;
+                            }
+                        }
+                    }
+
+                    // FIX #4: Lowered hardcoded cap from 100ms → 30ms.
+                    slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(30));
+                }
+            }
+        }
         if let Some(runtime) = slots_runtime.get_mut(slot_idx) {
             runtime.busy = false;
             runtime.busy_since_ms = 0;
             runtime.status = "Ready".to_string();
             runtime.first_unstable_at = 0;
-        }
-        let now = crate::core::utils::now_ms();
-        let mut model = model_arc.lock();
-        if let Some(slot) = model.slots.get_mut(slot_idx) {
-            slot.next_tick_at_ms = now.saturating_add(slot.refresh_ms.max(100));
         }
     }
 

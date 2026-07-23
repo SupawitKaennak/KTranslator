@@ -1,10 +1,12 @@
 use crate::core::ports::{OcrTextBlock, OcrTextLine};
 
 fn get_char_size(line: &OcrTextLine) -> f32 {
-    // The height of a text line bounding box is generally the most reliable
-    // indicator of its font size, especially for vertical manga text and CJK/Thai.
-    // Avoid area calculation because it gets heavily skewed by line-length differences.
-    line.h.min(line.w).max(12.0)
+    let is_vertical = line.h > line.w * 1.2;
+    if is_vertical {
+        line.w.max(12.0)
+    } else {
+        line.h.max(12.0)
+    }
 }
 
 fn is_close(
@@ -15,7 +17,7 @@ fn is_close(
 ) -> bool {
     let char_size_a = get_char_size(a);
     let char_size_b = get_char_size(b);
-    let char_size = char_size_a.max(char_size_b);
+    let char_size = (char_size_a + char_size_b) / 2.0;
 
     // Check if the lines are likely part of vertical text (typical in Japanese Manga)
     let is_a_vertical = a.h > a.w * 1.2;

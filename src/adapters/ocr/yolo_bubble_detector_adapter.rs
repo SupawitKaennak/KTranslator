@@ -118,7 +118,7 @@ impl YoloBubbleDetector {
                 let prob = view[[0, i, 4]];
                 let class_id = view[[0, i, 5]] as usize;
 
-                if prob > 0.20 {
+                if prob > 0.10 {
                     // Map back from 1280x1280 padded tensor coordinates to original image coordinates
                     let ox1 = ((x1 - pad_x as f32) / scale).clamp(0.0, orig_w);
                     let oy1 = ((y1 - pad_y as f32) / scale).clamp(0.0, orig_h);
@@ -127,8 +127,16 @@ impl YoloBubbleDetector {
 
                     let box_w = ox2 - ox1;
                     let box_h = oy2 - oy1;
-                    let pad_w = (box_w * 0.08).max(8.0);
-                    let pad_h = (box_h * 0.08).max(8.0);
+                    
+                    // Smart Aspect-Ratio Aware Padding
+                    // If vertical text (h > w * 1.2), pad more on top/bottom
+                    let (pad_w, pad_h) = if box_h > box_w * 1.2 {
+                        ((box_w * 0.06).max(6.0), (box_h * 0.12).max(12.0))
+                    } else if box_w > box_h * 1.2 { // Horizontal text
+                        ((box_w * 0.12).max(12.0), (box_h * 0.06).max(6.0))
+                    } else { // Square-ish
+                        ((box_w * 0.08).max(8.0), (box_h * 0.08).max(8.0))
+                    };
 
                     let ex1 = (ox1 - pad_w).max(0.0);
                     let ey1 = (oy1 - pad_h).max(0.0);
@@ -166,7 +174,7 @@ impl YoloBubbleDetector {
                     }
                 }
 
-                if max_conf > 0.20 {
+                if max_conf > 0.35 {
                     let x1 = cx - w / 2.0;
                     let y1 = cy - h / 2.0;
                     let x2 = cx + w / 2.0;
@@ -180,8 +188,15 @@ impl YoloBubbleDetector {
 
                     let box_w = ox2 - ox1;
                     let box_h = oy2 - oy1;
-                    let pad_w = (box_w * 0.08).max(8.0);
-                    let pad_h = (box_h * 0.08).max(8.0);
+                    
+                    // Smart Aspect-Ratio Aware Padding
+                    let (pad_w, pad_h) = if box_h > box_w * 1.2 {
+                        ((box_w * 0.06).max(6.0), (box_h * 0.12).max(12.0))
+                    } else if box_w > box_h * 1.2 { // Horizontal text
+                        ((box_w * 0.12).max(12.0), (box_h * 0.06).max(6.0))
+                    } else { // Square-ish
+                        ((box_w * 0.08).max(8.0), (box_h * 0.08).max(8.0))
+                    };
 
                     let ex1 = (ox1 - pad_w).max(0.0);
                     let ey1 = (oy1 - pad_h).max(0.0);

@@ -218,9 +218,14 @@ impl CraftTextDetector {
                 continue;
             }
 
-            // Add small padding for OCR accuracy
-            let pad_w = (box_w * 0.05).max(4.0);
-            let pad_h = (box_h * 0.05).max(4.0);
+            // Add small padding for OCR accuracy, aware of aspect ratio
+            let (pad_w, pad_h) = if box_h > box_w * 1.2 {
+                ((box_w * 0.04).max(4.0), (box_h * 0.08).max(8.0))
+            } else if box_w > box_h * 1.2 {
+                ((box_w * 0.08).max(8.0), (box_h * 0.04).max(4.0))
+            } else {
+                ((box_w * 0.05).max(4.0), (box_h * 0.05).max(4.0))
+            };
 
             boxes.push(DetectionBox {
                 x1: (ox1 - pad_w).max(0.0),
