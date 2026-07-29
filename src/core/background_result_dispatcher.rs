@@ -236,11 +236,29 @@ impl ResultDispatcher {
                         }
                     } else {
                         // ── STABILITY FIX: Text is unchanged ──
-                        // The frame pixels changed (e.g. game animation) but OCR text is the same.
-                        // Keep the existing overlay positions (last_ocr_lines) to prevent
-                        // overlay flickering and position jumping.
-                        // Only update translation content if it was empty before.
-                        if slot.last_translation.trim().is_empty() && !translated.trim().is_empty() {
+                        // The frame pixels changed but OCR text is the same.
+                        // We need to distinguish between two cases:
+                        //   A) Game animation: pixels changed but text BOX is in the same position
+                        //      → Lock overlay position to prevent flickering
+                        //   B) Manga/Document scroll: user scrolled so same text is now at a
+                        //      DIFFERENT Y coordinate in the frame
+                        //      → MUST update positions or overlay will be stuck at wrong place
+                        //
+                        // Detection: compare avg Y of the first OCR line between old and new result.
+                        // If it shifted more than SCROLL_SHIFT_PX pixels → treat as a scroll event.
+                        const SCROLL_SHIFT_PX: f32 = 8.0;
+                        let positions_shifted = {
+                            let old_y = slot.last_ocr_lines.first().map(|l| l.y);
+                            let new_y = ocr_lines.first().map(|l| l.y);
+                            match (old_y, new_y) {
+                                (Some(o), Some(n)) => (o - n).abs() > SCROLL_SHIFT_PX,
+                                // Different line count → content layout changed → update
+                                _ => slot.last_ocr_lines.len() != ocr_lines.len(),
+                            }
+                        };
+
+                        if positions_shifted || slot.last_translation.trim().is_empty() {
+                            // Scroll or new translation → update positions and content
                             slot.last_translation = translated.clone();
                             slot.last_trans_lines = trans_lines.clone();
                             slot.last_ocr_lines = ocr_lines.clone();
