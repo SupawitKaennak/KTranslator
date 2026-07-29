@@ -201,6 +201,7 @@ impl ResultDispatcher {
                     runtime.last_seen_text_at_ms = now;
 
                     if new_ocr != old_ocr {
+                        // Text actually changed — update everything including positions
                         slot.last_ocr_text = ocr_text.clone();
                         slot.last_translation = translated.clone();
                         slot.last_ocr_lines = ocr_lines.clone();
@@ -233,11 +234,20 @@ impl ResultDispatcher {
                                     yolo_bubbles: yolo_bubbles.clone(),
                                 });
                         }
-                    } else if !translated.trim().is_empty() {
-                        slot.last_trans_lines = trans_lines.clone();
-                        slot.last_ocr_lines = ocr_lines.clone();
-                        slot.last_yolo_bubbles = yolo_bubbles.clone();
-                        slot.last_translation = translated.clone();
+                    } else {
+                        // ── STABILITY FIX: Text is unchanged ──
+                        // The frame pixels changed (e.g. game animation) but OCR text is the same.
+                        // Keep the existing overlay positions (last_ocr_lines) to prevent
+                        // overlay flickering and position jumping.
+                        // Only update translation content if it was empty before.
+                        if slot.last_translation.trim().is_empty() && !translated.trim().is_empty() {
+                            slot.last_translation = translated.clone();
+                            slot.last_trans_lines = trans_lines.clone();
+                            slot.last_ocr_lines = ocr_lines.clone();
+                            slot.last_yolo_bubbles = yolo_bubbles.clone();
+                        }
+                        // Always update frame hash so next identical frame hits frame-cache
+                        runtime.last_hash = frame_hash;
                     }
 
                     // Save to persistence store
