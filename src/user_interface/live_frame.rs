@@ -96,6 +96,7 @@ pub fn render_live_frame_viewport(
                 d.remove::<f64>(egui::Id::new(("ignore_until", slot_idx)));
                 d.remove::<f64>(egui::Id::new(("debounce_rect", slot_idx)));
             });
+            *runtime.visual_rect.lock() = None;
         }
         return;
     }

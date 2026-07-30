@@ -61,6 +61,7 @@ pub fn render_overlay_viewport(
     let overlay_settings = settings.clone();
     let platform_svc = platform.clone();
     let last_capture_hide = runtime.last_capture_hide.clone();
+    let last_frame_arc = runtime.last_frame.clone();
 
     ctx.show_viewport_deferred(
         viewport_id,
@@ -182,6 +183,23 @@ pub fn render_overlay_viewport(
                             (txt_b as f32 * txt_a).round() as u8,
                             overlay_settings.overlay_text_color[3],
                         );
+                        let fallback_bg_array = [
+                            (bg_r as f32 * bg_a).round() as u8,
+                            (bg_g as f32 * bg_a).round() as u8,
+                            (bg_b as f32 * bg_a).round() as u8,
+                            overlay_settings.overlay_bg_color[3],
+                        ];
+                        
+                        let sampled_bg_colors = if overlay_settings.inpaint_mode == crate::infrastructure::settings::InpaintMode::AutoSample {
+                            if let Some(frame) = last_frame_arc.lock().as_ref() {
+                                crate::core::usecases::inpainting::sample_bg_colors(frame, &ocr_lines, fallback_bg_array)
+                            } else {
+                                vec![]
+                            }
+                        } else {
+                            vec![]
+                        };
+
                         let overlay_padding = overlay_settings.overlay_padding;
                         let overlay_corner_radius = overlay_settings.overlay_corner_radius;
 
@@ -194,6 +212,17 @@ pub fn render_overlay_viewport(
                             while idx < ocr_lines.len() {
                                 let mut block_lines = vec![ocr_lines[idx].clone()];
                                 let trans = trans_lines.get(idx).map(|s| s.as_str()).unwrap_or("").trim().to_string();
+
+                                let (block_bg_color, block_text_color) = if overlay_settings.inpaint_mode == crate::infrastructure::settings::InpaintMode::AutoSample {
+                                    let bg = sampled_bg_colors.get(idx).copied().unwrap_or(fallback_bg_array);
+                                    let tc = crate::core::usecases::inpainting::contrast_text_color(bg);
+                                    (
+                                        egui::Color32::from_rgba_premultiplied(bg[0], bg[1], bg[2], bg[3]),
+                                        egui::Color32::from_rgba_premultiplied(tc[0], tc[1], tc[2], tc[3]),
+                                    )
+                                } else {
+                                    (overlay_bg_color, overlay_text_color)
+                                };
 
                                 let mut j = idx + 1;
                                 while j < ocr_lines.len() {
@@ -284,7 +313,7 @@ pub fn render_overlay_viewport(
                                             let mut job = egui::text::LayoutJob::simple(
                                                 full_text.clone(),
                                                 egui::FontId::proportional(font_size),
-                                                overlay_text_color,
+                                                block_text_color,
                                                 bg_w - (overlay_padding * 2.0)
                                             );
                                             job.wrap.break_anywhere = false;
@@ -308,7 +337,7 @@ pub fn render_overlay_viewport(
                                             final_bg_rect = final_bg_rect.expand2(egui::vec2(diff / 2.0, 0.0));
                                         }
 
-                                        painter.rect_filled(final_bg_rect, overlay_corner_radius, overlay_bg_color);
+                                        painter.rect_filled(final_bg_rect, overlay_corner_radius, block_bg_color);
                                         last_bottom_y = last_bottom_y.max(final_bg_rect.max.y);
 
                                         // PERFECT CENTERING
@@ -320,7 +349,7 @@ pub fn render_overlay_viewport(
                                         };
 
                                         let text_pos = egui::pos2(text_x, text_y);
-                                        painter.galley(text_pos, galley, overlay_text_color);
+                                        painter.galley(text_pos, galley, block_text_color);
 
                                     } else {
                                         // --- Individual Strip Mode (Single Line, No Bubble) ---
@@ -333,7 +362,7 @@ pub fn render_overlay_viewport(
                                             let mut job = egui::text::LayoutJob::simple(
                                                 full_text.clone(),
                                                 egui::FontId::proportional(font_size),
-                                                overlay_text_color,
+                                                block_text_color,
                                                 wrap_width
                                             );
                                             job.wrap.break_anywhere = false;
@@ -354,7 +383,7 @@ pub fn render_overlay_viewport(
                                         );
 
                                         last_bottom_y = last_bottom_y.max(bg.max.y);
-                                        painter.rect_filled(bg, overlay_corner_radius, overlay_bg_color);
+                                        painter.rect_filled(bg, overlay_corner_radius, block_bg_color);
 
                                         if !galley.rows.is_empty() {
                                             // PERFECT CENTERING
@@ -366,7 +395,7 @@ pub fn render_overlay_viewport(
                                             };
 
                                             let text_pos = egui::pos2(text_x, text_y);
-                                            painter.galley(text_pos, galley, overlay_text_color);
+                                            painter.galley(text_pos, galley, block_text_color);
                                         }
                                     }
                                 }

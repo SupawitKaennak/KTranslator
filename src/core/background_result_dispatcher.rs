@@ -201,6 +201,7 @@ impl ResultDispatcher {
                     runtime.last_seen_text_at_ms = now;
 
                     if new_ocr != old_ocr {
+                        // Text actually changed — update everything including positions
                         slot.last_ocr_text = ocr_text.clone();
                         slot.last_translation = translated.clone();
                         slot.last_ocr_lines = ocr_lines.clone();
@@ -233,11 +234,40 @@ impl ResultDispatcher {
                                     yolo_bubbles: yolo_bubbles.clone(),
                                 });
                         }
-                    } else if !translated.trim().is_empty() {
-                        slot.last_trans_lines = trans_lines.clone();
-                        slot.last_ocr_lines = ocr_lines.clone();
-                        slot.last_yolo_bubbles = yolo_bubbles.clone();
-                        slot.last_translation = translated.clone();
+                    } else {
+                        // ── STABILITY FIX: Text is unchanged ──
+                        // The frame pixels changed but OCR text is the same.
+                        // We need to distinguish between two cases:
+                        //   A) Game animation: pixels changed but text BOX is in the same position
+                        //      → Lock overlay position to prevent flickering
+                        //   B) Manga/Document scroll: user scrolled so same text is now at a
+                        //      DIFFERENT Y coordinate in the frame
+                        //      → MUST update positions or overlay will be stuck at wrong place
+                        //
+                        // Detection: compare avg Y of the first OCR line between old and new result.
+                        // If it shifted more than SCROLL_SHIFT_PX pixels → treat as a scroll event.
+                        const SCROLL_SHIFT_PX: f32 = 2.0;
+                        let positions_shifted = {
+                            let old_pos = slot.last_ocr_lines.first().map(|l| (l.x, l.y));
+                            let new_pos = ocr_lines.first().map(|l| (l.x, l.y));
+                            match (old_pos, new_pos) {
+                                (Some((ox, oy)), Some((nx, ny))) => {
+                                    (ox - nx).abs() > SCROLL_SHIFT_PX || (oy - ny).abs() > SCROLL_SHIFT_PX
+                                },
+                                // Different line count → content layout changed → update
+                                _ => slot.last_ocr_lines.len() != ocr_lines.len(),
+                            }
+                        };
+
+                        if positions_shifted || slot.last_translation.trim().is_empty() {
+                            // Scroll or new translation → update positions and content
+                            slot.last_translation = translated.clone();
+                            slot.last_trans_lines = trans_lines.clone();
+                            slot.last_ocr_lines = ocr_lines.clone();
+                            slot.last_yolo_bubbles = yolo_bubbles.clone();
+                        }
+                        // Always update frame hash so next identical frame hits frame-cache
+                        runtime.last_hash = frame_hash;
                     }
 
                     // Save to persistence store

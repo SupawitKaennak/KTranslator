@@ -87,6 +87,17 @@ pub enum OcrMode {
     Document,
 }
 
+/// Controls how the overlay background is rendered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum InpaintMode {
+    /// Use the manual bg/text color pickers (default behaviour).
+    #[default]
+    Manual,
+    /// Sample background color from surrounding pixels — great for manga.
+    /// Text color is chosen automatically for maximum contrast.
+    AutoSample,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UiLanguage {
     System,

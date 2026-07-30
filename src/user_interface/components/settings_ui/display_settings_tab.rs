@@ -1,4 +1,4 @@
-use crate::infrastructure::settings::Settings;
+use crate::infrastructure::settings::{InpaintMode, Settings};
 use eframe::egui;
 
 pub fn render_tab_overlay(
@@ -12,19 +12,63 @@ pub fn render_tab_overlay(
     super::section_header(ui, i18n.overlay_customization);
     ui.add_space(4.0);
 
+    // ── Inpaint Mode ──────────────────────────────────────────────────────
+    ui.label("Overlay Mode:");
+    ui.horizontal(|ui| {
+        ui.radio_value(
+            &mut settings.inpaint_mode,
+            InpaintMode::Manual,
+            "🎨 Manual Color",
+        )
+        .on_hover_text("Use the color pickers below to set overlay colors manually.");
+        ui.radio_value(
+            &mut settings.inpaint_mode,
+            InpaintMode::AutoSample,
+            "✨ Auto Inpaint (Manga)",
+        )
+        .on_hover_text(
+            "Samples surrounding pixels to match the background color of each text box.\n\
+             Best for manga with white or solid-color backgrounds.\n\
+             Text color is chosen automatically for maximum readability.",
+        );
+    });
+    ui.add_space(8.0);
+
     egui::Grid::new("overlay_grid")
         .num_columns(2)
         .spacing([20.0, 10.0])
         .show(ui, |ui| {
-            ui.label(format!("{}:", i18n.bg_color));
-            ui.horizontal(|ui| {
-                ui.color_edit_button_srgba_unmultiplied(&mut settings.overlay_bg_color);
+            // Color pickers — dim them when Auto Inpaint is active
+            let manual = settings.inpaint_mode == InpaintMode::Manual;
+            let alpha = if manual { 1.0 } else { 0.4 };
+
+            ui.add_enabled_ui(manual, |ui| {
+                ui.set_opacity(alpha);
+                ui.label(format!("{}:", i18n.bg_color));
+            });
+            ui.add_enabled_ui(manual, |ui| {
+                ui.set_opacity(alpha);
+                ui.horizontal(|ui| {
+                    ui.color_edit_button_srgba_unmultiplied(&mut settings.overlay_bg_color);
+                    if !manual {
+                        ui.weak("(auto)");
+                    }
+                });
             });
             ui.end_row();
 
-            ui.label(format!("{}:", i18n.text_color));
-            ui.horizontal(|ui| {
-                ui.color_edit_button_srgba_unmultiplied(&mut settings.overlay_text_color);
+            ui.add_enabled_ui(manual, |ui| {
+                ui.set_opacity(alpha);
+                ui.label(format!("{}:", i18n.text_color));
+            });
+            ui.add_enabled_ui(manual, |ui| {
+                ui.set_opacity(alpha);
+                ui.horizontal(|ui| {
+                    ui.color_edit_button_srgba_unmultiplied(&mut settings.overlay_text_color);
+                    if !manual {
+                        ui.weak("(auto contrast)");
+                    }
+                });
             });
             ui.end_row();
 
