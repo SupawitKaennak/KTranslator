@@ -1,6 +1,7 @@
 pub mod error_handler;
 pub mod glossary_replacement_engine;
 pub mod image_processing_usecase;
+pub mod inpainting;
 pub mod pipeline;
 pub mod pipeline_cache;
 pub mod pipeline_ocr;

@@ -246,12 +246,14 @@ impl ResultDispatcher {
                         //
                         // Detection: compare avg Y of the first OCR line between old and new result.
                         // If it shifted more than SCROLL_SHIFT_PX pixels → treat as a scroll event.
-                        const SCROLL_SHIFT_PX: f32 = 8.0;
+                        const SCROLL_SHIFT_PX: f32 = 2.0;
                         let positions_shifted = {
-                            let old_y = slot.last_ocr_lines.first().map(|l| l.y);
-                            let new_y = ocr_lines.first().map(|l| l.y);
-                            match (old_y, new_y) {
-                                (Some(o), Some(n)) => (o - n).abs() > SCROLL_SHIFT_PX,
+                            let old_pos = slot.last_ocr_lines.first().map(|l| (l.x, l.y));
+                            let new_pos = ocr_lines.first().map(|l| (l.x, l.y));
+                            match (old_pos, new_pos) {
+                                (Some((ox, oy)), Some((nx, ny))) => {
+                                    (ox - nx).abs() > SCROLL_SHIFT_PX || (oy - ny).abs() > SCROLL_SHIFT_PX
+                                },
                                 // Different line count → content layout changed → update
                                 _ => slot.last_ocr_lines.len() != ocr_lines.len(),
                             }

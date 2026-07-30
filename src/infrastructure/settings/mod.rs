@@ -70,6 +70,7 @@ pub struct Settings {
     pub overlay_padding: f32,
     pub overlay_corner_radius: f32,
     pub overlay_text_align: TextAlign,
+    pub inpaint_mode: InpaintMode,
 
     pub use_yolo_bubble: bool,
     pub show_yolo_debug_borders: bool,
@@ -131,6 +132,7 @@ impl Default for Settings {
             overlay_padding: 4.0,
             overlay_corner_radius: 4.0,
             overlay_text_align: TextAlign::Center,
+            inpaint_mode: InpaintMode::Manual,
             use_yolo_bubble: false,
             show_yolo_debug_borders: false,
             text_detector: TextDetectorMode::None,
