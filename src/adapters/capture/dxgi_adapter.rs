@@ -2,7 +2,7 @@ use crate::core::{
     ports::{FrameRgba, FrameSource},
     types::Rect,
 };
-use dxgi_capture_rs::DXGIManager;
+use dxgi_capture_rs::{DXGIManager, CaptureError};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -29,8 +29,24 @@ impl FrameSource for DxgiCapture {
         _display_id: u32,
     ) -> anyhow::Result<FrameRgba> {
         let mut manager = self.manager.lock();
-        let (pixels, (width, height)) = manager.capture_frame()
-            .map_err(|e| anyhow::anyhow!("DXGI capture failed: {:?}", e))?;
+        
+        let capture_result = manager.capture_frame();
+        
+        let (pixels, (width, height)) = match capture_result {
+            Ok(res) => res,
+            Err(CaptureError::AccessLost) => {
+                // AccessLost happens if resolution changes, or if Desktop Duplication is invalidated.
+                // We must recreate the DXGIManager to recover.
+                *manager = DXGIManager::new(1000)
+                    .map_err(|e| anyhow::anyhow!("DXGI reinit failed after AccessLost: {:?}", e))?;
+                    
+                manager.capture_frame()
+                    .map_err(|e| anyhow::anyhow!("DXGI capture failed after reinit: {:?}", e))?
+            }
+            Err(e) => {
+                return Err(anyhow::anyhow!("DXGI capture failed: {:?}", e));
+            }
+        };
             
         // `pixels` from dxgi-capture-rs is Vec<u8> in BGRA8 format.
         // We need RGBA8 for KTranslator FrameRgba.
