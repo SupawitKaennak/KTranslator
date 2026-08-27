@@ -4,15 +4,18 @@ use anyhow::Result;
 use reqwest::blocking::Client;
 use serde_json::Value;
 
-use super::llm_shared_utilities;
-
 pub struct GoogleTranslator {
     client: Client,
 }
 
 impl GoogleTranslator {
     pub fn new() -> Result<Self> {
-        let client = llm_shared_utilities::build_client(15)?;
+        let client = reqwest::blocking::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .tcp_keepalive(std::time::Duration::from_secs(60))
+            .pool_idle_timeout(std::time::Duration::from_secs(120))
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .build()?;
         Ok(Self { client })
     }
 }
@@ -34,7 +37,7 @@ impl Translator for GoogleTranslator {
                 .client
                 .get("https://translate.googleapis.com/translate_a/single")
                 .query(&[
-                    ("client", "gtx"),
+                    ("client", "dict-chrome-ex"),
                     ("sl", sl),
                     ("tl", tl),
                     ("dt", "t"),
