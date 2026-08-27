@@ -152,7 +152,7 @@ pub fn render_overlay_viewport(
                         // Also, sRGB conversions in the graphics pipeline might quantize 1,1,1 to 0,0,0.
                         // Shift very dark colors dynamically to ensure they don't multiply to 0 (which becomes a transparent hole).
                         let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
-                        let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(255).max(4);
+                        let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(255).max(2);
 
                         let mut bg_r = overlay_settings.overlay_bg_color[0];
                         let mut bg_g = overlay_settings.overlay_bg_color[1];
@@ -162,7 +162,7 @@ pub fn render_overlay_viewport(
                         }
 
                         let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
-                        let safe_txt_val = if txt_a > 0.0 { (0.5 / txt_a).ceil() as u8 } else { 1 }.min(255).max(4);
+                        let safe_txt_val = if txt_a > 0.0 { (0.5 / txt_a).ceil() as u8 } else { 1 }.min(255).max(2);
 
                         let mut txt_r = overlay_settings.overlay_text_color[0];
                         let mut txt_g = overlay_settings.overlay_text_color[1];
@@ -220,13 +220,13 @@ pub fn render_overlay_viewport(
                                     
                                     // Protect against pure black / sRGB quantization holes
                                     let bg_a = bg[3] as f32 / 255.0;
-                                    let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(255).max(4);
+                                    let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(255).max(2);
                                     if bg[0] < safe_bg_val && bg[1] < safe_bg_val && bg[2] < safe_bg_val {
                                         bg[0] = safe_bg_val; bg[1] = safe_bg_val; bg[2] = safe_bg_val;
                                     }
                                     
                                     let tc_a = tc[3] as f32 / 255.0;
-                                    let safe_tc_val = if tc_a > 0.0 { (0.5 / tc_a).ceil() as u8 } else { 1 }.min(255).max(4);
+                                    let safe_tc_val = if tc_a > 0.0 { (0.5 / tc_a).ceil() as u8 } else { 1 }.min(255).max(2);
                                     if tc[0] < safe_tc_val && tc[1] < safe_tc_val && tc[2] < safe_tc_val {
                                         tc[0] = safe_tc_val; tc[1] = safe_tc_val; tc[2] = safe_tc_val;
                                     }
