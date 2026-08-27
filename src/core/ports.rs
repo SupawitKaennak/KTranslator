@@ -59,6 +59,7 @@ pub trait Translator: Send + Sync {
 
     /// Optional: Post-process OCR text to fix character recognition errors based on language context.
     /// Default implementation simply returns the input text unmodified.
+    #[allow(dead_code)]
     fn correct_text(&self, text: &str, _lang_hint: Option<&LanguageTag>) -> anyhow::Result<String> {
         Ok(text.to_string())
     }

@@ -230,7 +230,7 @@ impl TranslationPipeline {
             .map(|b| b.source_text.replace('\n', " "))
             .collect::<Vec<_>>()
             .join("\n");
-        let mut ocr_text_base = TextCleaner::clean(&raw_ocr_text, &txt_proc_cfg);
+        let ocr_text_base = TextCleaner::clean(&raw_ocr_text, &txt_proc_cfg);
 
         // FIX #2: Early text-cache check BEFORE LLM OCR correction.
         // If we already translated this raw OCR text before, skip the expensive
