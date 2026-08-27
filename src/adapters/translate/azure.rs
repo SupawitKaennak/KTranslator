@@ -45,6 +45,7 @@ impl Translator for AzureOpenAiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
+        enable_ocr_correction: bool,
     ) -> anyhow::Result<String> {
         if self.endpoint.is_empty() || self.api_key.is_empty() {
             return Err(anyhow::anyhow!(
@@ -58,6 +59,7 @@ impl Translator for AzureOpenAiTranslator {
             target,
             self.behavior.as_ref(),
             context_hint,
+            enable_ocr_correction,
         );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.3);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);

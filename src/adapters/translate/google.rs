@@ -27,6 +27,7 @@ impl Translator for GoogleTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         _context_hint: Option<&str>,
+        _enable_ocr_correction: bool,
     ) -> anyhow::Result<String> {
         let sl = source.map(|s| s.as_str()).unwrap_or("auto");
         let tl = target.as_str();

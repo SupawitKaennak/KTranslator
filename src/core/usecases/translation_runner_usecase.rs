@@ -1,4 +1,4 @@
-﻿
+
 use crate::core::ports::Translator;
 use crate::core::types::LanguageTag;
 
@@ -34,15 +34,16 @@ pub fn translate_text(
     target: &LanguageTag,
     enable_batching: bool,
     context_hint: Option<&str>,
+    enable_ocr_correction: bool,
 ) -> anyhow::Result<String> {
     let non_empty: Vec<&str> = text.lines().filter(|l| !l.trim().is_empty()).collect();
     if enable_batching || non_empty.len() <= 1 {
-        return translator.translate(text, source, target, context_hint);
+        return translator.translate(text, source, target, context_hint, enable_ocr_correction);
     }
 
     let mut out = Vec::with_capacity(non_empty.len());
     for line in non_empty {
-        out.push(translator.translate(line.trim(), source, target, None)?);
+        out.push(translator.translate(line.trim(), source, target, None, enable_ocr_correction)?);
     }
     Ok(out.join("\n"))
 }

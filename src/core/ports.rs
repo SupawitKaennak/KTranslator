@@ -54,6 +54,7 @@ pub trait Translator: Send + Sync {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
+        enable_ocr_correction: bool,
     ) -> anyhow::Result<String>;
 
     /// Optional: Post-process OCR text to fix character recognition errors based on language context.

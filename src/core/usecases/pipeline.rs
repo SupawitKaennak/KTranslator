@@ -156,19 +156,7 @@ impl TranslationPipeline {
             return Ok(BgResult::Unchanged { slot_idx });
         }
 
-        // 2. Stability Hash Tracking
-        if is_changing && !force_proceed {
-            return Ok(BgResult::HashChanged {
-                slot_idx,
-                new_hash: hash,
-            });
-        }
-
-        // 3. Stable Debounce check
-        if unstable_dur < debounce_timeout_ms && !force_proceed {
-            return Ok(BgResult::WaitingDebounce { slot_idx });
-        }
-
+        // 2. Zero-Latency Cache Bypassing
         if let Some(cache_hit) = crate::core::usecases::pipeline_cache::check_cache(
             &cache_arc,
             &cache_key,
@@ -177,6 +165,19 @@ impl TranslationPipeline {
             hash,
         ) {
             return Ok(cache_hit);
+        }
+
+        // 3. Stability Hash Tracking
+        if is_changing && !force_proceed {
+            return Ok(BgResult::HashChanged {
+                slot_idx,
+                new_hash: hash,
+            });
+        }
+
+        // 4. Stable Debounce check
+        if unstable_dur < debounce_timeout_ms && !force_proceed {
+            return Ok(BgResult::WaitingDebounce { slot_idx });
         }
 
         tracing::info!(slot = slot_idx, "Proceeding with OCR/Translation");
@@ -276,30 +277,7 @@ impl TranslationPipeline {
         }
 
 
-        // Optional: LLM OCR Correction (only runs when no early cache hit above)
-        if enable_llm_ocr_correction {
-            if let Some(translator_arc) = &translator {
-                let _ = status_tx.send(BgResult::StatusUpdate {
-                    slot_idx,
-                    status: "Correcting OCR with LLM...".to_string(),
-                });
-                tracing::info!(slot = slot_idx, "Applying LLM OCR correction");
-                match translator_arc.correct_text(&ocr_text_base, source_lang.as_ref()) {
-                    Ok(corrected) => {
-                        tracing::debug!(
-                            slot = slot_idx,
-                            "OCR Corrected: {} -> {}",
-                            ocr_text_base,
-                            corrected
-                        );
-                        ocr_text_base = corrected;
-                    }
-                    Err(e) => {
-                        tracing::warn!(slot = slot_idx, "LLM OCR Correction failed: {:?}", e);
-                    }
-                }
-            }
-        }
+
 
 
         // Helper check: Perfect Translation Memory Hit
@@ -568,6 +546,7 @@ impl TranslationPipeline {
             &target_lang,
             enable_batching,
             context_hint_ref,
+            enable_llm_ocr_correction,
         )?;
 
         // --- Thai Word Segmentation ---
