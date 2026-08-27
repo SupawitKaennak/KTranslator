@@ -29,6 +29,34 @@ pub fn render_tab_general(
 
     ui.add_space(12.0);
     super::section_header(ui, i18n.capture_section);
+    
+    ui.horizontal(|ui| {
+        ui.label(format!("{}:", i18n.capture_method));
+        egui::ComboBox::from_id_salt("capture_engine_combo")
+            .selected_text(match settings.capture_method {
+                crate::infrastructure::settings::CaptureMethod::Gdi => i18n.capture_gdi,
+                crate::infrastructure::settings::CaptureMethod::Dxgi => i18n.capture_dxgi,
+                crate::infrastructure::settings::CaptureMethod::Wgc => i18n.capture_wgc,
+            })
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut settings.capture_method,
+                    crate::infrastructure::settings::CaptureMethod::Gdi,
+                    i18n.capture_gdi,
+                );
+                ui.selectable_value(
+                    &mut settings.capture_method,
+                    crate::infrastructure::settings::CaptureMethod::Dxgi,
+                    i18n.capture_dxgi,
+                );
+                ui.selectable_value(
+                    &mut settings.capture_method,
+                    crate::infrastructure::settings::CaptureMethod::Wgc,
+                    i18n.capture_wgc,
+                );
+            });
+    });
+    
     let mut allow = !settings.hide_from_capture;
     if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
         settings.hide_from_capture = !allow;
