@@ -553,13 +553,13 @@ pub fn render_popup_viewport(
             .with_inner_size([400.0, 200.0])
             .with_always_on_top(),
         move |ctx, class| {
-            let (last_ocr_text, last_trans_lines) = {
+            let (last_ocr_text, last_translation) = {
                 let m = model_arc_inner.lock();
                 if slot_idx >= m.slots.len() {
                     return;
                 }
                 let slot = &m.slots[slot_idx];
-                (slot.last_ocr_text.clone(), slot.last_trans_lines.clone())
+                (slot.last_ocr_text.clone(), slot.last_translation.clone())
             };
 
             if ctx.input(|i| i.viewport().close_requested()) {
@@ -576,12 +576,10 @@ pub fn render_popup_viewport(
                 }
                 ui.separator();
                 ui.label("Translation:");
-                if last_trans_lines.is_empty() {
+                if last_translation.is_empty() {
                     ui.monospace("(waiting...)");
                 } else {
-                    for line in &last_trans_lines {
-                        ui.label(line);
-                    }
+                    ui.label(&last_translation);
                 }
             };
 
