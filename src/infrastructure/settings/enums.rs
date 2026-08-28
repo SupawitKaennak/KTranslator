@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum CaptureMethod {
+    #[default]
+    Gdi,
+    Dxgi,
+    Wgc,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TranslationProvider {
     Gemini,

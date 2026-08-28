@@ -19,9 +19,34 @@ fn is_close(
     let char_size_b = get_char_size(b);
     let char_size = (char_size_a + char_size_b) / 2.0;
 
-    // Check if the lines are likely part of vertical text (typical in Japanese Manga)
+    // 1. Definitively prevent merging lines with vastly different character sizes
+    // This stops tiny background garbage or giant titles from bridging standard text bubbles.
+    let size_ratio = char_size_a.max(char_size_b) / char_size_a.min(char_size_b).max(1.0);
+    if size_ratio > 3.0 {
+        return false;
+    }
+
+    // 2. Line Length Difference Guard (Prevents page-spanning watermarks from bridging)
     let is_a_vertical = a.h > a.w * 1.2;
     let is_b_vertical = b.h > b.w * 1.2;
+    
+    if is_a_vertical == is_b_vertical {
+        if is_a_vertical {
+            let h_ratio = a.h.max(b.h) / a.h.min(b.h).max(1.0);
+            let max_h = a.h.max(b.h);
+            if h_ratio > 4.5 && max_h > char_size * 12.0 {
+                return false;
+            }
+        } else {
+            let w_ratio = a.w.max(b.w) / a.w.min(b.w).max(1.0);
+            let max_w = a.w.max(b.w);
+            if w_ratio > 4.5 && max_w > char_size * 12.0 {
+                return false;
+            }
+        }
+    }
+
+    // Check if the lines are likely part of vertical text (typical in Japanese Manga)
     let is_vertical_context = jp_merge_vertical && (is_a_vertical || is_b_vertical);
 
     if is_vertical_context {
@@ -172,6 +197,45 @@ fn merge_text(lines: &[OcrTextLine]) -> String {
     result
 }
 
+fn can_merge_block(block: &OcrTextBlock, new_line: &OcrTextLine) -> bool {
+    let mut min_x = new_line.x;
+    let mut min_y = new_line.y;
+    let mut max_x = new_line.x + new_line.w;
+    let mut max_y = new_line.y + new_line.h;
+
+    let mut sum_area = new_line.w * new_line.h;
+    let mut max_char_size = get_char_size(new_line);
+
+    for l in &block.lines {
+        min_x = min_x.min(l.x);
+        min_y = min_y.min(l.y);
+        max_x = max_x.max(l.x + l.w);
+        max_y = max_y.max(l.y + l.h);
+        sum_area += l.w * l.h;
+        max_char_size = max_char_size.max(get_char_size(l));
+    }
+
+    let box_w = max_x - min_x;
+    let box_h = max_y - min_y;
+    let box_area = box_w * box_h;
+
+    // 1. Density Check: If the bounding box area is overwhelmingly larger than the text area, 
+    // it means it's spanning across empty space between distant bubbles.
+    // Typical text blocks have a density (sum_area / box_area) of 0.4 to 1.0.
+    // If it drops below 0.15, it's definitely bridging huge empty spaces.
+    if box_area > 0.0 && (sum_area / box_area) < 0.15 {
+        return false;
+    }
+
+    // 2. Maximum Size Check: Bubbles are rarely wider or taller than 40x their character size
+    // If it's a huge block, stop chaining.
+    if box_w > max_char_size * 40.0 || box_h > max_char_size * 40.0 {
+        return false;
+    }
+
+    true
+}
+
 pub fn build_blocks(
     lines: Vec<OcrTextLine>,
     smart_merge: bool,
@@ -179,7 +243,7 @@ pub fn build_blocks(
     layout: &crate::infrastructure::settings::TextLayoutSettings,
 ) -> Vec<OcrTextBlock> {
     if lines.is_empty() {
-        return vec![];
+        return Vec::new();
     }
 
     if !smart_merge {
@@ -197,11 +261,12 @@ pub fn build_blocks(
     for line in lines {
         let mut matched_idx = None;
         for (i, block) in blocks.iter().enumerate() {
-            if block
+            let is_any_close = block
                 .lines
                 .iter()
-                .any(|existing_line| is_close(&line, existing_line, jp_merge_vertical, layout))
-            {
+                .any(|existing_line| is_close(&line, existing_line, jp_merge_vertical, layout));
+                
+            if is_any_close && can_merge_block(block, &line) {
                 matched_idx = Some(i);
                 break;
             }

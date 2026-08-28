@@ -32,8 +32,8 @@ ndarray = "0.17"
 wordninja = "0.1"
 symspell = "0.5"
 oar-ocr = { version = "0.6", features = ["directml", "cuda", "tensorrt"] }
-
-
+dxgi-capture-rs = "1.2.2"
+windows-capture = "2.0.1"
 
 [build-dependencies]
 winres = "0.1"

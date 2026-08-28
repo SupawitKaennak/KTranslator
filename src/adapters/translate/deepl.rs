@@ -38,6 +38,7 @@ impl Translator for DeeplTranslator {
         _source: Option<&LanguageTag>,
         target: &LanguageTag,
         _context_hint: Option<&str>,
+        _enable_ocr_correction: bool,
     ) -> anyhow::Result<String> {
         if self.api_key.is_empty() {
             return Err(anyhow::anyhow!(

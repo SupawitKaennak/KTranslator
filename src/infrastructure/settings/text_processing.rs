@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct TextLayoutSettings {
     pub merge_x_gap: f32, // Default 0.8
     pub merge_y_gap: f32, // Default 0.6
-    pub inline_x_gap: f32, // Default 0.35
+    pub inline_x_gap: f32, // Default 0.0
 }
 
 impl Default for TextLayoutSettings {
@@ -14,7 +14,7 @@ impl Default for TextLayoutSettings {
         Self {
             merge_x_gap: 0.8, // Generous gap for vertical manga columns
             merge_y_gap: 0.6, // Generous gap for horizontal stacked lines
-            inline_x_gap: 0.35, // Standard word spacing tolerance
+            inline_x_gap: 0.0, // Prevent inline merging by default
         }
     }
 }

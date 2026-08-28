@@ -4,7 +4,7 @@ use std::sync::{mpsc, Arc};
 
 use crate::{
     adapters::{
-        capture::screenshots_crate_adapter::ScreenshotsCapture, translate::create_translator,
+        translate::create_translator,
     },
     core::{
         coordinator::BackgroundCoordinator,
@@ -81,8 +81,16 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
         progress_rx: dp_rx,
     };
 
+    let capture_method_atomic = Arc::new(std::sync::atomic::AtomicU8::new(match settings.capture_method {
+        crate::infrastructure::settings::CaptureMethod::Gdi => 0,
+        crate::infrastructure::settings::CaptureMethod::Dxgi => 1,
+        crate::infrastructure::settings::CaptureMethod::Wgc => 2,
+    }));
+
+    let dynamic_capture = Arc::new(crate::adapters::capture::dynamic_adapter::DynamicCaptureAdapter::new(capture_method_atomic.clone()).unwrap());
+    
     let services = PipelineServices {
-        capture: Arc::new(ScreenshotsCapture::new()),
+        capture: dynamic_capture,
         platform: platform.clone(),
         ocr_engine,
         translator,
@@ -98,6 +106,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
         region_session: None,
         region_finish: Arc::new(Mutex::new(None)),
         services,
+        capture_method_atomic,
         coordinator,
         slots_runtime: vec![SlotRuntimeState::new()],
         available_screens: screenshots::Screen::all()

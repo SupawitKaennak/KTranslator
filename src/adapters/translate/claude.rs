@@ -43,6 +43,7 @@ impl Translator for ClaudeTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
+        enable_ocr_correction: bool,
     ) -> anyhow::Result<String> {
         if self.api_key.is_empty() {
             return Err(anyhow::anyhow!(
@@ -56,6 +57,7 @@ impl Translator for ClaudeTranslator {
             target,
             Some(&self.behavior),
             context_hint,
+            enable_ocr_correction,
         );
         let temp = llm_shared_utilities::get_temperature(Some(&self.behavior), 0.3);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);

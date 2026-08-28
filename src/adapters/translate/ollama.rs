@@ -69,6 +69,7 @@ impl Translator for OllamaTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
+        enable_ocr_correction: bool,
     ) -> anyhow::Result<String> {
         let prompt = llm_shared_utilities::build_prompt(
             text,
@@ -76,6 +77,7 @@ impl Translator for OllamaTranslator {
             target,
             self.behavior.as_ref(),
             context_hint,
+            enable_ocr_correction,
         );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.1);
 
