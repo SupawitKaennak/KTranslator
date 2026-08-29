@@ -32,12 +32,15 @@ impl Translator for GoogleTranslator {
         for attempt in 0..3 {
             let req = self
                 .client
-                .get("https://translate.googleapis.com/translate_a/single")
+                .get("https://translate.googleapis.com/translate_a/t")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                )
                 .query(&[
-                    ("client", "gtx"),
+                    ("client", "dict-chrome-ex"),
                     ("sl", sl),
                     ("tl", tl),
-                    ("dt", "t"),
                     ("q", text),
                 ]);
 
@@ -61,10 +64,11 @@ impl Translator for GoogleTranslator {
                         };
 
                         let mut translated = String::new();
-                        if let Some(outer) = v.get(0).and_then(|v| v.as_array()) {
-                            for inner in outer {
+                        // dict-chrome-ex format: [["Translated text", "source_lang_code"]]
+                        if let Some(outer) = v.as_array() {
+                            if let Some(inner) = outer.get(0).and_then(|v| v.as_array()) {
                                 if let Some(t) = inner.get(0).and_then(|v| v.as_str()) {
-                                    translated.push_str(t);
+                                    translated = t.to_string();
                                 }
                             }
                         }
