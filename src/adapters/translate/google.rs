@@ -33,6 +33,10 @@ impl Translator for GoogleTranslator {
             let req = self
                 .client
                 .get("https://translate.googleapis.com/translate_a/single")
+                .header(
+                    "User-Agent",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+                )
                 .query(&[
                     ("client", "gtx"),
                     ("sl", sl),
