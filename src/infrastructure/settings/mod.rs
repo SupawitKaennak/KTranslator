@@ -20,6 +20,7 @@ use std::{fs, path::PathBuf};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
+    pub capture_method: CaptureMethod,
     pub provider: TranslationProvider,
     pub ocr_mode: OcrMode,
     pub game_ocr_engine: OcrEngineType,
@@ -91,6 +92,7 @@ pub struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            capture_method: CaptureMethod::default(),
             provider: TranslationProvider::Gemini,
             ocr_mode: OcrMode::Game,
             game_ocr_engine: OcrEngineType::Windows,

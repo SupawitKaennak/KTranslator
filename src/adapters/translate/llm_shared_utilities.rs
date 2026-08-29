@@ -57,6 +57,7 @@ pub fn build_prompt(
     target: &LanguageTag,
     behavior: Option<&TranslationBehaviorSettings>,
     context_hint: Option<&str>,
+    enable_ocr_correction: bool,
 ) -> TranslationPrompt {
     let lines: Vec<&str> = text.lines().collect();
     let ctx = if behavior.map(|b| b.contextual_translation).unwrap_or(false) {
@@ -65,7 +66,7 @@ pub fn build_prompt(
         None
     };
     llm_prompt_builder::build_translation_prompt_with_behavior(
-        &lines, source, target, behavior, ctx,
+        &lines, source, target, behavior, ctx, enable_ocr_correction
     )
 }
 

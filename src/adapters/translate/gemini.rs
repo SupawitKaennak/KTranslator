@@ -98,7 +98,8 @@ impl Translator for GeminiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
-    ) -> anyhow::Result<String> {
+        enable_ocr_correction: bool,
+    ) -> Result<String> {
         if self.api_key.trim().is_empty() {
             return Err(anyhow::anyhow!(
                 "Gemini API key is empty (open Settings and set it)".to_string(),
@@ -111,6 +112,7 @@ impl Translator for GeminiTranslator {
             target,
             self.behavior.as_ref(),
             context_hint,
+            enable_ocr_correction,
         );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.1);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);

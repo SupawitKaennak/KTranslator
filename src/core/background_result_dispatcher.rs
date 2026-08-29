@@ -8,7 +8,7 @@ use std::sync::{mpsc, Arc};
 /// Tick interval for animation frames (e.g. scrolling text).
 const TICK_ANIMATION_MS: u64 = 50;
 /// Tick interval for hash-change follow-up.
-const TICK_HASH_FOLLOWUP_MS: u64 = 30;
+const TICK_HASH_FOLLOWUP_MS: u64 = 15;
 /// Tick interval for debounce polling (~60fps).
 const TICK_DEBOUNCE_POLL_MS: u64 = 16;
 /// Rate limit exponential backoff base (seconds).

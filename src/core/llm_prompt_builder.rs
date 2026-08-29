@@ -1,4 +1,4 @@
-﻿use crate::core::types::LanguageTag;
+use crate::core::types::LanguageTag;
 use std::sync::LazyLock;
 
 // ---------------------------------------------------------------------------
@@ -68,9 +68,16 @@ pub fn build_translation_prompt(
     lines: &[&str],
     source: Option<&LanguageTag>,
     target: &LanguageTag,
+    enable_ocr_correction: bool,
 ) -> TranslationPrompt {
     let target_name = lang_name(target);
     let source_name = lang_name_or_auto(source);
+
+    let ocr_instruction = if enable_ocr_correction {
+        " First, silently correct any OCR errors or corrupted characters in the input."
+    } else {
+        ""
+    };
 
     if lines.len() <= 1 {
         // ── Single-line mode ─────────────────────────────────────────────
@@ -80,7 +87,7 @@ pub fn build_translation_prompt(
         } else {
             ""
         };
-        let system = format!("Translate to {target_name}. Output translation ONLY.{extra_rules}");
+        let system = format!("Translate to {target_name}.{ocr_instruction} Output translation ONLY.{extra_rules}");
         let user = lines.first().unwrap_or(&"").to_string();
         TranslationPrompt {
             system,
@@ -103,7 +110,7 @@ pub fn build_translation_prompt(
         let system = format!(
             "You are an expert professional manga/game translator.\n\
              Input: A numbered list of {count} text segments.\n\
-             Task: Translate EACH segment to {target_name}.\n\
+             Task:{ocr_task} Translate EACH segment to {target_name}.\n\
              \n\
              STRICT RULES:\n\
              1. Output EXACTLY {count} translated lines.\n\
@@ -117,6 +124,7 @@ pub fn build_translation_prompt(
 {extra_rules}",
             count = lines.len(),
             target_name = target_name,
+            ocr_task = ocr_instruction,
             extra_rules = extra_rules,
         );
 
@@ -143,8 +151,9 @@ pub fn build_translation_prompt_with_behavior(
     target: &LanguageTag,
     behavior: Option<&crate::infrastructure::settings::TranslationBehaviorSettings>,
     context_hint: Option<&str>,
+    enable_ocr_correction: bool,
 ) -> TranslationPrompt {
-    let mut base = build_translation_prompt(lines, source, target);
+    let mut base = build_translation_prompt(lines, source, target, enable_ocr_correction);
 
     if let Some(beh) = behavior {
         // Apply Prompt Customization Overrides if enabled

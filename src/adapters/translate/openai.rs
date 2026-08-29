@@ -72,6 +72,7 @@ impl Translator for OpenAiTranslator {
         source: Option<&LanguageTag>,
         target: &LanguageTag,
         context_hint: Option<&str>,
+        enable_ocr_correction: bool,
     ) -> anyhow::Result<String> {
         if self.base_url.is_empty() {
             return Err(anyhow::anyhow!(
@@ -85,6 +86,7 @@ impl Translator for OpenAiTranslator {
             target,
             self.behavior.as_ref(),
             context_hint,
+            enable_ocr_correction,
         );
         let temp = llm_shared_utilities::get_temperature(self.behavior.as_ref(), 0.3);
         let max_tokens = llm_shared_utilities::estimate_max_tokens(text);

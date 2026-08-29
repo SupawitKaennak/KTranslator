@@ -54,6 +54,7 @@ pub struct App {
     pub(crate) region_finish: Arc<Mutex<Option<RegionOutcome>>>,
 
     pub(crate) services: crate::user_interface::application_services::PipelineServices,
+    pub(crate) capture_method_atomic: Arc<std::sync::atomic::AtomicU8>,
 
     // Background processing
     pub(crate) coordinator: BackgroundCoordinator,
@@ -152,6 +153,15 @@ impl App {
 
         if text_detector_changed || updated.perf.gpu_backend != self.settings.perf.gpu_backend {
             self.coordinator.invalidate_detectors();
+        }
+
+        if updated.capture_method != self.settings.capture_method {
+            let val = match updated.capture_method {
+                crate::infrastructure::settings::CaptureMethod::Gdi => 0,
+                crate::infrastructure::settings::CaptureMethod::Dxgi => 1,
+                crate::infrastructure::settings::CaptureMethod::Wgc => 2,
+            };
+            self.capture_method_atomic.store(val, std::sync::atomic::Ordering::Relaxed);
         }
 
         self.settings = updated;

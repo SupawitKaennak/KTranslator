@@ -149,9 +149,10 @@ pub fn render_overlay_viewport(
                         // The OS uses pure black RGB(0,0,0) as the transparent window color key.
                         // Full black pixels are made transparent by Windows DWM.
                         // Font anti-aliasing blending can cause near-black pixels to round down to 0,0,0.
+                        // Also, sRGB conversions in the graphics pipeline might quantize 1,1,1 to 0,0,0.
                         // Shift very dark colors dynamically to ensure they don't multiply to 0 (which becomes a transparent hole).
                         let bg_a = overlay_settings.overlay_bg_color[3] as f32 / 255.0;
-                        let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(12).max(1);
+                        let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(255).max(2);
 
                         let mut bg_r = overlay_settings.overlay_bg_color[0];
                         let mut bg_g = overlay_settings.overlay_bg_color[1];
@@ -161,7 +162,7 @@ pub fn render_overlay_viewport(
                         }
 
                         let txt_a = overlay_settings.overlay_text_color[3] as f32 / 255.0;
-                        let safe_txt_val = if txt_a > 0.0 { (0.5 / txt_a).ceil() as u8 } else { 1 }.min(12).max(1);
+                        let safe_txt_val = if txt_a > 0.0 { (0.5 / txt_a).ceil() as u8 } else { 1 }.min(255).max(2);
 
                         let mut txt_r = overlay_settings.overlay_text_color[0];
                         let mut txt_g = overlay_settings.overlay_text_color[1];
@@ -214,8 +215,22 @@ pub fn render_overlay_viewport(
                                 let trans = trans_lines.get(idx).map(|s| s.as_str()).unwrap_or("").trim().to_string();
 
                                 let (block_bg_color, block_text_color) = if overlay_settings.inpaint_mode == crate::infrastructure::settings::InpaintMode::AutoSample {
-                                    let bg = sampled_bg_colors.get(idx).copied().unwrap_or(fallback_bg_array);
-                                    let tc = crate::core::usecases::inpainting::contrast_text_color(bg);
+                                    let mut bg = sampled_bg_colors.get(idx).copied().unwrap_or(fallback_bg_array);
+                                    let mut tc = crate::core::usecases::inpainting::contrast_text_color(bg);
+                                    
+                                    // Protect against pure black / sRGB quantization holes
+                                    let bg_a = bg[3] as f32 / 255.0;
+                                    let safe_bg_val = if bg_a > 0.0 { (0.5 / bg_a).ceil() as u8 } else { 1 }.min(255).max(2);
+                                    if bg[0] < safe_bg_val && bg[1] < safe_bg_val && bg[2] < safe_bg_val {
+                                        bg[0] = safe_bg_val; bg[1] = safe_bg_val; bg[2] = safe_bg_val;
+                                    }
+                                    
+                                    let tc_a = tc[3] as f32 / 255.0;
+                                    let safe_tc_val = if tc_a > 0.0 { (0.5 / tc_a).ceil() as u8 } else { 1 }.min(255).max(2);
+                                    if tc[0] < safe_tc_val && tc[1] < safe_tc_val && tc[2] < safe_tc_val {
+                                        tc[0] = safe_tc_val; tc[1] = safe_tc_val; tc[2] = safe_tc_val;
+                                    }
+
                                     (
                                         egui::Color32::from_rgba_premultiplied(bg[0], bg[1], bg[2], bg[3]),
                                         egui::Color32::from_rgba_premultiplied(tc[0], tc[1], tc[2], tc[3]),
@@ -538,13 +553,13 @@ pub fn render_popup_viewport(
             .with_inner_size([400.0, 200.0])
             .with_always_on_top(),
         move |ctx, class| {
-            let (last_ocr_text, last_trans_lines) = {
+            let (last_ocr_text, last_translation) = {
                 let m = model_arc_inner.lock();
                 if slot_idx >= m.slots.len() {
                     return;
                 }
                 let slot = &m.slots[slot_idx];
-                (slot.last_ocr_text.clone(), slot.last_trans_lines.clone())
+                (slot.last_ocr_text.clone(), slot.last_translation.clone())
             };
 
             if ctx.input(|i| i.viewport().close_requested()) {
@@ -561,12 +576,10 @@ pub fn render_popup_viewport(
                 }
                 ui.separator();
                 ui.label("Translation:");
-                if last_trans_lines.is_empty() {
+                if last_translation.is_empty() {
                     ui.monospace("(waiting...)");
                 } else {
-                    for line in &last_trans_lines {
-                        ui.label(line);
-                    }
+                    ui.label(&last_translation);
                 }
             };
 
