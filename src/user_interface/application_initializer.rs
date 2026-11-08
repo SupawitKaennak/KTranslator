@@ -4,7 +4,7 @@ use std::sync::{mpsc, Arc};
 
 use crate::{
     adapters::{
-        capture::screenshots_crate_adapter::ScreenshotsCapture, translate::create_translator,
+        capture::capture_adapter_factory::CaptureAdapterFactory, translate::create_translator,
     },
     core::{
         coordinator::BackgroundCoordinator,
@@ -82,7 +82,7 @@ pub fn build_app(cc: &eframe::CreationContext<'_>) -> App {
     };
 
     let services = PipelineServices {
-        capture: Arc::new(ScreenshotsCapture::new()),
+        capture: CaptureAdapterFactory::create(settings.capture_method),
         platform: platform.clone(),
         ocr_engine,
         translator,
