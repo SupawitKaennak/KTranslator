@@ -29,6 +29,37 @@ pub fn render_tab_general(
 
     ui.add_space(12.0);
     super::section_header(ui, i18n.capture_section);
+
+    ui.horizontal(|ui| {
+        ui.label(format!("{}:", i18n.capture_method_label));
+        let selected_text = match settings.capture_method {
+            crate::infrastructure::settings::CaptureMethod::Gdi => i18n.capture_method_gdi,
+            crate::infrastructure::settings::CaptureMethod::Wgc => i18n.capture_method_wgc,
+            crate::infrastructure::settings::CaptureMethod::Dxgi => i18n.capture_method_dxgi,
+        };
+        egui::ComboBox::from_id_salt("capture_method_combo")
+            .width(320.0)
+            .selected_text(selected_text)
+            .show_ui(ui, |ui| {
+                ui.selectable_value(
+                    &mut settings.capture_method,
+                    crate::infrastructure::settings::CaptureMethod::Gdi,
+                    i18n.capture_method_gdi,
+                );
+                ui.selectable_value(
+                    &mut settings.capture_method,
+                    crate::infrastructure::settings::CaptureMethod::Wgc,
+                    i18n.capture_method_wgc,
+                );
+                ui.selectable_value(
+                    &mut settings.capture_method,
+                    crate::infrastructure::settings::CaptureMethod::Dxgi,
+                    i18n.capture_method_dxgi,
+                );
+            });
+    });
+
+    ui.add_space(6.0);
     let mut allow = !settings.hide_from_capture;
     if ui.checkbox(&mut allow, i18n.allow_capture).changed() {
         settings.hide_from_capture = !allow;

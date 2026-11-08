@@ -320,18 +320,20 @@ mod tests {
     fn test_is_close_horizontal_stack() {
         let a = create_line("Hello", 10.0, 10.0, 80.0, 15.0);
         let b = create_line("World", 12.0, 28.0, 80.0, 15.0); // Stacked vertically below 'a'
-        
+        let layout = crate::infrastructure::settings::TextLayoutSettings::default();
+
         // Should be close because they overlap horizontally and have small vertical gap
-        assert!(is_close(&a, &b, false));
+        assert!(is_close(&a, &b, false, &layout));
     }
 
     #[test]
     fn test_is_close_vertical_cjk() {
         let a = create_line("こ", 100.0, 10.0, 20.0, 80.0); // Vertical column 1
-        let b = create_line("れ", 75.0, 12.0, 20.0, 80.0);  // Vertical column 2 (to the left)
+        let b = create_line("れ", 82.0, 12.0, 20.0, 80.0);  // Vertical column 2 (adjacent column to the left)
+        let layout = crate::infrastructure::settings::TextLayoutSettings::default();
 
         // Should be close in vertical context
-        assert!(is_close(&a, &b, true));
+        assert!(is_close(&a, &b, true, &layout));
     }
 
     #[test]

@@ -78,6 +78,7 @@ pub struct Settings {
 
     pub ui_language: UiLanguage,
     pub hide_from_capture: bool,
+    pub capture_method: CaptureMethod,
 
     pub img_proc: ImageProcessingSettings,
     pub txt_proc: TextProcessingSettings,
@@ -138,6 +139,7 @@ impl Default for Settings {
             text_detector: TextDetectorMode::None,
             ui_language: UiLanguage::System,
             hide_from_capture: true,
+            capture_method: CaptureMethod::default(),
             img_proc: ImageProcessingSettings::default(),
             txt_proc: TextProcessingSettings::default(),
             regex_rules: vec![],

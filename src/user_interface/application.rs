@@ -124,6 +124,7 @@ impl App {
         let rebuild_ocr = current_engine_type != old_engine_type
             || updated.perf.gpu_backend != self.settings.perf.gpu_backend
             || updated.ppocr_model != self.settings.ppocr_model;
+        let rebuild_capture = updated.capture_method != self.settings.capture_method;
 
         let trans_behavior_changed = updated.trans_behavior != self.settings.trans_behavior;
         let realtime_changed = updated.realtime != self.settings.realtime;
@@ -164,6 +165,11 @@ impl App {
                 self.caches.translation.lock().clear();
                 self.caches.text_translation.lock().clear();
             }
+        }
+        if rebuild_capture {
+            self.services.capture = crate::adapters::capture::capture_adapter_factory::CaptureAdapterFactory::create(self.settings.capture_method);
+            self.reprocess_pending = true;
+            self.last_reprocess_update_ms = crate::core::utils::now_ms();
         }
         if realtime_changed || txt_proc_changed || img_proc_changed || text_detector_changed {
             self.reprocess_pending = true;
