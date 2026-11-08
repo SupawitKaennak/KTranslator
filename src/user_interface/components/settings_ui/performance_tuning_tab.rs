@@ -1,6 +1,19 @@
 use crate::infrastructure::settings::Settings;
 use eframe::egui;
 
+fn get_brand_color(name: &str) -> egui::Color32 {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("nvidia") || lower.contains("geforce") || lower.contains("rtx") || lower.contains("gtx") {
+        egui::Color32::from_rgb(118, 205, 50) // Nvidia Green
+    } else if lower.contains("amd") || lower.contains("radeon") || lower.contains("ryzen") {
+        egui::Color32::from_rgb(240, 80, 50) // AMD Red-Orange
+    } else if lower.contains("intel") || lower.contains("core") || lower.contains("xeon") || lower.contains("arc") {
+        egui::Color32::from_rgb(50, 150, 255) // Intel Blue
+    } else {
+        egui::Color32::from_rgb(200, 200, 200) // Generic Light Gray
+    }
+}
+
 pub fn render_tab_performance(
     ui: &mut egui::Ui,
     settings: &mut Settings,
@@ -8,7 +21,53 @@ pub fn render_tab_performance(
 ) {
     super::section_header(ui, i18n.tab_performance);
     ui.label(egui::RichText::new("Fine-tune thread execution, hardware acceleration, and cache footprints for maximal frame stability.").small().color(egui::Color32::GRAY));
-    ui.add_space(12.0);
+    ui.add_space(8.0);
+
+    // ── Detected Hardware Telemetry Box ──
+    let hw = crate::infrastructure::hardware_detector::get_hardware_info();
+    egui::Frame::group(ui.style())
+        .fill(ui.visuals().faint_bg_color)
+        .corner_radius(6.0)
+        .inner_margin(8.0)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("CPU:").strong());
+                let cpu_color = get_brand_color(&hw.cpu_name);
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{} ({} Threads)",
+                        hw.cpu_name, hw.cpu_threads
+                    ))
+                    .small()
+                    .color(cpu_color),
+                );
+            });
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("GPU:").strong());
+                if let Some(gpu) = &hw.primary_gpu {
+                    let vram_text = if gpu.vram_mb > 0 {
+                        format!("{} MB VRAM", gpu.vram_mb)
+                    } else {
+                        "Shared Memory".to_string()
+                    };
+                    let gpu_color = get_brand_color(&gpu.name);
+                    ui.label(
+                        egui::RichText::new(format!("{} ({})", gpu.name, vram_text))
+                            .small()
+                            .color(gpu_color),
+                    );
+                } else {
+                    ui.label(
+                        egui::RichText::new("None detected (Using CPU Fallback)")
+                            .small()
+                            .color(egui::Color32::GRAY),
+                    );
+                }
+            });
+        });
+
+    ui.add_space(10.0);
 
     // Enforce default locks immediately
     settings.perf.enforce_preset_locks();
@@ -84,23 +143,68 @@ pub fn render_tab_performance(
 
             ui.label(format!("{}:", i18n.perf_gpu));
             ui.add_enabled_ui(is_custom, |ui| {
+                use crate::infrastructure::settings::GpuBackend;
+
+                let auto_label = if let Some(gpu) = &hw.primary_gpu {
+                    format!("Auto ({})", gpu.name)
+                } else {
+                    "Auto (CPU)".to_string()
+                };
+                let sel_label = match perf.gpu_backend {
+                    GpuBackend::Auto => auto_label.clone(),
+                    GpuBackend::Cpu => "CPU Fallback (Force CPU)".to_string(),
+                    GpuBackend::Cuda => "Nvidia CUDA".to_string(),
+                    GpuBackend::DirectMl => "DirectML (Windows)".to_string(),
+                    GpuBackend::TensorRt => "Nvidia TensorRT".to_string(),
+                };
+
                 egui::ComboBox::from_id_salt("gpu_backend_sel")
-                    .selected_text(format!("{:?}", perf.gpu_backend))
+                    .width(260.0)
+                    .selected_text(sel_label)
                     .show_ui(ui, |ui| {
-                        use crate::infrastructure::settings::GpuBackend;
-                        ui.selectable_value(&mut perf.gpu_backend, GpuBackend::Auto, "Auto-Detect");
-                        ui.selectable_value(&mut perf.gpu_backend, GpuBackend::Cpu, "CPU fallback");
-                        ui.selectable_value(&mut perf.gpu_backend, GpuBackend::Cuda, "Nvidia CUDA");
                         ui.selectable_value(
                             &mut perf.gpu_backend,
-                            GpuBackend::DirectMl,
-                            "DirectML (Windows)",
+                            GpuBackend::Auto,
+                            format!("Auto-Detect [{}]", auto_label),
                         );
                         ui.selectable_value(
                             &mut perf.gpu_backend,
-                            GpuBackend::TensorRt,
-                            "Nvidia TensorRT",
+                            GpuBackend::Cpu,
+                            "CPU fallback (Force CPU)",
                         );
+                        if let Some(gpu) = &hw.primary_gpu {
+                            ui.selectable_value(
+                                &mut perf.gpu_backend,
+                                GpuBackend::DirectMl,
+                                format!("DirectML [{}]", gpu.name),
+                            );
+                            ui.selectable_value(
+                                &mut perf.gpu_backend,
+                                GpuBackend::Cuda,
+                                format!("Nvidia CUDA [{}]", gpu.name),
+                            );
+                            ui.selectable_value(
+                                &mut perf.gpu_backend,
+                                GpuBackend::TensorRt,
+                                format!("Nvidia TensorRT [{}]", gpu.name),
+                            );
+                        } else {
+                            ui.selectable_value(
+                                &mut perf.gpu_backend,
+                                GpuBackend::DirectMl,
+                                "DirectML (Windows)",
+                            );
+                            ui.selectable_value(
+                                &mut perf.gpu_backend,
+                                GpuBackend::Cuda,
+                                "Nvidia CUDA",
+                            );
+                            ui.selectable_value(
+                                &mut perf.gpu_backend,
+                                GpuBackend::TensorRt,
+                                "Nvidia TensorRT",
+                            );
+                        }
                     });
             });
             ui.end_row();
