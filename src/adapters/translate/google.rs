@@ -17,6 +17,69 @@ impl GoogleTranslator {
     }
 }
 
+/// Extract the translated text from Google Translate's JSON response.
+///
+/// The `dict-chrome-ex` client on `/translate_a/t` returns **different** JSON shapes
+/// depending on whether source language is `auto` or explicit:
+///
+/// **Format A** – JSON object with `sentences` array (most common, returned for ANY `sl`):
+/// ```json
+/// {"sentences": [{"trans": "สวัสดี", "orig": "こんにちは"}], "src": "ja"}
+/// ```
+///
+/// **Format B** – Nested array (sometimes returned for `sl=auto` on short text):
+/// ```json
+/// [["สวัสดี", "こんにちは", ...], ..., "ja"]
+/// ```
+///
+/// Previously only Format B was handled, so selecting an explicit source language
+/// (which always produces Format A) caused "Empty translation returned" every time.
+fn extract_translation(v: &Value) -> Option<String> {
+    // ── Format A: JSON object with a "sentences" key ──────────────────────────
+    if let Some(sentences) = v.get("sentences").and_then(|s| s.as_array()) {
+        let parts: Vec<&str> = sentences
+            .iter()
+            .filter_map(|s| s.get("trans").and_then(|t| t.as_str()))
+            .collect();
+        if !parts.is_empty() {
+            return Some(parts.join(""));
+        }
+    }
+
+    // ── Format B: outer array (gtx / legacy dict-chrome-ex on sl=auto) ────────
+    if let Some(outer) = v.as_array() {
+        if let Some(first) = outer.first() {
+            // Deep form: [[["trans_seg", "orig_seg", ...], ...], ..., "src_lang"]
+            if let Some(inner_arr) = first.as_array() {
+                // Try collecting all translation segments (each is ["trans", "orig", ...])
+                let parts: Vec<&str> = inner_arr
+                    .iter()
+                    .filter_map(|seg| {
+                        seg.as_array()
+                            .and_then(|a| a.first())
+                            .and_then(|t| t.as_str())
+                    })
+                    .collect();
+                if !parts.is_empty() {
+                    return Some(parts.join(""));
+                }
+
+                // Shallow form: outer[0] is already ["trans_text", "src_lang"]
+                if let Some(t) = inner_arr.first().and_then(|v| v.as_str()) {
+                    return Some(t.to_string());
+                }
+            }
+
+            // Flat string as first element
+            if let Some(t) = first.as_str() {
+                return Some(t.to_string());
+            }
+        }
+    }
+
+    None
+}
+
 impl Translator for GoogleTranslator {
     fn translate(
         &self,
@@ -58,25 +121,31 @@ impl Translator for GoogleTranslator {
                         let v: Value = match serde_json::from_str(&resp_text) {
                             Ok(val) => val,
                             Err(e) => {
-                                last_err = Some(format!("JSON parse error: {}", e));
+                                last_err = Some(format!(
+                                    "JSON parse error: {} | raw: {}",
+                                    e,
+                                    &resp_text[..resp_text.len().min(200)]
+                                ));
                                 continue;
                             }
                         };
 
-                        let mut translated = String::new();
-                        // dict-chrome-ex format: [["Translated text", "source_lang_code"]]
-                        if let Some(outer) = v.as_array() {
-                            if let Some(inner) = outer.get(0).and_then(|v| v.as_array()) {
-                                if let Some(t) = inner.get(0).and_then(|v| v.as_str()) {
-                                    translated = t.to_string();
-                                }
+                        match extract_translation(&v) {
+                            Some(translated) if !translated.is_empty() => {
+                                return Ok(translated);
                             }
-                        }
-
-                        if !translated.is_empty() {
-                            return Ok(translated);
-                        } else {
-                            last_err = Some("Empty translation returned".to_string());
+                            _ => {
+                                tracing::warn!(
+                                    sl = sl,
+                                    tl = tl,
+                                    "Google Translate: could not extract translation. Response: {}",
+                                    &resp_text[..resp_text.len().min(300)]
+                                );
+                                last_err = Some(format!(
+                                    "Empty translation returned. Response snippet: {}",
+                                    &resp_text[..resp_text.len().min(200)]
+                                ));
+                            }
                         }
                     } else if resp.status().as_u16() == 429 {
                         // Rate limit hit, backoff heavily
